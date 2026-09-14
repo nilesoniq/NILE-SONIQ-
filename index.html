@@ -1,177 +1,326 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NILE SONIQ - Uganda's #1 Music</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0d0d0d">
+<title>NILE SONIQ — Uganda's Music</title>
 <style>
-*{margin:0;padding:0;box-sizing:border-box}body{background:#0a0a0a;color:#fff;font-family:Arial}
-.header{background:linear-gradient(90deg,#ff6600,#ff3300);padding:15px;text-align:center;position:sticky;top:0;z-index:99}
-.logo{font-size:28px;font-weight:900;letter-spacing:2px}
-.nav{display:flex;gap:10px;justify-content:center;padding:10px;flex-wrap:wrap;background:#111}
-.nav button{background:#222;color:#fff;border:1px solid #ff6600;padding:8px 16px;border-radius:20px;cursor:pointer}
-.nav button.active,.nav button:hover{background:#ff6600}
-.card{background:#1a1a1a;border-radius:12px;padding:12px;margin:10px;display:flex;gap:12px;align-items:center}
-.card img{width:60px;height:60px;border-radius:8px;object-fit:cover;background:#333}
-.btn{background:#ff6600;color:#fff;border:none;padding:10px 18px;border-radius:20px;cursor:pointer;font-weight:bold}
-.input{width:100%;padding:12px;margin:8px 0;background:#222;border:1px solid #333;color:#fff;border-radius:8px}
-.file-box{border:2px dashed #ff6600;border-radius:12px;padding:20px;text-align:center;margin:10px 0;cursor:pointer;background:#1a1a1a}
-.progress{height:6px;background:#333;border-radius:3px;margin:10px 0;overflow:hidden;display:none}
-.progress-bar{height:100%;background:#ff6600;width:0%}
+:root{
+  --bg:#0d0d0d;--panel:#1b1b1b;--panel2:#222;--orange:#ff6a00;
+  --white:#fff;--muted:#8e8e8e;--line:#292929;--danger:#e53935;
+  --radius:22px;--shadow:0 10px 30px rgba(0,0,0,.28)
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--white);font-family:Arial,Helvetica,sans-serif}
+body{min-height:100vh;padding-bottom:92px}
+button,input,textarea{font:inherit}
+button{cursor:pointer;border:0}
+.header{position:sticky;top:0;z-index:50;background:rgba(13,13,13,.96);backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
+.header-inner{max-width:1100px;margin:auto;padding:20px 28px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+.logo{font-size:29px;font-weight:900;line-height:.78;letter-spacing:-1px}.logo span{color:var(--orange)}
+.header-right{display:flex;align-items:center;gap:14px}.email{color:var(--muted);max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.orange-btn{background:var(--orange);color:#090909;border-radius:999px;padding:14px 24px;font-weight:900}
+.ghost-btn{background:#1a1a1a;color:#ddd;border:1px solid #303030;border-radius:999px;padding:13px 20px;font-weight:800}
+.container{max-width:1100px;margin:auto;padding:22px 28px}
+.nav{display:flex;gap:12px;flex-wrap:wrap;margin:0 0 26px}.nav button{background:#191919;color:#999;border:1px solid #292929;padding:13px 21px;border-radius:999px;font-weight:900}.nav button.active{background:var(--orange);color:#080808;border-color:var(--orange)}
+.page{display:none}.page.active{display:block}
+.hero{background:#191919;border:1px solid #292929;border-radius:28px;padding:42px 34px;margin-bottom:24px;box-shadow:var(--shadow)}
+.eyebrow{color:var(--orange);font-weight:900;letter-spacing:3px;font-size:14px}.hero h1{font-size:52px;line-height:1.02;margin:18px 0 12px;max-width:760px}.hero h1 span{color:var(--orange)}.hero p{font-size:20px;color:#8f8f8f;margin:0}
+.search{width:100%;background:#191919;color:#fff;border:1px solid #292929;border-radius:26px;padding:20px 24px;outline:0;margin-bottom:30px}.search:focus{border-color:var(--orange)}
+.section-head{display:flex;align-items:center;justify-content:space-between;margin:28px 0 15px}.section-head h2{margin:0;font-size:25px}.section-head b{color:var(--orange)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(245px,1fr));gap:18px}
+.card{background:var(--panel);border:1px solid #292929;border-radius:24px;overflow:hidden;box-shadow:var(--shadow)}
+.art{height:230px;background:#242424;display:flex;align-items:center;justify-content:center;position:relative;background-size:cover;background-position:center}
+.art .note{font-size:48px}.play-round{position:absolute;right:15px;bottom:15px;width:58px;height:58px;border-radius:50%;background:var(--orange);font-size:23px;color:#080808;font-weight:900}
+.card-body{padding:16px}.song-title{font-size:20px;font-weight:900;margin-bottom:5px}.sub{color:#8c8c8c}.card-actions{display:flex;gap:8px;margin-top:15px}.card-actions button{flex:1;border-radius:999px;padding:11px;background:#252525;color:#fff;font-weight:800}.card-actions .main{background:var(--orange);color:#080808}
+.artist-card{padding:20px;display:flex;align-items:center;gap:16px}.avatar{width:72px;height:72px;border-radius:50%;background:#292929;object-fit:cover;display:flex;align-items:center;justify-content:center;font-size:25px;font-weight:900;color:var(--orange);flex:none}
+.form{background:#171717;border:1px solid #292929;border-radius:24px;padding:22px;margin-bottom:20px}.form h2{margin-top:0}.field{margin-bottom:14px}.field label{display:block;color:#aaa;font-weight:800;margin:0 0 7px}.field input,.field textarea,.field select{width:100%;background:#fff;color:#111;border:0;border-radius:14px;padding:17px;outline:0}.field textarea{min-height:110px;resize:vertical}.field input[type=file]{padding:12px}.form-row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:15px;margin:18px 0}.stat{background:#191919;border:1px solid #292929;border-radius:22px;padding:22px}.stat small{color:#aaa}.stat strong{display:block;font-size:32px;color:var(--orange);margin-top:5px}
+.table-wrap{overflow:auto;border:1px solid #292929;border-radius:20px}.table{width:100%;border-collapse:collapse;min-width:700px}.table th,.table td{padding:15px;text-align:left;border-bottom:1px solid #292929}.table th{color:var(--orange)}
+.notice{padding:15px 17px;border-radius:15px;background:#22180f;border:1px solid #4c2a13;color:#ffc79f;margin-bottom:18px}.success{background:#112016;border-color:#1d5630;color:#9ee0ad}
+.empty{padding:35px;text-align:center;color:#777;background:#171717;border:1px dashed #333;border-radius:20px}
+.player{position:fixed;z-index:100;bottom:0;left:0;right:0;background:#171717;border-top:1px solid #333;box-shadow:0 -10px 35px rgba(0,0,0,.45);padding:12px 20px}
+.player-inner{max-width:1100px;margin:auto;display:grid;grid-template-columns:1.2fr 2fr 1fr;align-items:center;gap:16px}.now-title{font-weight:900}.now-sub{color:#888;font-size:13px;margin-top:3px}.controls{display:flex;align-items:center;justify-content:center;gap:12px}.controls button{background:#292929;color:#fff;border-radius:50%;width:42px;height:42px}.controls .big{background:var(--orange);color:#080808;width:50px;height:50px}.progress{width:100%;accent-color:var(--orange)}.volume{display:flex;align-items:center;gap:8px}.volume input{width:100%;accent-color:var(--orange)}
+.modal{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.75);display:none;align-items:center;justify-content:center;padding:20px}.modal.show{display:flex}.modal-box{width:min(440px,100%);background:#171717;border:1px solid #333;border-radius:25px;padding:25px}.modal-box h2{margin-top:0}.close{float:right;background:none;color:#aaa;font-size:26px}
+.footer{border-top:1px solid var(--line);margin-top:50px;padding:32px;text-align:center;color:#777}.footer b{color:var(--orange)}
+.toast{position:fixed;z-index:300;right:20px;bottom:110px;background:#fff;color:#111;padding:14px 18px;border-radius:14px;font-weight:800;display:none;box-shadow:var(--shadow)}
+@media(max-width:700px){
+ .header-inner{padding:18px 20px}.container{padding:18px 20px}.email{display:none}
+ .hero{padding:32px 25px}.hero h1{font-size:39px}.hero p{font-size:17px}
+ .grid{grid-template-columns:1fr 1fr;gap:12px}.art{height:170px}.card-body{padding:12px}.song-title{font-size:16px}
+ .form-row{grid-template-columns:1fr}.stats{grid-template-columns:1fr 1fr}.stat strong{font-size:27px}
+ .player{padding:10px}.player-inner{grid-template-columns:1fr}.volume{display:none}.controls{order:3}.player-inner .progress-wrap{order:2}
+}
+@media(max-width:430px){.grid{grid-template-columns:1fr}.art{height:220px}.stats{grid-template-columns:1fr 1fr}.header-inner{gap:8px}.logo{font-size:25px}}
 </style>
 </head>
 <body>
-<div class="header"><div class="logo">NILE SONIQ</div><small>UGANDA'S #1 MUSIC PLATFORM</small></div>
-<div class="nav">
-<button class="active" onclick="showTab('home')">🏠 Home</button>
-<button onclick="showTab('trending')">🔥 Trending</button>
-<button onclick="showTab('dashboard')">📊 Dashboard</button>
-<button onclick="showTab('admin')" id="adminBtn" style="display:none">🛡️ Admin</button>
-<button onclick="login()">👤 Artist Login</button>
+<header class="header">
+  <div class="header-inner">
+    <div class="logo">NILE <span>SONIQ</span></div>
+    <div class="header-right"><span id="userEmail" class="email"></span><button id="authBtn" class="orange-btn" onclick="openAuth()">Artist Login</button></div>
+  </div>
+</header>
+
+<main class="container">
+  <nav class="nav">
+    <button data-page="home" class="active">🏠 Home</button>
+    <button data-page="artists">🎤 Artists</button>
+    <button data-page="dashboard" id="dashNav" style="display:none">📊 Dashboard</button>
+    <button data-page="admin" id="adminNav" style="display:none">🛡️ Admin</button>
+  </nav>
+
+  <section id="home" class="page active">
+    <div class="hero">
+      <div class="eyebrow">FREE FOREVER • MTN MOMO READY</div>
+      <h1>Uganda's music,<br><span>free to stream</span></h1>
+      <p>Fans pay 0. Artists earn UGX per play.</p>
+    </div>
+    <input id="search" class="search" placeholder="🔍  Search songs, artists..." oninput="renderHome()">
+    <div class="section-head"><h2>🔥 Trending <b id="trendCount">0 SONGS</b></h2><b>Most played</b></div>
+    <div id="trending" class="grid"></div>
+    <div class="section-head"><h2>🆕 New Releases</h2><b>Fresh</b></div>
+    <div id="newReleases" class="grid"></div>
+    <div class="section-head"><h2>🏆 Top Charts</h2><b>Most played</b></div>
+    <div id="topCharts" class="grid"></div>
+  </section>
+
+  <section id="artists" class="page">
+    <div class="section-head"><h2>🎤 Artists</h2><b id="artistCount"></b></div>
+    <div id="artistList" class="grid"></div>
+  </section>
+
+  <section id="dashboard" class="page">
+    <h1>📊 My Artist Dashboard</h1>
+    <p style="color:#888">Manage your profile, upload music and follow your performance.</p>
+    <div class="stats">
+      <div class="stat"><small>Plays</small><strong id="myPlays">0</strong></div>
+      <div class="stat"><small>UGX earned</small><strong id="myEarnings">0</strong></div>
+      <div class="stat"><small>Songs</small><strong id="mySongs">0</strong></div>
+    </div>
+    <div class="form">
+      <h2>Artist Profile</h2>
+      <div class="field"><label>Artist name</label><input id="profileName" placeholder="Kaga Boy"></div>
+      <div class="field"><label>Bio</label><textarea id="profileBio" placeholder="Tell fans about yourself..."></textarea></div>
+      <div class="field"><label>Profile picture</label><input id="profileImage" type="file" accept="image/*" onchange="previewProfile()"></div>
+      <div id="profilePreview"></div>
+      <button class="orange-btn" onclick="saveProfile()">Save Profile</button>
+    </div>
+    <div class="form">
+      <h2>Upload Song</h2>
+      <div class="form-row">
+        <div class="field"><label>Song title</label><input id="songTitle" placeholder="Kwete"></div>
+        <div class="field"><label>Artist</label><input id="songArtist" placeholder="Kaga Boy"></div>
+      </div>
+      <div class="form-row">
+        <div class="field"><label>Song artwork</label><input id="songCover" type="file" accept="image/*"></div>
+        <div class="field"><label>MP3 / audio file</label><input id="songFile" type="file" accept="audio/*" onchange="showSelectedFile()"></div>
+      </div>
+      <div id="selectedFile" style="color:var(--orange);margin:5px 0 14px"></div>
+      <div class="field"><label>Or paste a public MP3/audio link</label><input id="songUrl" type="url" placeholder="https://example.com/song.mp3"></div>
+      <button class="orange-btn" onclick="uploadSong()">Upload</button>
+      <div class="notice" style="margin-top:15px">Demo note: a local phone MP3 is previewable in this browser, but GitHub Pages cannot permanently store uploaded audio. A real NileSoniq launch needs cloud storage/backend.</div>
+    </div>
+    <div class="form"><h2>My Songs</h2><div id="mySongList"></div></div>
+  </section>
+
+  <section id="admin" class="page">
+    <h1>🛡️ Admin Dashboard</h1>
+    <p style="color:#888">Platform management for the NileSoniq owner.</p>
+    <div class="stats">
+      <div class="stat"><small>Total songs</small><strong id="adminSongs">0</strong></div>
+      <div class="stat"><small>Total plays</small><strong id="adminPlays">0</strong></div>
+      <div class="stat"><small>Artists</small><strong id="adminArtists">0</strong></div>
+    </div>
+    <div class="form">
+      <h2>All Songs</h2>
+      <div id="adminSongList"></div>
+    </div>
+    <div class="form">
+      <h2>Platform Settings</h2>
+      <div class="form-row">
+        <div class="field"><label>UGX earned per play</label><input id="rate" type="number" min="0" step="0.01"></div>
+        <div class="field"><label>Minimum payout (UGX)</label><input id="minPayout" type="number" min="0"></div>
+      </div>
+      <button class="orange-btn" onclick="saveSettings()">Save Settings</button>
+    </div>
+  </section>
+
+  <footer class="footer">NILE <b>SONIQ</b> © 2026<br><span>Privacy &nbsp; | &nbsp; Terms &nbsp; | &nbsp; Contact</span></footer>
+</main>
+
+<div class="player" id="player" style="display:none">
+  <div class="player-inner">
+    <div><div class="now-title" id="nowTitle">Nothing playing</div><div class="now-sub" id="nowArtist"></div></div>
+    <div class="progress-wrap"><input id="progress" class="progress" type="range" min="0" max="100" value="0" oninput="seek(this.value)"></div>
+    <div class="controls">
+      <button onclick="restart()">↺</button><button class="big" id="playPause" onclick="togglePlay()">▶</button><button onclick="stopAudio()">■</button>
+    </div>
+    <div class="volume"><span>🔊</span><input id="volume" type="range" min="0" max="1" step=".01" value=".8" oninput="audio.volume=this.value"></div>
+  </div>
 </div>
 
-<div id="home" class="tab" style="padding:15px">
-<h2>🔥 Trending Now</h2><div id="trendingList"></div>
-<h2 style="margin-top:20px">🆕 New Releases</h2><div id="newList"></div>
-<h2 style="margin-top:20px">📈 Top Charts</h2><div id="topList"></div>
+<div id="authModal" class="modal">
+  <div class="modal-box">
+    <button class="close" onclick="closeAuth()">×</button>
+    <h2>Artist Login</h2>
+    <p style="color:#888">This prototype stores login data only in this browser.</p>
+    <div class="field"><label>Email</label><input id="loginEmail" type="email" placeholder="artist@example.com"></div>
+    <div class="field"><label>Artist name</label><input id="loginArtist" placeholder="Kaga Boy"></div>
+    <div class="field"><label>Password</label><input id="loginPassword" type="password" placeholder="••••••••"></div>
+    <button class="orange-btn" style="width:100%" onclick="login()">Login / Create Demo Artist</button>
+  </div>
 </div>
-
-<div id="dashboard" class="tab" style="display:none;padding:15px">
-<h2>Upload Your Music to NILE SONIQ</h2>
-<input id="songTitle" class="input" placeholder="Song Title - e.g Kwete">
-<input id="artistName" class="input" placeholder="Artist Name">
-
-<div class="file-box" onclick="document.getElementById('picInput').click()">
-📷 Add Picture from Gallery<br><small id="picName">Tap to choose image</small>
-</div>
-<input type="file" id="picInput" accept="image/*" style="display:none" onchange="handlePic(this)">
-
-<div class="file-box" onclick="document.getElementById('songInput').click()">
-🎵 Choose Song from Phone<br><small id="songName">Tap to choose MP3 - Selected: none</small>
-</div>
-<input type="file" id="songInput" accept="audio/*,.mp3,.wav,.m4a" style="display:none" onchange="handleSong(this)">
-
-<div class="progress" id="progressBox"><div class="progress-bar" id="progressBar"></div></div>
-<p id="status"></p>
-
-<button class="btn" style="width:100%;padding:15px;margin-top:10px" onclick="uploadToSupabase()">⬆️ UPLOAD TO NILE SONIQ</button>
-
-<h3 style="margin-top:20px">My Uploads</h3><div id="mySongs"></div>
-</div>
-
-<div id="homePlayer" style="position:fixed;bottom:0;left:0;right:0;background:#111;padding:10px;display:none;border-top:2px solid #ff6600">
-<audio id="audio" controls style="width:100%"></audio>
-<p id="nowPlaying" style="text-align:center;margin-top:5px"></p>
-</div>
+<div id="toast" class="toast"></div>
 
 <script>
-// ==== PASTE YOUR URL HERE BOSS - 1 LINE ONLY ====
-const SUPABASE_URL = "https://YOUR_PROJECT_ID.supabase.co"; // <--- PASTE HERE!!!
-const SUPABASE_KEY = "sb_publishable_MJYDrg3qcgynvoRTWHQvAA_qt7nRTDw";
-const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const KEY="nilesoniq_v1";
+let db=JSON.parse(localStorage.getItem(KEY)||"null")||{
+  settings:{rate:.5,minPayout:10000},
+  users:[],
+  songs:[
+    {id:1,title:"Eyiyu Kuda",artist:"Ston Boi Ft Kv",plays:1,created:Date.now(),cover:"",audio:""}
+  ]
+};
+let currentUser=JSON.parse(localStorage.getItem("nilesoniq_user")||"null");
+let audio=new Audio(); audio.preload="metadata"; let currentSong=null;
 
-let selectedPicFile = null;
-let selectedSongFile = null;
-let currentUser = localStorage.getItem('nile_user') || null;
+function save(){localStorage.setItem(KEY,JSON.stringify(db))}
+function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
+function money(n){return Number(n||0).toLocaleString("en-UG")}
+function toast(t){const x=document.getElementById("toast");x.textContent=t;x.style.display="block";clearTimeout(window._toast);window._toast=setTimeout(()=>x.style.display="none",2600)}
+function initials(name){return esc((name||"?").split(/\s+/).map(x=>x[0]).join("").slice(0,2).toUpperCase())}
 
-if(currentUser === 'nilesoniq@gmail.com'){document.getElementById('adminBtn').style.display='inline-block'}
-
-function showTab(t){
-document.querySelectorAll('.tab').forEach(x=>x.style.display='none');
-document.getElementById(t).style.display='block';
-document.querySelectorAll('.nav button').forEach(b=>b.classList.remove('active'));
-if(t==='home') loadSongs();
-if(t==='dashboard' &&!currentUser){login(); return;}
+function nav(){
+ document.querySelectorAll(".nav button").forEach(b=>b.onclick=()=>showPage(b.dataset.page));
+ updateAuth();
 }
-
+function showPage(id){
+ document.querySelectorAll(".page").forEach(p=>p.classList.remove("active"));
+ document.getElementById(id).classList.add("active");
+ document.querySelectorAll(".nav button").forEach(b=>b.classList.toggle("active",b.dataset.page===id));
+ if(id==="home")renderHome(); if(id==="artists")renderArtists(); if(id==="dashboard")renderDashboard(); if(id==="admin")renderAdmin();
+ window.scrollTo({top:0,behavior:"smooth"});
+}
+function updateAuth(){
+ document.getElementById("userEmail").textContent=currentUser?.email||"";
+ document.getElementById("authBtn").textContent=currentUser?"Logout":"Artist Login";
+ document.getElementById("authBtn").onclick=currentUser?logout:openAuth;
+ document.getElementById("dashNav").style.display=currentUser?"inline-block":"none";
+ document.getElementById("adminNav").style.display=currentUser?.admin?"inline-block":"none";
+}
+function openAuth(){document.getElementById("authModal").classList.add("show")}
+function closeAuth(){document.getElementById("authModal").classList.remove("show")}
 function login(){
-let email = prompt("Enter artist email (use nilesoniq@gmail.com for admin):");
-if(!email) return;
-let pass = prompt("Enter password (any):");
-if(!pass) return;
-localStorage.setItem('nile_user', email);
-currentUser = email;
-alert("Welcome "+email+"! Now you can upload!");
-if(email==='nilesoniq@gmail.com') document.getElementById('adminBtn').style.display='inline-block';
-showTab('dashboard');
+ const email=document.getElementById("loginEmail").value.trim(), name=document.getElementById("loginArtist").value.trim()||"New Artist";
+ if(!email){toast("Enter your email");return}
+ let u=db.users.find(x=>x.email===email);
+ if(!u){u={id:Date.now(),email,name,bio:"",avatar:"",admin:false};db.users.push(u)}
+ else if(name)u.name=name;
+ currentUser=u; localStorage.setItem("nilesoniq_user",JSON.stringify(u)); save(); closeAuth(); updateAuth(); toast("Welcome "+u.name+"!"); showPage("dashboard");
+}
+function logout(){currentUser=null;localStorage.removeItem("nilesoniq_user");updateAuth();showPage("home");toast("Logged out")}
+function ensureLogin(){if(!currentUser){openAuth();toast("Artist login required");return false}return true}
+
+function coverStyle(s){
+ return s.cover?`background-image:url("${s.cover}")`:"";
+}
+function songCard(s){
+ return `<article class="card"><div class="art" style="${coverStyle(s)}">${s.cover?"":"<span class='note'>♫</span>"}<button class="play-round" onclick="playSong(${s.id})">▶</button></div>
+ <div class="card-body"><div class="song-title">${esc(s.title)}</div><div class="sub">${esc(s.artist)} • ${s.plays||0} plays</div>
+ <div class="card-actions"><button class="main" onclick="playSong(${s.id})">Play</button><button onclick="shareSong(${s.id})">Share</button></div></div></article>`;
+}
+function filteredSongs(){const q=(document.getElementById("search")?.value||"").toLowerCase().trim();return db.songs.filter(s=>!q||s.title.toLowerCase().includes(q)||s.artist.toLowerCase().includes(q))}
+function renderHome(){
+ const all=filteredSongs(), sorted=[...all].sort((a,b)=>(b.plays||0)-(a.plays||0)), fresh=[...all].sort((a,b)=>b.created-a.created);
+ document.getElementById("trendCount").textContent=all.length+" SONGS";
+ document.getElementById("trending").innerHTML=sorted.slice(0,8).map(songCard).join("")||`<div class="empty">No music found.</div>`;
+ document.getElementById("newReleases").innerHTML=fresh.slice(0,8).map(songCard).join("")||`<div class="empty">No new releases yet.</div>`;
+ document.getElementById("topCharts").innerHTML=sorted.slice(0,8).map(songCard).join("")||`<div class="empty">No charts yet.</div>`;
+}
+function renderArtists(){
+ const map={};db.songs.forEach(s=>{const k=s.artist.trim();if(k)map[k]=(map[k]||0)+1});
+ const users=db.users.map(u=>({name:u.name,avatar:u.avatar,count:db.songs.filter(s=>s.artist===u.name).length})); 
+ const names=[...new Set([...Object.keys(map),...users.map(u=>u.name)])];
+ document.getElementById("artistCount").textContent=names.length+" ARTISTS";
+ document.getElementById("artistList").innerHTML=names.map(n=>{
+   const u=users.find(x=>x.name===n); return `<div class="card artist-card"><div class="avatar">${u?.avatar?`<img src="${u.avatar}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`:initials(n)}</div><div><div class="song-title">${esc(n)}</div><div class="sub">${map[n]||0} songs</div></div></div>`
+ }).join("")||`<div class="empty">No artists yet.</div>`;
 }
 
-function handlePic(input){
-selectedPicFile = input.files[0];
-document.getElementById('picName').innerText = "Selected: "+selectedPicFile.name;
+function renderDashboard(){
+ if(!ensureLogin())return;
+ const u=db.users.find(x=>x.id===currentUser.id)||currentUser;
+ currentUser=u;localStorage.setItem("nilesoniq_user",JSON.stringify(u));
+ const mine=db.songs.filter(s=>s.artist===u.name);
+ const plays=mine.reduce((a,s)=>a+(s.plays||0),0);
+ document.getElementById("myPlays").textContent=plays;
+ document.getElementById("myEarnings").textContent=money(plays*db.settings.rate);
+ document.getElementById("mySongs").textContent=mine.length;
+ document.getElementById("profileName").value=u.name||"";
+ document.getElementById("profileBio").value=u.bio||"";
+ document.getElementById("profilePreview").innerHTML=u.avatar?`<img src="${u.avatar}" class="avatar" style="margin:8px 0 14px">`:"";
+ document.getElementById("mySongList").innerHTML=mine.map(s=>`<div class="artist-card" style="margin-bottom:10px;border:1px solid #292929;border-radius:18px"><div class="avatar" style="width:55px;height:55px">${s.cover?`<img src="${s.cover}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`:"♫"}</div><div style="flex:1"><b>${esc(s.title)}</b><div class="sub">${s.plays||0} plays • UGX ${money((s.plays||0)*db.settings.rate)}</div></div><button class="ghost-btn" onclick="deleteSong(${s.id})">Delete</button></div>`).join("")||`<div class="empty">You have not uploaded a song yet.</div>`;
 }
-function handleSong(input){
-selectedSongFile = input.files[0];
-document.getElementById('songName').innerText = "Selected: "+selectedSongFile.name+" ("+(selectedSongFile.size/1024/1024).toFixed(1)+" MB)";
+function previewProfile(){
+ const f=document.getElementById("profileImage").files[0];if(!f)return;
+ const r=new FileReader();r.onload=()=>document.getElementById("profilePreview").innerHTML=`<img src="${r.result}" class="avatar" style="margin:8px 0 14px">`;r.readAsDataURL(f);
 }
-
-async function uploadToSupabase(){
-if(!selectedSongFile){alert("Boss choose song from phone first!"); return;}
-let title = document.getElementById('songTitle').value || selectedSongFile.name;
-let artist = document.getElementById('artistName').value || currentUser || "Unknown Artist";
-document.getElementById('status').innerText = "Uploading to NILE SONIQ cloud...";
-document.getElementById('progressBox').style.display='block';
-
-try{
-// 1. Upload song to bucket 'songs'
-let songPath = Date.now()+"_"+selectedSongFile.name.replace(/[^a-zA-Z0-9.]/g,'_');
-let {data: songUp, error: songErr} = await supabaseClient.storage.from('songs').upload(songPath, selectedSongFile, {upsert:true, onUploadProgress:(e)=>{let p=Math.round(e.loaded/e.total*100); document.getElementById('progressBar').style.width=p+'%'}});
-if(songErr) throw songErr;
-
-// 2. Get public URL
-let {data: urlData} = supabaseClient.storage.from('songs').getPublicUrl(songPath);
-let songUrl = urlData.publicUrl;
-
-// 3. Optional: upload pic
-let picUrl = "";
-if(selectedPicFile){
-let picPath = Date.now()+"_"+selectedPicFile.name;
-await supabaseClient.storage.from('avatars').upload(picPath, selectedPicFile, {upsert:true});
-let {data: pData} = supabaseClient.storage.from('avatars').getPublicUrl(picPath);
-picUrl = pData.publicUrl;
+function saveProfile(){
+ if(!ensureLogin())return;
+ const u=db.users.find(x=>x.id===currentUser.id);u.name=document.getElementById("profileName").value.trim()||u.name;u.bio=document.getElementById("profileBio").value.trim();
+ const f=document.getElementById("profileImage").files[0];
+ const finish=()=>{currentUser=u;localStorage.setItem("nilesoniq_user",JSON.stringify(u));save();updateAuth();toast("Profile saved");renderDashboard()};
+ if(f){const r=new FileReader();r.onload=()=>{u.avatar=r.result;finish()};r.readAsDataURL(f)}else finish();
 }
+function showSelectedFile(){const f=document.getElementById("songFile").files[0];document.getElementById("selectedFile").textContent=f?"Selected: "+f.name:""}
+function uploadSong(){
+ if(!ensureLogin())return;
+ const title=document.getElementById("songTitle").value.trim(), artist=document.getElementById("songArtist").value.trim()||currentUser.name;
+ const file=document.getElementById("songFile").files[0], url=document.getElementById("songUrl").value.trim(), cover=document.getElementById("songCover").files[0];
+ if(!title){toast("Enter a song title");return}
+ if(!file&&!url){toast("Choose an audio file or paste an audio link");return}
+ const song={id:Date.now(),title,artist,plays:0,created:Date.now(),cover:"",audio:url||""};
+ const finish=()=>{db.songs.unshift(song);save();toast("Song added to this browser");document.getElementById("songTitle").value="";document.getElementById("songUrl").value="";document.getElementById("songFile").value="";document.getElementById("songCover").value="";document.getElementById("selectedFile").textContent="";renderDashboard();renderHome()};
+ const readCover=()=>{if(!cover){finish();return}const r=new FileReader();r.onload=()=>{song.cover=r.result;finish()};r.readAsDataURL(cover)};
+ if(file){const r=new FileReader();r.onload=()=>{song.audio=r.result;readCover()};r.readAsDataURL(file)}else readCover();
+}
+function deleteSong(id){if(!confirm("Delete this song?"))return;db.songs=db.songs.filter(s=>s.id!==id);save();renderDashboard();renderHome();toast("Song deleted")}
+function playSong(id){
+ const s=db.songs.find(x=>x.id===id);if(!s)return;
+ if(!s.audio){toast("This song has no playable audio source yet");return}
+ currentSong=s;audio.src=s.audio;audio.volume=Number(document.getElementById("volume").value);audio.play().catch(()=>toast("Tap play again to start audio"));
+ s.plays=(s.plays||0)+1;save();document.getElementById("player").style.display="block";document.getElementById("nowTitle").textContent=s.title;document.getElementById("nowArtist").textContent=s.artist;document.getElementById("playPause").textContent="Ⅱ";renderHome();renderDashboard();
+}
+function togglePlay(){if(!currentSong)return;if(audio.paused){audio.play();document.getElementById("playPause").textContent="Ⅱ"}else{audio.pause();document.getElementById("playPause").textContent="▶"}}
+function stopAudio(){audio.pause();audio.currentTime=0;document.getElementById("playPause").textContent="▶"}
+function restart(){if(currentSong){audio.currentTime=0;audio.play();document.getElementById("playPause").textContent="Ⅱ"}}
+function seek(v){if(audio.duration)audio.currentTime=(Number(v)/100)*audio.duration}
+audio.addEventListener("timeupdate",()=>{if(audio.duration)document.getElementById("progress").value=(audio.currentTime/audio.duration)*100});
+audio.addEventListener("ended",()=>document.getElementById("playPause").textContent="▶");
 
-// 4. Save to table 'songs'
-let {error: dbErr} = await supabaseClient.from('songs').insert([{title: title, artist: artist, url: songUrl, cover: picUrl, plays:0, status:'approved', artist_id: currentUser}]);
-if(dbErr) throw dbErr;
-
-document.getElementById('status').innerText = "✅ UPLOADED! Everyone can now play it on nilesoniq.github.io/NILE/";
-document.getElementById('progressBar').style.width='100%';
-alert("SUCCESS Boss! Song live on site!");
-loadSongs();
-loadMySongs();
-
-}catch(err){
-console.error(err);
-document.getElementById('status').innerText = "❌ Error: "+err.message+" - Make sure you created buckets 'songs' and 'avatars' as PUBLIC in Supabase Storage!";
+function shareSong(id){
+ const s=db.songs.find(x=>x.id===id);if(!s)return;
+ const text=`${s.title} by ${s.artist} — NileSoniq`;
+ if(navigator.share)navigator.share({title:text,text,url:location.href}).catch(()=>{});
+ else navigator.clipboard?.writeText(location.href).then(()=>toast("NileSoniq link copied"));
 }
+function renderAdmin(){
+ if(!currentUser?.admin)return;
+ const plays=db.songs.reduce((a,s)=>a+(s.plays||0),0);
+ document.getElementById("adminSongs").textContent=db.songs.length;document.getElementById("adminPlays").textContent=plays;document.getElementById("adminArtists").textContent=new Set(db.songs.map(s=>s.artist)).size;
+ document.getElementById("rate").value=db.settings.rate;document.getElementById("minPayout").value=db.settings.minPayout;
+ document.getElementById("adminSongList").innerHTML=`<div class="table-wrap"><table class="table"><thead><tr><th>Song</th><th>Artist</th><th>Plays</th><th>UGX</th><th>Action</th></tr></thead><tbody>${db.songs.map(s=>`<tr><td>${esc(s.title)}</td><td>${esc(s.artist)}</td><td>${s.plays||0}</td><td>${money((s.plays||0)*db.settings.rate)}</td><td><button class="ghost-btn" onclick="deleteSong(${s.id})">Delete</button></td></tr>`).join("")}</tbody></table></div>`;
 }
-
-async function loadSongs(){
-let {data, error} = await supabaseClient.from('songs').select('*').eq('status','approved').order('created_at',{ascending:false}).limit(50);
-if(error){console.log(error); return;}
-let html = "";
-data.forEach(s=>{
-html+=`<div class="card"><img src="${s.cover||'https://via.placeholder.com/60?text=NILE'}"><div style="flex:1"><b>${s.title}</b><br><small>${s.artist} • ${s.plays||0} plays</small></div><button class="btn" onclick="playSong('${s.url}','${s.title} - ${s.artist}')">▶️</button></div>`;
-});
-document.getElementById('trendingList').innerHTML = html;
-document.getElementById('newList').innerHTML = html;
-document.getElementById('topList').innerHTML = data.sort((a,b)=>b.plays-a.plays).map(s=>`<div class="card"><img src="${s.cover||'https://via.placeholder.com/60?text=NILE'}"><div style="flex:1"><b>${s.title}</b><br><small>${s.artist}</small></div><button class="btn" onclick="playSong('${s.url}','${s.title}')">▶️</button></div>`).join('');
+function saveSettings(){db.settings.rate=Number(document.getElementById("rate").value)||0;db.settings.minPayout=Number(document.getElementById("minPayout").value)||0;save();toast("Settings saved");renderAdmin()}
+function makeAdmin(){
+ // For the first owner setup only: add ?owner=1 to the URL, then login/create an artist.
+ if(new URLSearchParams(location.search).get("owner")==="1"&&currentUser){
+  const u=db.users.find(x=>x.id===currentUser.id);u.admin=true;currentUser=u;localStorage.setItem("nilesoniq_user",JSON.stringify(u));save();updateAuth();toast("Owner/admin mode enabled");showPage("admin");
+ }
 }
-async function loadMySongs(){
-if(!currentUser) return;
-let {data} = await supabaseClient.from('songs').select('*').eq('artist_id',currentUser).order('created_at',{ascending:false});
-if(!data) return;
-document.getElementById('mySongs').innerHTML = data.map(s=>`<div class="card"><div style="flex:1"><b>${s.title}</b><br><small>${s.status}</small></div><button class="btn" onclick="playSong('${s.url}','${s.title}')">▶️</button></div>`).join('');
-}
-function playSong(url, title){
-let a=document.getElementById('audio');
-document.getElementById('homePlayer').style.display='block';
-a.src=url; a.play();
-document.getElementById('nowPlaying').innerText="Now Playing: "+title;
-}
-loadSongs();
+nav();renderHome();renderArtists();makeAdmin();
 </script>
 </body>
 </html>
