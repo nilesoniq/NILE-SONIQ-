@@ -2,136 +2,123 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NILE SONIQ</title>
+<title>NILE SONIQ - Uganda's Music Empire</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.43.5/dist/umd/supabase.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;font-family:system-ui,sans-serif}
-body{background:#0a0a0a;color:#fff}
-header{display:flex;justify-content:space-between;align-items:center;padding:18px 16px;border-bottom:1px solid #1e1e1e;position:sticky;top:0;background:#0a0a0a;z-index:10}
-.logo{font-weight:900;font-size:20px}.logo span{color:#ff6a00}
-.icon-btn{background:#1a1a1a;border:1px solid #2a2a2a;width:40px;height:40px;border-radius:50%;color:#fff;font-size:18px}
-.artist-btn{background:#ff6a00;color:#000;padding:10px 16px;border-radius:999px;font-weight:800;border:none;margin-left:8px}
-.search-bar{display:none;padding:12px 16px;background:#111;border-bottom:1px solid #1e1e1e}.search-bar.show{display:block}
-.search-bar input{width:100%;background:#1e1e1e;border:1px solid #2a2a2a;color:#fff;padding:12px 16px;border-radius:999px;outline:none}
-.hero{margin:16px;background:#171717;border:1px solid #242424;border-radius:24px;padding:24px 20px}
-.free{color:#ff6a00;letter-spacing:3px;font-size:11px;font-weight:800;margin-bottom:10px}
-.hero h1{font-size:32px;font-weight:900;line-height:.95;margin-bottom:10px}.hero h1 span{color:#ff6a00}
-.hero p{color:#8a8a8a;font-size:13px;margin-bottom:18px}
-.btn-o{background:#ff6a00;color:#000;padding:12px 20px;border-radius:999px;font-weight:800;border:none}
-.btn-b{background:#1e1e1e;color:#fff;padding:12px 20px;border-radius:999px;border:1px solid #2a2a2a;margin-left:8px}
-.sec{padding:8px 16px 120px}.count{color:#ff6a00;font-size:12px;font-weight:700;margin:6px 0 12px}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.card{background:#151515;border:1px solid #222;border-radius:18px;overflow:hidden}
-.art{aspect-ratio:1;background:#1c1c1c;display:flex;align-items:center;justify-content:center;font-size:48px;position:relative}
-.badge{position:absolute;bottom:10px;right:10px;background:#ff6a00;width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#000;font-weight:900}
-.info{padding:10px}.info h4{font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.info p{font-size:11px;color:#777}
-.player{position:fixed;bottom:0;left:0;right:0;background:#181818;border-top:1px solid #2a2a2a;padding:12px 16px;display:none;align-items:center;gap:12px;z-index:20}.player.show{display:flex}
-.modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:30;align-items:center;justify-content:center;padding:20px}.modal.show{display:flex}
-.modal-box{background:#181818;border:1px solid #2a2a2a;border-radius:20px;padding:22px;width:100%;max-width:380px}
-.modal-box input{width:100%;background:#111;border:1px solid #2a2a2a;color:#fff;padding:12px;border-radius:12px;margin:8px 0}
+body{background:#0a0a0a;color:#fff;padding-bottom:120px}
+header{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid #1e1e1e;position:sticky;top:0;background:#0a0a0a;z-index:20}
+.logo{font-weight:900;font-size:19px}.logo span{color:#ff6a00}
+.hdr{display:flex;gap:8px;align-items:center}
+.ibtn{background:#1a1a1a;border:1px solid #2a2a2a;width:38px;height:38px;border-radius:50%;color:#fff}
+.abtn{background:#ff6a00;color:#000;padding:9px 14px;border-radius:999px;font-weight:800;border:none;font-size:12px}
+.tabs{display:flex;gap:8px;padding:12px 16px;overflow:auto}
+.tab{background:#151515;border:1px solid #222;padding:8px 16px;border-radius:999px;font-size:12px;font-weight:700;white-space:nowrap}.tab.active{background:#ff6a00;color:#000;border-color:#ff6a00}
+.search{margin:0 16px;background:#111;border:1px solid #222;border-radius:999px;padding:10px 16px;display:flex;align-items:center;gap:8px}.search input{background:none;border:none;color:#fff;width:100%;outline:none}
+.hero{margin:16px;background:#171717;border:1px solid #242424;border-radius:20px;padding:20px}
+.free{color:#ff6a00;font-size:10px;letter-spacing:3px;font-weight:800}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:0 16px}
+.card{background:#151515;border:1px solid #222;border-radius:16px;overflow:hidden}
+.art{aspect-ratio:1;background:#1e1e1e;display:flex;align-items:center;justify-content:center;font-size:40px;position:relative}
+.badge{position:absolute;bottom:8px;right:8px;background:#ff6a00;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#000;font-weight:900;font-size:14px}
+.info{padding:8px}.info h4{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.info p{font-size:10px;color:#777}
+.actions{display:flex;gap:6px;padding:0 8px 8px}.act{flex:1;background:#1e1e1e;border:1px solid #2a2a2a;border-radius:999px;padding:6px;font-size:10px;color:#fff}
+.player{position:fixed;bottom:0;left:0;right:0;background:#181818;border-top:1px solid #2a2a2a;padding:10px 12px;display:none;z-index:30}.player.show{display:flex;gap:10px;align-items:center}
+.modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:40;align-items:center;justify-content:center;padding:16px;overflow:auto}.modal.show{display:flex}
+.box{background:#181818;border:1px solid #2a2a2a;border-radius:20px;padding:18px;width:100%;max-width:400px;max-height:90vh;overflow:auto}
+.box input,.box textarea{width:100%;background:#111;border:1px solid #2a2a2a;color:#fff;padding:10px;border-radius:10px;margin:6px 0;font-size:13px}
+.dash{display:none;padding:16px}.dash.show{display:block}
+.stat{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}.sbox{background:#151515;border:1px solid #222;border-radius:14px;padding:12px}.sbox b{color:#ff6a00;font-size:18px}
 </style>
 </head>
 <body>
-<header>
-<div class="logo">NILE <span>SONIQ</span></div>
-<div style="display:flex;align-items:center">
-<button class="icon-btn" onclick="toggleSearch()">⌕</button>
-<button class="artist-btn" onclick="openLogin()">Artist login</button>
-</div>
-</header>
-<div class="search-bar" id="searchBar"><input id="searchInput" placeholder="Search songs, artists..." oninput="filterSongs()"></div>
-
-<div class="hero">
-<div class="free">FREE FOREVER</div>
-<h1>Uganda's music,<br><span>free to stream</span></h1>
-<p>Fans pay nothing. Artists earn from every play.</p>
-<div><button class="btn-o" onclick="document.getElementById('trending').scrollIntoView({behavior:'smooth'})">Explore music</button><button class="btn-b" onclick="openLogin()">I'm an artist</button></div>
-</div>
-
-<div class="sec" id="trending">
-<div style="font-size:17px;font-weight:800;margin-top:8px">🔥 Trending today</div>
-<div class="count" id="count">Loading songs...</div>
+<header><div class="logo">NILE <span>SONIQ</span></div><div class="hdr"><button class="ibtn" onclick="openBox('searchBox')">⌕</button><button class="abtn" onclick="openBox('loginBox')">Artist</button></div></header>
+<div class="tabs"><div class="tab active" onclick="switchTab('home',this)">🏠 Home</div><div class="tab" onclick="switchTab('artists',this)">🎤 Artists</div><div class="tab" onclick="switchTab('dash',this)">📊 Dashboard</div><div class="tab" onclick="switchTab('admin',this)">🛡️ Admin</div></div>
+<div id="homeTab">
+<div class="hero"><div class="free">FREE FOREVER • MTN MOMO READY</div><h2 style="font-size:28px;font-weight:900;margin:6px 0">Uganda's music,<br><span style="color:#ff6a00">free to stream</span></h2><p style="font-size:12px;color:#888">Fans pay 0. Artists earn UGX per play via Mobile Money.</p></div>
+<div class="search"><span>⌕</span><input id="q" placeholder="Search songs, artists..." oninput="filter()"></div>
+<div style="padding:12px 16px;font-weight:800">🔥 Trending • <span id="cnt" style="color:#ff6a00;font-size:12px">0 SONGS</span></div>
 <div class="grid" id="grid"></div>
 </div>
-
-<div class="player" id="player">
-<div style="width:46px;height:46px;background:#222;border-radius:10px;display:flex;align-items:center;justify-content:center">♫</div>
-<div style="flex:1"><div id="nowTitle" style="font-size:13px;font-weight:700">Title</div><div id="nowArtist" style="font-size:11px;color:#888">Artist</div><audio id="audio" controls style="width:100%;height:30px;margin-top:4px"></audio></div>
-<button onclick="closePlayer()" style="background:none;border:none;color:#fff;font-size:22px">✕</button>
+<div id="artistsTab" class="dash"><h3>🎤 Artists</h3><div id="artistList" style="margin-top:12px"></div></div>
+<div id="dashTab" class="dash">
+<h3>📊 Artist Dashboard</h3><p style="font-size:11px;color:#888">Login to see earnings, bio, plays</p>
+<div class="stat"><div class="sbox"><div style="font-size:11px;color:#888">Total Plays</div><b id="dPlays">0</b></div><div class="sbox"><div style="font-size:11px;color:#888">Earnings UGX</div><b id="dEarn">0</b></div><div class="sbox"><div style="font-size:11px;color:#888">Songs</div><b id="dSongs">0</b></div><div class="sbox"><div style="font-size:11px;color:#888">Likes</div><b id="dLikes">0</b></div></div>
+<div style="margin-top:16px"><h4 style="font-size:13px">My Profile & Bio</h4><input id="aName" placeholder="Stage Name"><textarea id="aBio" placeholder="Your biography - who are you?"></textarea><input id="aAvatar" placeholder="Avatar image link"><button class="abtn" style="width:100%;margin-top:8px" onclick="saveArtist()">Save Profile</button></div>
+<div style="margin-top:16px"><h4 style="font-size:13px">Upload New Song</h4><input id="sTitle" placeholder="Song Title"><input id="sArtist" placeholder="Artist Name"><input id="sUrl" placeholder="MP3 file_url"><textarea id="sLyrics" placeholder="Lyrics (optional)"></textarea><button class="abtn" style="width:100%;background:#fff;color:#000;margin-top:8px" onclick="upload()">Upload Song</button></div>
+<div style="margin-top:16px"><h4 style="font-size:13px">💰 Withdraw via MTN MoMo</h4><input id="momo" placeholder="MTN Number 077..."><button class="abtn" style="width:100%;margin-top:6px;background:#ffcc00;color:#000" onclick="alert('MoMo payout coming soon! Earnings: UGX '+document.getElementById('dEarn').innerText)">Request Payout</button></div>
+<p id="dashMsg" style="font-size:11px;color:#ff6a00;margin-top:8px"></p>
 </div>
-
-<div class="modal" id="loginModal">
-<div class="modal-box">
-<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><h3 style="font-weight:800">Artist Login</h3><button onclick="closeLogin()" style="background:none;border:none;color:#fff;font-size:22px">✕</button></div>
-<p style="font-size:12px;color:#888;margin-bottom:12px">Login to upload your music. New artist? Just enter email - we will create account.</p>
-<input id="email" placeholder="Email">
-<input id="password" type="password" placeholder="Password">
-<button class="btn-o" style="width:100%;margin-top:10px" onclick="artistLogin()">Login / Sign Up</button>
-<div style="margin-top:18px;border-top:1px solid #222;padding-top:14px">
-<h4 style="font-size:13px">Upload Song (after login)</h4>
-<input id="songTitle" placeholder="Song Title">
-<input id="songArtist" placeholder="Artist Name">
-<input id="songUrl" placeholder="Paste MP3 link OR file_url">
-<button class="btn-b" style="width:100%;margin-top:8px;background:#ff6a00;color:#000;border:none;font-weight:800" onclick="uploadSong()">Upload Song</button>
-<p id="loginMsg" style="font-size:11px;color:#ff6a00;margin-top:8px"></p>
-</div>
-</div>
-</div>
-
+<div id="adminTab" class="dash"><h3>🛡️ Admin Panel</h3><p style="font-size:11px;color:#888">Approve / reject songs, manage artists</p><div id="adminList" style="margin-top:12px"></div></div>
+<div class="player" id="player"><div style="width:44px;height:44px;background:#222;border-radius:8px;display:flex;align-items:center;justify-content:center">♫</div><div style="flex:1"><div id="nowT" style="font-size:12px;font-weight:700">Title</div><div id="nowA" style="font-size:10px;color:#888">Artist</div><audio id="audio" controls style="width:100%;height:28px;margin-top:2px" onplay="addPlay()"></audio><div style="display:flex;gap:6px;margin-top:4px"><button class="act" onclick="like()">❤️ Like <span id="likeC">0</span></button><button class="act" onclick="openBox('commentBox')">💬 Comment</button><button class="act" onclick="share()">↗ Share</button></div></div><button onclick="this.parentElement.classList.remove('show')" style="background:none;border:none;color:#fff;font-size:20px">✕</button></div>
+<div class="modal" id="loginBox"><div class="box"><div style="display:flex;justify-content:space-between"><h3>Artist Login</h3><button onclick="closeBox('loginBox')" style="background:none;border:none;color:#fff;font-size:20px">✕</button></div><input id="email" placeholder="Email"><input id="pass" type="password" placeholder="Password"><button class="abtn" style="width:100%;margin-top:8px" onclick="login()">Login / Sign Up</button><p id="loginMsg" style="font-size:11px;color:#ff6a00;margin-top:8px"></p></div></div>
+<div class="modal" id="commentBox"><div class="box"><h3>💬 Comments</h3><div id="cList" style="max-height:200px;overflow:auto;margin:10px 0"></div><input id="cText" placeholder="Add comment..."><button class="abtn" style="width:100%;margin-top:6px" onclick="postComment()">Post</button><button class="abtn" style="width:100%;margin-top:6px;background:#222;color:#fff" onclick="closeBox('commentBox')">Close</button></div></div>
+<div class="modal" id="searchBox"><div class="box"><h3>Search</h3><input id="sq" placeholder="Type..." oninput="document.getElementById('q').value=this.value;filter();closeBox('searchBox')"><button class="abtn" style="width:100%;margin-top:8px" onclick="closeBox('searchBox')">Close</button></div></div>
 <script>
-const client = supabase.createClient("https://nxiygxnzlusasgzdknft.supabase.co", "sb_publishable_MJYDrg3qcgynvoRTWHQvAA_qt7nRTDw");
-let allSongs=[];
-function toggleSearch(){document.getElementById('searchBar').classList.toggle('show');document.getElementById('searchInput').focus()}
-function openLogin(){document.getElementById('loginModal').classList.add('show')}
-function closeLogin(){document.getElementById('loginModal').classList.remove('show')}
-function closePlayer(){document.getElementById('player').classList.remove('show');document.getElementById('audio').pause()}
+const sb=supabase.createClient("https://nxiygxnzlusasgzdknft.supabase.co","sb_publishable_MJYDrg3qcgynvoRTWHQvAA_qt7nRTDw");
+let all=[],cur=null,uid=null;
+function openBox(id){document.getElementById(id).classList.add('show')}
+function closeBox(id){document.getElementById(id).classList.remove('show')}
+function switchTab(name,el){
+ document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));el.classList.add('active');
+ document.getElementById('homeTab').style.display=name==='home'?'block':'none';
+ document.getElementById('artistsTab').style.display=name==='artists'?'block':'none';
+ document.getElementById('dashTab').style.display=name==='dash'?'block':'none';
+ document.getElementById('adminTab').style.display=name==='admin'?'block':'none';
+ if(name==='artists')loadArtists(); if(name==='admin')loadAdmin(); if(name==='dash')loadDash();
+}
 async function load(){
-  const {data,error}=await client.from('songs').select('*').order('created_at',{ascending:false});
-  if(error){document.getElementById('count').innerText="Error: "+error.message;return}
-  allSongs=data; render(data);
+ const {data}=await sb.from('songs').select('*').order('created_at',{ascending:false});
+ all=data||[]; document.getElementById('cnt').innerText=all.length+' SONGS';
+ render(all);
 }
 function render(list){
-  document.getElementById('count').innerText=list.length+" SONGS";
-  document.getElementById('grid').innerHTML=list.map(s=>{
-    const u=(s.file_url||s.song_url||'').replace(/'/g,'');
-    const t=(s.title||'Untitled').replace(/'/g,'');
-    const a=(s.artist||'Unknown').replace(/'/g,'');
-    return `<div class="card" onclick="playSong('${t}','${a}','${u}')"><div class="art">♫<div class="badge">▶</div></div><div class="info"><h4>${s.title||'Untitled'}</h4><p>${s.artist||'Unknown'}</p></div></div>`;
-  }).join('');
+ document.getElementById('grid').innerHTML=list.map(s=>`<div class="card"><div class="art" onclick="play('${(s.title||'').replace(/'/g,'')}','${(s.artist||'').replace(/'/g,'')}','${(s.file_url||s.song_url||'').replace(/'/g,'')}','${s.id}')">♫<div class="badge">▶</div></div><div class="info"><h4>${s.title}</h4><p>${s.artist} • ${s.plays||0} plays • ${s.likes||0} ❤️</p></div><div class="actions"><button class="act" onclick="quickLike('${s.id}')">❤️</button><button class="act" onclick="play('${(s.title||'').replace(/'/g,'')}','${(s.artist||'').replace(/'/g,'')}','${(s.file_url||s.song_url||'').replace(/'/g,'')}','${s.id}')">Play</button></div></div>`).join('');
 }
-function filterSongs(){
-  const q=document.getElementById('searchInput').value.toLowerCase();
-  const f=allSongs.filter(s=>(s.title||'').toLowerCase().includes(q)||(s.artist||'').toLowerCase().includes(q));
-  render(f);
+function filter(){const q=document.getElementById('q').value.toLowerCase();render(all.filter(s=>(s.title||'').toLowerCase().includes(q)||(s.artist||'').toLowerCase().includes(q)))}
+function play(t,a,u,id){cur={id,t,a,u};document.getElementById('nowT').innerText=t;document.getElementById('nowA').innerText=a;const au=document.getElementById('audio');au.src=u;document.getElementById('player').classList.add('show');au.play();document.getElementById('likeC').innerText='0';loadComments(id)}
+async function addPlay(){if(!cur)return;await sb.from('songs').update({plays:(all.find(s=>s.id===cur.id)?.plays||0)+1}).eq('id',cur.id);if(uid){const {data:art}=await sb.from('artists').select('*').eq('user_id',uid).single();if(art)await sb.from('artists').update({total_plays:(art.total_plays||0)+1,earnings:(art.earnings||0)+100}).eq('user_id',uid)}}
+async function quickLike(id){await sb.from('songs').update({likes:(all.find(s=>s.id===id)?.likes||0)+1}).eq('id',id);load()}
+async function like(){if(!cur)return;quickLike(cur.id);document.getElementById('likeC').innerText=parseInt(document.getElementById('likeC').innerText||0)+1}
+function share(){if(cur)navigator.clipboard.writeText(location.href);alert('Link copied!')}
+async function login(){
+ const e=document.getElementById('email').value,p=document.getElementById('pass').value;
+ if(!e||!p){document.getElementById('loginMsg').innerText='Enter email & pass';return}
+ let {data,error}=await sb.auth.signInWithPassword({email:e,password:p});
+ if(error){let {error:e2}=await sb.auth.signUp({email:e,password:p});if(e2){document.getElementById('loginMsg').innerText=e2.message;return}document.getElementById('loginMsg').innerText='Check email, then login!';return}
+ uid=data.user.id;document.getElementById('loginMsg').innerText='Logged in!';closeBox('loginBox');loadDash();
 }
-function playSong(t,a,u){
-  if(!u){alert('No file_url for this song');return}
-  document.getElementById('nowTitle').innerText=t;
-  document.getElementById('nowArtist').innerText=a;
-  const ad=document.getElementById('audio');ad.src=u;document.getElementById('player').classList.add('show');ad.play();
+async function loadDash(){
+ const {data:{user}}=await sb.auth.getUser();if(!user){document.getElementById('dashMsg').innerText='Please login first';return}uid=user.id;
+ const {data:art}=await sb.from('artists').select('*').eq('user_id',uid).maybeSingle();
+ if(art){document.getElementById('aName').value=art.name||'';document.getElementById('aBio').value=art.bio||'';document.getElementById('dPlays').innerText=art.total_plays||0;document.getElementById('dEarn').innerText=art.earnings||0}
+ const {data:songs}=await sb.from('songs').select('*').eq('artist',document.getElementById('aName').value||'');
+ document.getElementById('dSongs').innerText=songs?.length||all.length;let l=0;songs?.forEach(s=>l+=s.likes||0);document.getElementById('dLikes').innerText=l;
 }
-async function artistLogin(){
-  const email=document.getElementById('email').value;
-  const pass=document.getElementById('password').value;
-  if(!email||!pass){document.getElementById('loginMsg').innerText='Enter email & password';return}
-  document.getElementById('loginMsg').innerText='Loading...';
-  let {error}=await client.auth.signInWithPassword({email,password:pass});
-  if(error){
-    const {error:e2}=await client.auth.signUp({email,password:pass});
-    if(e2){document.getElementById('loginMsg').innerText=e2.message;return}
-    document.getElementById('loginMsg').innerText='Account created! Check email then login.';
-  }else{document.getElementById('loginMsg').innerText='Logged in! Now you can upload.'}
+async function saveArtist(){
+ const {data:{user}}=await sb.auth.getUser();if(!user)return alert('Login first');
+ const rec={user_id:user.id,name:document.getElementById('aName').value,bio:document.getElementById('aBio').value,avatar_url:document.getElementById('aAvatar').value};
+ const {data:ex}=await sb.from('artists').select('*').eq('user_id',user.id).maybeSingle();
+ let err;if(ex){let r=await sb.from('artists').update(rec).eq('user_id',user.id);err=r.error}else{let r=await sb.from('artists').insert([rec]);err=r.error}
+ document.getElementById('dashMsg').innerText=err?err.message:'Profile saved! ✅';
 }
-async function uploadSong(){
-  const title=document.getElementById('songTitle').value;
-  const artist=document.getElementById('songArtist').value;
-  const url=document.getElementById('songUrl').value;
-  if(!title||!url){document.getElementById('loginMsg').innerText='Title + URL required';return}
-  const {error}=await client.from('songs').insert([{title,artist,file_url:url,song_url:url}]);
-  if(error){document.getElementById('loginMsg').innerText='Upload failed: '+error.message+' - Run INSERT policy in Supabase';return}
-  document.getElementById('loginMsg').innerText='Uploaded!'; load(); closeLogin();
+async function upload(){
+ const t=document.getElementById('sTitle').value,a=document.getElementById('sArtist').value,u=document.getElementById('sUrl').value;
+ if(!t||!u)return alert('Title + URL needed');
+ const {error}=await sb.from('songs').insert([{title:t,artist:a,file_url:u,song_url:u,lyrics:document.getElementById('sLyrics').value}]);
+ if(error)alert(error.message);else{alert('Uploaded!');load()}
 }
+async function loadArtists(){
+ const {data}=await sb.from('artists').select('*');
+ document.getElementById('artistList').innerHTML=(data||[]).map(ar=>`<div style="display:flex;gap:10px;background:#151515;border:1px solid #222;border-radius:14px;padding:10px;margin-bottom:8px"><div style="width:44px;height:44px;background:#222;border-radius:50%;display:flex;align-items:center;justify-content:center">${ar.avatar_url?`<img src="${ar.avatar_url}" style="width:100%;height:100%;border-radius:50%;object-fit:cover">`:'🎤'}</div><div><div style="font-weight:700;font-size:13px">${ar.name} ${ar.verified?'✓':''}</div><div style="font-size:11px;color:#888">${ar.bio||'No bio yet'} • ${ar.location}</div><div style="font-size:11px;color:#ff6a00">${ar.total_plays||0} plays • UGX ${ar.earnings||0}</div></div></div>`).join('')||'No artists yet';
+}
+async function loadAdmin(){
+ document.getElementById('adminList').innerHTML=all.map(s=>`<div style="background:#151515;border:1px solid #222;border-radius:12px;padding:10px;margin-bottom:8px;display:flex;justify-content:space-between"><div><div style="font-size:12px;font-weight:700">${s.title}</div><div style="font-size:10px;color:#888">${s.artist} • ${s.approved?'Approved ✅':'Pending'}</div></div><button class="abtn" style="font-size:10px" onclick="toggleApprove('${s.id}',${!s.approved})">${s.approved?'Reject':'Approve'}</button></div>`).join('');
+}
+async function toggleApprove(id,val){await sb.from('songs').update({approved:val}).eq('id',id);load();loadAdmin()}
+async function loadComments(id){const {data}=await sb.from('comments').select('*').eq('song_id',id).order('created_at',{ascending:false});document.getElementById('cList').innerHTML=(data||[]).map(c=>`<div style="font-size:11px;background:#111;border:1px solid #222;border-radius:8px;padding:6px;margin-bottom:4px">${c.text}</div>`).join('')||'No comments yet'}
+async function postComment(){if(!cur)return;const t=document.getElementById('cText').value;if(!t)return;await sb.from('comments').insert([{song_id:cur.id,text:t,user_id:uid}]);document.getElementById('cText').value='';loadComments(cur.id)}
 load();
 </script>
 </body>
-</html>
+  </html>
