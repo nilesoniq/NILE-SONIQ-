@@ -23,6 +23,7 @@ content="NileSoniq — Uganda's music platform. Stream music, discover artists a
   --border:#292929;
   --danger:#ff4040;
   --success:#2ecc71;
+  --warning:#f1c40f;
 }
 
 *{
@@ -134,6 +135,11 @@ nav button.active{
 .btn-success{
   background:var(--success);
   color:#08150d;
+}
+
+.btn-warning{
+  background:var(--warning);
+  color:#111;
 }
 
 .menu-btn{
@@ -428,7 +434,8 @@ nav button.active{
 }
 
 .field input:focus,
-.field textarea:focus{
+.field textarea:focus,
+.field select:focus{
   border-color:var(--orange);
 }
 
@@ -477,12 +484,23 @@ td{font-size:14px}
   color:var(--orange2);
 }
 
-.status.approved{
+.status.approved,
+.status.paid{
   background:rgba(46,204,113,.12);
   color:var(--success);
 }
 
 .status.rejected{
+  background:rgba(255,64,64,.12);
+  color:#ff7777;
+}
+
+.status.active{
+  background:rgba(46,204,113,.12);
+  color:var(--success);
+}
+
+.status.inactive{
   background:rgba(255,64,64,.12);
   color:#ff7777;
 }
@@ -497,6 +515,39 @@ td{font-size:14px}
   font-size:12px;
   font-weight:bold;
   margin-top:8px;
+}
+
+.admin-tabs{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  margin-bottom:20px;
+}
+
+.admin-tabs button{
+  background:#202020;
+  border:1px solid var(--border);
+  color:#ddd;
+  padding:10px 14px;
+  border-radius:10px;
+}
+
+.admin-tabs button.active{
+  background:var(--orange);
+  color:white;
+  border-color:var(--orange);
+}
+
+.footer-admin{
+  background:transparent;
+  border:none;
+  color:#777;
+  padding:0;
+  font-size:13px;
+}
+
+.footer-admin:hover{
+  color:var(--orange);
 }
 
 .modal{
@@ -702,6 +753,8 @@ footer{
   display:flex;
   gap:18px;
   font-size:13px;
+  align-items:center;
+  flex-wrap:wrap;
 }
 
 @media(max-width:950px){
@@ -808,7 +861,8 @@ footer{
       NILE <span>SONIQ</span>
     </a>
 
-    <button class="menu-btn" onclick="toggleMenu()">☰</button>
+    <button class="menu-btn"
+            onclick="toggleMenu()">☰</button>
 
     <nav id="mainNav">
 
@@ -826,14 +880,6 @@ footer{
       <button data-page="dashboard"
               onclick="showPage('dashboard')">
         Dashboard
-      </button>
-
-      <!-- ADMIN LINK -->
-      <button data-page="admin"
-              id="adminNav"
-              class="hidden"
-              onclick="showPage('admin')">
-        Admin
       </button>
 
     </nav>
@@ -1002,8 +1048,6 @@ Artist Login
 </div>
 
 
-<!-- PROFILE -->
-
 <div class="dashboard-card">
 
 <h2>Artist Profile</h2>
@@ -1048,8 +1092,6 @@ Save Profile
 
 </div>
 
-
-<!-- UPLOAD -->
 
 <div class="dashboard-card">
 
@@ -1102,8 +1144,6 @@ Uploaded songs are sent for admin approval before appearing publicly.
 </div>
 
 
-<!-- MY SONGS -->
-
 <div class="dashboard-card">
 
 <h2>My Songs</h2>
@@ -1147,17 +1187,19 @@ Uploaded songs are sent for admin approval before appearing publicly.
 <h1>Admin Dashboard</h1>
 
 <p>
-Manage NileSoniq music submissions.
+Manage NileSoniq music, withdrawals and administrators.
 </p>
 
-<div id="adminRoleBadge" class="admin-badge hidden">
+<div id="adminRoleBadge"
+     class="admin-badge hidden">
 ADMIN
 </div>
 
 </div>
 
 
-<div id="adminDenied" class="empty hidden">
+<div id="adminDenied"
+     class="empty hidden">
 
 <h3>Admin access required</h3>
 
@@ -1168,13 +1210,40 @@ You do not have permission to access this section.
 </div>
 
 
-<div id="adminContent" class="hidden">
+<div id="adminContent"
+     class="hidden">
 
-<div class="dashboard-card">
+<div class="admin-tabs">
 
-<h2>Pending Songs</h2>
+<button id="adminTabSongs"
+        class="active"
+        onclick="showAdminTab('songs')">
+Songs
+</button>
 
-<div id="adminMessage" class="message"></div>
+<button id="adminTabWithdrawals"
+        onclick="showAdminTab('withdrawals')">
+Withdrawals
+</button>
+
+<button id="adminTabAdmins"
+        class="hidden"
+        onclick="showAdminTab('admins')">
+Administrators
+</button>
+
+</div>
+
+
+<!-- ADMIN SONGS -->
+
+<div id="adminSongsPanel"
+     class="dashboard-card">
+
+<h2>Song Submissions</h2>
+
+<div id="adminMessage"
+     class="message"></div>
 
 <div class="table-wrap">
 
@@ -1200,6 +1269,112 @@ You do not have permission to access this section.
 
 </div>
 
+
+<!-- WITHDRAWALS -->
+
+<div id="adminWithdrawalsPanel"
+     class="dashboard-card hidden">
+
+<h2>Withdrawal Requests</h2>
+
+<div id="withdrawalAdminMessage"
+     class="message"></div>
+
+<div class="table-wrap">
+
+<table>
+
+<thead>
+
+<tr>
+<th>Artist</th>
+<th>Amount</th>
+<th>Phone</th>
+<th>Network</th>
+<th>Status</th>
+<th>Action</th>
+</tr>
+
+</thead>
+
+<tbody id="withdrawalsTable"></tbody>
+
+</table>
+
+</div>
+
+</div>
+
+
+<!-- ADMIN MANAGEMENT -->
+
+<div id="adminManagementPanel"
+     class="dashboard-card hidden">
+
+<h2>Administrator Management</h2>
+
+<div id="adminManagementMessage"
+     class="message"></div>
+
+<div class="form-grid">
+
+<div class="field">
+<label>Administrator Email</label>
+
+<input id="newAdminEmail"
+       type="email"
+       placeholder="artist@example.com">
+</div>
+
+<div class="field">
+<label>Role</label>
+
+<select id="newAdminRole">
+
+<option value="admin">
+Admin
+</option>
+
+<option value="super_admin">
+Super Admin
+</option>
+
+</select>
+
+</div>
+
+</div>
+
+<button class="btn btn-orange"
+        onclick="addAdministrator()">
+Add Administrator
+</button>
+
+
+<div style="margin-top:25px;"
+     class="table-wrap">
+
+<table>
+
+<thead>
+
+<tr>
+<th>Email</th>
+<th>Role</th>
+<th>Status</th>
+<th>Action</th>
+</tr>
+
+</thead>
+
+<tbody id="adminsTable"></tbody>
+
+</table>
+
+</div>
+
+</div>
+
 </div>
 
 </div>
@@ -1208,6 +1383,8 @@ You do not have permission to access this section.
 
 </main>
 
+
+<!-- ================= FOOTER ================= -->
 
 <footer>
 
@@ -1242,6 +1419,13 @@ Terms
 <a href="mailto:info@nilesoniq.com">
 Contact
 </a>
+
+<button
+id="adminFooterLink"
+class="footer-admin hidden"
+onclick="showPage('admin')">
+Admin
+</button>
 
 </div>
 
@@ -1286,10 +1470,11 @@ Create Account
 
 </div>
 
-<div id="authMessage" class="message"></div>
+<div id="authMessage"
+     class="message"></div>
 
 <div id="signupNameField"
-class="field hidden">
+     class="field hidden">
 
 <label>Artist Name</label>
 
@@ -1338,7 +1523,8 @@ Login
 
 <div class="now-playing">
 
-<div id="nowCover" class="now-cover"></div>
+<div id="nowCover"
+     class="now-cover"></div>
 
 <div class="now-title">
 
@@ -1453,10 +1639,12 @@ async function checkUser(){
     } = await sb.auth.getSession();
 
     if(error){
+
       console.error(
         "Session error:",
         error
       );
+
       return;
     }
 
@@ -1475,15 +1663,17 @@ async function checkUser(){
 
 
 /* =========================================================
-   IMPORTANT ADMIN CHECK
-   THIS NOW USES SUPABASE ADMINS TABLE
+   ADMIN CHECK
 ========================================================= */
 
 async function isCurrentUserAdmin(){
 
   if(!currentUser){
+
     currentAdmin = null;
+
     return false;
+
   }
 
   try{
@@ -1506,6 +1696,7 @@ async function isCurrentUserAdmin(){
       )
       .maybeSingle();
 
+
     if(error){
 
       console.error(
@@ -1516,9 +1707,12 @@ async function isCurrentUserAdmin(){
       currentAdmin = null;
 
       return false;
+
     }
 
-    currentAdmin = data || null;
+
+    currentAdmin =
+      data || null;
 
     return !!data;
 
@@ -1532,7 +1726,23 @@ async function isCurrentUserAdmin(){
     currentAdmin = null;
 
     return false;
+
   }
+
+}
+
+
+/* =========================================================
+   SUPER ADMIN CHECK
+========================================================= */
+
+function isCurrentUserSuperAdmin(){
+
+  return (
+    currentAdmin &&
+    currentAdmin.role ===
+    "super_admin"
+  );
 
 }
 
@@ -1553,9 +1763,9 @@ async function updateUI(){
       "logoutButton"
     );
 
-  const adminNav =
+  const adminFooterLink =
     document.getElementById(
-      "adminNav"
+      "adminFooterLink"
     );
 
   const adminBadge =
@@ -1599,7 +1809,7 @@ async function updateUI(){
 
     if(isAdmin){
 
-      adminNav.classList.remove(
+      adminFooterLink.classList.remove(
         "hidden"
       );
 
@@ -1615,7 +1825,7 @@ async function updateUI(){
 
     }else{
 
-      adminNav.classList.add(
+      adminFooterLink.classList.add(
         "hidden"
       );
 
@@ -1647,7 +1857,7 @@ async function updateUI(){
       "hidden"
     );
 
-    adminNav.classList.add(
+    adminFooterLink.classList.add(
       "hidden"
     );
 
@@ -1742,10 +1952,6 @@ async function showPage(page){
   }
 
 
-  /* =========================
-     ADMIN PAGE
-  ========================== */
-
   if(page === "admin"){
 
     const denied =
@@ -1788,6 +1994,8 @@ async function showPage(page){
         "hidden"
       );
 
+      updateAdminTabs();
+
       await loadAdminSongs();
 
     }else{
@@ -1812,6 +2020,158 @@ function toggleMenu(){
   document
     .getElementById("mainNav")
     .classList.toggle("open");
+
+}
+
+
+/* =========================================================
+   ADMIN TABS
+========================================================= */
+
+function updateAdminTabs(){
+
+  const adminTab =
+    document.getElementById(
+      "adminTabAdmins"
+    );
+
+  if(
+    adminTab &&
+    isCurrentUserSuperAdmin()
+  ){
+
+    adminTab.classList.remove(
+      "hidden"
+    );
+
+  }else if(adminTab){
+
+    adminTab.classList.add(
+      "hidden"
+    );
+
+  }
+
+}
+
+
+async function showAdminTab(tab){
+
+  const songsPanel =
+    document.getElementById(
+      "adminSongsPanel"
+    );
+
+  const withdrawalsPanel =
+    document.getElementById(
+      "adminWithdrawalsPanel"
+    );
+
+  const managementPanel =
+    document.getElementById(
+      "adminManagementPanel"
+    );
+
+
+  const songTab =
+    document.getElementById(
+      "adminTabSongs"
+    );
+
+  const withdrawalTab =
+    document.getElementById(
+      "adminTabWithdrawals"
+    );
+
+  const adminTab =
+    document.getElementById(
+      "adminTabAdmins"
+    );
+
+
+  songsPanel.classList.add(
+    "hidden"
+  );
+
+  withdrawalsPanel.classList.add(
+    "hidden"
+  );
+
+  managementPanel.classList.add(
+    "hidden"
+  );
+
+
+  songTab.classList.remove(
+    "active"
+  );
+
+  withdrawalTab.classList.remove(
+    "active"
+  );
+
+  if(adminTab){
+    adminTab.classList.remove(
+      "active"
+    );
+  }
+
+
+  if(tab === "songs"){
+
+    songsPanel.classList.remove(
+      "hidden"
+    );
+
+    songTab.classList.add(
+      "active"
+    );
+
+    await loadAdminSongs();
+
+  }
+
+
+  if(tab === "withdrawals"){
+
+    withdrawalsPanel.classList.remove(
+      "hidden"
+    );
+
+    withdrawalTab.classList.add(
+      "active"
+    );
+
+    await loadWithdrawals();
+
+  }
+
+
+  if(tab === "admins"){
+
+    if(!isCurrentUserSuperAdmin()){
+
+      alert(
+        "Only the Super Admin can manage administrators."
+      );
+
+      return;
+
+    }
+
+    managementPanel.classList.remove(
+      "hidden"
+    );
+
+    if(adminTab){
+      adminTab.classList.add(
+        "active"
+      );
+    }
+
+    await loadAdministrators();
+
+  }
 
 }
 
@@ -1971,6 +2331,7 @@ async function submitAuth(){
         password
       });
 
+
       if(error){
         throw error;
       }
@@ -2033,6 +2394,7 @@ async function submitAuth(){
               onConflict:"user_id"
             }
           );
+
 
         if(artistError){
 
@@ -3524,6 +3886,13 @@ async function loadAdminSongs(){
                 Approve
               </button>
 
+              <button
+                class="btn btn-danger"
+                style="padding:8px 12px;margin-left:5px;"
+                onclick="rejectSong('${song.id}')">
+                Reject
+              </button>
+
             </td>
 
           </tr>
@@ -3630,6 +3999,772 @@ async function approveSong(songId){
       "adminMessage",
       error.message ||
       "Could not approve song.",
+      "error"
+    );
+
+  }
+
+}
+
+
+/* =========================================================
+   REJECT SONG
+========================================================= */
+
+async function rejectSong(songId){
+
+  if(!currentUser){
+
+    alert(
+      "Please login first."
+    );
+
+    return;
+
+  }
+
+
+  const isAdmin =
+    await isCurrentUserAdmin();
+
+
+  if(!isAdmin){
+
+    alert(
+      "You are not authorized."
+    );
+
+    return;
+
+  }
+
+
+  const confirmed =
+    confirm(
+      "Reject this song submission?"
+    );
+
+
+  if(!confirmed){
+    return;
+  }
+
+
+  try{
+
+    const {
+      error
+    } = await sb
+      .from("songs")
+      .update({
+        approved:false
+      })
+      .eq(
+        "id",
+        songId
+      );
+
+
+    if(error){
+      throw error;
+    }
+
+
+    showMessage(
+      "adminMessage",
+      "Song rejected.",
+      "success"
+    );
+
+
+    await loadAdminSongs();
+
+  }catch(error){
+
+    console.error(error);
+
+    showMessage(
+      "adminMessage",
+      error.message ||
+      "Could not reject song.",
+      "error"
+    );
+
+  }
+
+}
+
+
+/* =========================================================
+   WITHDRAWALS
+========================================================= */
+
+async function loadWithdrawals(){
+
+  if(!currentUser){
+    return;
+  }
+
+
+  const isAdmin =
+    await isCurrentUserAdmin();
+
+
+  if(!isAdmin){
+    return;
+  }
+
+
+  const tbody =
+    document.getElementById(
+      "withdrawalsTable"
+    );
+
+
+  tbody.innerHTML = `
+    <tr>
+      <td colspan="6">
+        <div class="loading">
+          Loading withdrawals...
+        </div>
+      </td>
+    </tr>
+  `;
+
+
+  try{
+
+    const {
+      data,
+      error
+    } = await sb
+      .from("withdrawals")
+      .select("*")
+      .order(
+        "created_at",
+        {
+          ascending:false
+        }
+      );
+
+
+    if(error){
+      throw error;
+    }
+
+
+    const withdrawals =
+      data || [];
+
+
+    if(withdrawals.length === 0){
+
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="6">
+            <div class="empty">
+              No withdrawal requests yet.
+            </div>
+          </td>
+        </tr>
+      `;
+
+      return;
+
+    }
+
+
+    tbody.innerHTML =
+      withdrawals.map(item => {
+
+        return `
+          <tr>
+
+            <td>
+              ${escapeHtml(
+                item.artist_id || "Unknown"
+              )}
+            </td>
+
+            <td>
+              UGX ${formatNumber(
+                item.amount || 0
+              )}
+            </td>
+
+            <td>
+              ${escapeHtml(
+                item.phone_number || ""
+              )}
+            </td>
+
+            <td>
+              ${escapeHtml(
+                item.network || "MTN"
+              )}
+            </td>
+
+            <td>
+              <span class="status ${escapeHtml(
+                item.status || "pending"
+              )}">
+                ${escapeHtml(
+                  item.status || "pending"
+                )}
+              </span>
+            </td>
+
+            <td>
+
+              ${
+                item.status === "pending"
+                ? `
+                  <button
+                    class="btn btn-success"
+                    style="padding:7px 10px;"
+                    onclick="approveWithdrawal('${item.id}')">
+                    Approve
+                  </button>
+
+                  <button
+                    class="btn btn-danger"
+                    style="padding:7px 10px;margin-left:4px;"
+                    onclick="rejectWithdrawal('${item.id}')">
+                    Reject
+                  </button>
+                `
+                : ""
+              }
+
+              ${
+                item.status === "approved"
+                ? `
+                  <button
+                    class="btn btn-orange"
+                    style="padding:7px 10px;"
+                    onclick="markWithdrawalPaid('${item.id}')">
+                    Mark Paid
+                  </button>
+                `
+                : ""
+              }
+
+            </td>
+
+          </tr>
+        `;
+
+      }).join("");
+
+
+  }catch(error){
+
+    console.error(
+      "Withdrawals error:",
+      error
+    );
+
+
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="6">
+          <div class="empty">
+            ${escapeHtml(
+              error.message ||
+              "Could not load withdrawals."
+            )}
+          </div>
+        </td>
+      </tr>
+    `;
+
+  }
+
+}
+
+
+async function updateWithdrawalStatus(
+  withdrawalId,
+  status
+){
+
+  const isAdmin =
+    await isCurrentUserAdmin();
+
+
+  if(!isAdmin){
+
+    alert(
+      "You are not authorized."
+    );
+
+    return;
+
+  }
+
+
+  try{
+
+    const {
+      error
+    } = await sb
+      .from("withdrawals")
+      .update({
+        status:status,
+        processed_at:
+          status === "paid" ||
+          status === "rejected"
+            ? new Date().toISOString()
+            : null
+      })
+      .eq(
+        "id",
+        withdrawalId
+      );
+
+
+    if(error){
+      throw error;
+    }
+
+
+    showMessage(
+      "withdrawalAdminMessage",
+      "Withdrawal updated successfully.",
+      "success"
+    );
+
+
+    await loadWithdrawals();
+
+  }catch(error){
+
+    console.error(error);
+
+    showMessage(
+      "withdrawalAdminMessage",
+      error.message ||
+      "Could not update withdrawal.",
+      "error"
+    );
+
+  }
+
+}
+
+
+async function approveWithdrawal(id){
+
+  await updateWithdrawalStatus(
+    id,
+    "approved"
+  );
+
+}
+
+
+async function rejectWithdrawal(id){
+
+  if(
+    !confirm(
+      "Reject this withdrawal request?"
+    )
+  ){
+
+    return;
+
+  }
+
+
+  await updateWithdrawalStatus(
+    id,
+    "rejected"
+  );
+
+}
+
+
+async function markWithdrawalPaid(id){
+
+  if(
+    !confirm(
+      "Confirm that this MTN payment has been made manually?"
+    )
+  ){
+
+    return;
+
+  }
+
+
+  await updateWithdrawalStatus(
+    id,
+    "paid"
+  );
+
+}
+
+
+/* =========================================================
+   ADMINISTRATORS
+========================================================= */
+
+async function loadAdministrators(){
+
+  if(!isCurrentUserSuperAdmin()){
+
+    return;
+
+  }
+
+
+  const tbody =
+    document.getElementById(
+      "adminsTable"
+    );
+
+
+  tbody.innerHTML = `
+    <tr>
+      <td colspan="4">
+        <div class="loading">
+          Loading administrators...
+        </div>
+      </td>
+    </tr>
+  `;
+
+
+  try{
+
+    const {
+      data,
+      error
+    } = await sb
+      .from("admins")
+      .select(
+        "id,user_id,email,role,active"
+      )
+      .order(
+        "created_at",
+        {
+          ascending:true
+        }
+      );
+
+
+    if(error){
+      throw error;
+    }
+
+
+    const admins =
+      data || [];
+
+
+    if(admins.length === 0){
+
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="4">
+            <div class="empty">
+              No administrators found.
+            </div>
+          </td>
+        </tr>
+      `;
+
+      return;
+
+    }
+
+
+    tbody.innerHTML =
+      admins.map(admin => {
+
+        const isMe =
+          admin.user_id ===
+          currentUser.id;
+
+
+        return `
+          <tr>
+
+            <td>
+              ${escapeHtml(
+                admin.email || ""
+              )}
+
+              ${
+                isMe
+                ? `<small style="color:#777;"> (You)</small>`
+                : ""
+              }
+            </td>
+
+            <td>
+              <span class="admin-badge">
+                ${escapeHtml(
+                  admin.role || "admin"
+                )}
+              </span>
+            </td>
+
+            <td>
+
+              <span class="status ${
+                admin.active
+                ? "active"
+                : "inactive"
+              }">
+
+                ${
+                  admin.active
+                  ? "Active"
+                  : "Inactive"
+                }
+
+              </span>
+
+            </td>
+
+            <td>
+
+              ${
+                isMe
+                ? `<span style="color:#777;">
+                    Your account
+                   </span>`
+                : `
+                  <button
+                    class="btn ${
+                      admin.active
+                      ? "btn-danger"
+                      : "btn-success"
+                    }"
+                    style="padding:7px 10px;"
+                    onclick="toggleAdministrator(
+                      '${admin.user_id}',
+                      ${admin.active}
+                    )">
+
+                    ${
+                      admin.active
+                      ? "Deactivate"
+                      : "Activate"
+                    }
+
+                  </button>
+                `
+              }
+
+            </td>
+
+          </tr>
+        `;
+
+      }).join("");
+
+
+  }catch(error){
+
+    console.error(
+      "Admin list error:",
+      error
+    );
+
+
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="4">
+          <div class="empty">
+            ${escapeHtml(
+              error.message ||
+              "Could not load administrators."
+            )}
+          </div>
+        </td>
+      </tr>
+    `;
+
+  }
+
+}
+
+
+/* =========================================================
+   ADD ADMINISTRATOR
+========================================================= */
+
+async function addAdministrator(){
+
+  if(!isCurrentUserSuperAdmin()){
+
+    alert(
+      "Only the Super Admin can add administrators."
+    );
+
+    return;
+
+  }
+
+
+  const email =
+    document
+      .getElementById(
+        "newAdminEmail"
+      )
+      .value
+      .trim();
+
+  const role =
+    document
+      .getElementById(
+        "newAdminRole"
+      )
+      .value;
+
+
+  if(!email){
+
+    showMessage(
+      "adminManagementMessage",
+      "Enter the administrator email.",
+      "error"
+    );
+
+    return;
+
+  }
+
+
+  try{
+
+    const {
+      data,
+      error
+    } = await sb.rpc(
+      "add_admin_by_email",
+      {
+        target_email:email,
+        target_role:role
+      }
+    );
+
+
+    if(error){
+      throw error;
+    }
+
+
+    showMessage(
+      "adminManagementMessage",
+      "Administrator added successfully.",
+      "success"
+    );
+
+
+    document.getElementById(
+      "newAdminEmail"
+    ).value = "";
+
+
+    await loadAdministrators();
+
+  }catch(error){
+
+    console.error(error);
+
+    showMessage(
+      "adminManagementMessage",
+      error.message ||
+      "Could not add administrator.",
+      "error"
+    );
+
+  }
+
+}
+
+
+/* =========================================================
+   ACTIVATE / DEACTIVATE ADMIN
+========================================================= */
+
+async function toggleAdministrator(
+  userId,
+  currentStatus
+){
+
+  if(!isCurrentUserSuperAdmin()){
+
+    alert(
+      "Only the Super Admin can change administrator status."
+    );
+
+    return;
+
+  }
+
+
+  const newStatus =
+    !currentStatus;
+
+
+  const action =
+    newStatus
+    ? "activate"
+    : "deactivate";
+
+
+  if(
+    !confirm(
+      `Are you sure you want to ${action} this administrator?`
+    )
+  ){
+
+    return;
+
+  }
+
+
+  try{
+
+    const {
+      error
+    } = await sb
+      .from("admins")
+      .update({
+        active:newStatus
+      })
+      .eq(
+        "user_id",
+        userId
+      );
+
+
+    if(error){
+      throw error;
+    }
+
+
+    showMessage(
+      "adminManagementMessage",
+      `Administrator ${action}d successfully.`,
+      "success"
+    );
+
+
+    await loadAdministrators();
+
+  }catch(error){
+
+    console.error(error);
+
+    showMessage(
+      "adminManagementMessage",
+      error.message ||
+      "Could not update administrator.",
       "error"
     );
 
