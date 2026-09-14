@@ -1,50 +1,137 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NILE SONIQ - Free Forever</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NILE SONIQ</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.43.5/dist/umd/supabase.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;font-family:system-ui,sans-serif}
 body{background:#0a0a0a;color:#fff}
-header{display:flex;justify-content:space-between;align-items:center;padding:18px 20px;border-bottom:1px solid #1e1e1e;position:sticky;top:0;background:#0a0a0a;z-index:20}
-.logo{font-weight:900;font-size:22px}.logo span{color:#ff6a00}
-.artist-btn{background:#ff6a00;color:#000;padding:10px 18px;border-radius:999px;font-weight:800;border:none}
-.hero{margin:16px;background:#171717;border:1px solid #242424;border-radius:24px;padding:28px 20px}
-.free{color:#ff6a00;letter-spacing:3px;font-size:11px;font-weight:800;margin-bottom:14px}
-.hero h1{font-size:36px;line-height:0.95;font-weight:900;margin-bottom:14px}.hero h1 span{color:#ff6a00}
-.hero p{color:#8a8a8a;font-size:14px;margin-bottom:22px;max-width:320px}
-.btn-o{background:#ff6a00;color:#000;padding:13px 22px;border-radius:999px;font-weight:800;border:none}
-.btn-b{background:#1e1e1e;color:#fff;padding:13px 22px;border-radius:999px;border:1px solid #2a2a2a}
-.ad{margin:16px;border:1px dashed #2a2a2a;border-radius:16px;padding:24px;text-align:center;color:#555;letter-spacing:3px;font-size:11px;background:#0f0f0f}
-.sec{padding:8px 16px 120px}.sec-head{font-size:18px;font-weight:800;margin:8px 0}
-.count{color:#ff6a00;font-size:12px;font-weight:700;margin:6px 0 12px}
+header{display:flex;justify-content:space-between;align-items:center;padding:18px 16px;border-bottom:1px solid #1e1e1e;position:sticky;top:0;background:#0a0a0a;z-index:10}
+.logo{font-weight:900;font-size:20px}.logo span{color:#ff6a00}
+.icon-btn{background:#1a1a1a;border:1px solid #2a2a2a;width:40px;height:40px;border-radius:50%;color:#fff;font-size:18px}
+.artist-btn{background:#ff6a00;color:#000;padding:10px 16px;border-radius:999px;font-weight:800;border:none;margin-left:8px}
+.search-bar{display:none;padding:12px 16px;background:#111;border-bottom:1px solid #1e1e1e}.search-bar.show{display:block}
+.search-bar input{width:100%;background:#1e1e1e;border:1px solid #2a2a2a;color:#fff;padding:12px 16px;border-radius:999px;outline:none}
+.hero{margin:16px;background:#171717;border:1px solid #242424;border-radius:24px;padding:24px 20px}
+.free{color:#ff6a00;letter-spacing:3px;font-size:11px;font-weight:800;margin-bottom:10px}
+.hero h1{font-size:32px;font-weight:900;line-height:.95;margin-bottom:10px}.hero h1 span{color:#ff6a00}
+.hero p{color:#8a8a8a;font-size:13px;margin-bottom:18px}
+.btn-o{background:#ff6a00;color:#000;padding:12px 20px;border-radius:999px;font-weight:800;border:none}
+.btn-b{background:#1e1e1e;color:#fff;padding:12px 20px;border-radius:999px;border:1px solid #2a2a2a;margin-left:8px}
+.sec{padding:8px 16px 120px}.count{color:#ff6a00;font-size:12px;font-weight:700;margin:6px 0 12px}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .card{background:#151515;border:1px solid #222;border-radius:18px;overflow:hidden}
-.art{aspect-ratio:1;background:#1c1c1c;display:flex;align-items:center;justify-content:center;position:relative;font-size:56px;color:#2a2a2a}
-.badge{position:absolute;bottom:10px;right:10px;background:#ff6a00;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#000;font-weight:900}
-.info{padding:11px 10px}.info h4{font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.info p{font-size:11px;color:#777}
-.player{position:fixed;bottom:0;left:0;right:0;background:#181818;border-top:1px solid #2a2a2a;padding:14px 16px;display:none;align-items:center;gap:12px}
-.player.show{display:flex}
+.art{aspect-ratio:1;background:#1c1c1c;display:flex;align-items:center;justify-content:center;font-size:48px;position:relative}
+.badge{position:absolute;bottom:10px;right:10px;background:#ff6a00;width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#000;font-weight:900}
+.info{padding:10px}.info h4{font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.info p{font-size:11px;color:#777}
+.player{position:fixed;bottom:0;left:0;right:0;background:#181818;border-top:1px solid #2a2a2a;padding:12px 16px;display:none;align-items:center;gap:12px;z-index:20}.player.show{display:flex}
+.modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:30;align-items:center;justify-content:center;padding:20px}.modal.show{display:flex}
+.modal-box{background:#181818;border:1px solid #2a2a2a;border-radius:20px;padding:22px;width:100%;max-width:380px}
+.modal-box input{width:100%;background:#111;border:1px solid #2a2a2a;color:#fff;padding:12px;border-radius:12px;margin:8px 0}
 </style>
 </head>
 <body>
-<header><div class="logo">NILE <span>MUSIC</span></div><div style="display:flex;gap:12px;align-items:center"><span style="font-size:22px">⌕</span><button class="artist-btn">Artist login</button></div></header>
-<div class="hero"><div class="free">FREE FOREVER</div><h1>Uganda's music,<br><span>free to stream</span></h1><p>Fans pay nothing. Artists earn from every play and download their music brings in.</p><div style="display:flex;gap:10px"><button class="btn-o">Explore music</button><button class="btn-b">I'm an artist</button></div></div>
-<div class="ad">SPONSORED — AD SPACE</div>
-<div class="sec"><div class="sec-head">🔥 Trending today</div><div class="count" id="count">Loading songs...</div><div class="grid" id="grid"></div></div>
-<div class="player" id="player"><div style="width:48px;height:48px;background:#222;border-radius:10px;display:flex;align-items:center;justify-content:center">♪</div><div style="flex:1"><div id="nowTitle" style="font-size:13px;font-weight:700">Title</div><div id="nowArtist" style="font-size:11px;color:#888">Artist</div><audio id="audio" controls style="width:100%;height:32px;margin-top:6px"></audio></div><button onclick="closePlayer()" style="background:none;border:none;color:#fff;font-size:22px">✕</button></div>
+<header>
+<div class="logo">NILE <span>SONIQ</span></div>
+<div style="display:flex;align-items:center">
+<button class="icon-btn" onclick="toggleSearch()">⌕</button>
+<button class="artist-btn" onclick="openLogin()">Artist login</button>
+</div>
+</header>
+<div class="search-bar" id="searchBar"><input id="searchInput" placeholder="Search songs, artists..." oninput="filterSongs()"></div>
+
+<div class="hero">
+<div class="free">FREE FOREVER</div>
+<h1>Uganda's music,<br><span>free to stream</span></h1>
+<p>Fans pay nothing. Artists earn from every play.</p>
+<div><button class="btn-o" onclick="document.getElementById('trending').scrollIntoView({behavior:'smooth'})">Explore music</button><button class="btn-b" onclick="openLogin()">I'm an artist</button></div>
+</div>
+
+<div class="sec" id="trending">
+<div style="font-size:17px;font-weight:800;margin-top:8px">🔥 Trending today</div>
+<div class="count" id="count">Loading songs...</div>
+<div class="grid" id="grid"></div>
+</div>
+
+<div class="player" id="player">
+<div style="width:46px;height:46px;background:#222;border-radius:10px;display:flex;align-items:center;justify-content:center">♫</div>
+<div style="flex:1"><div id="nowTitle" style="font-size:13px;font-weight:700">Title</div><div id="nowArtist" style="font-size:11px;color:#888">Artist</div><audio id="audio" controls style="width:100%;height:30px;margin-top:4px"></audio></div>
+<button onclick="closePlayer()" style="background:none;border:none;color:#fff;font-size:22px">✕</button>
+</div>
+
+<div class="modal" id="loginModal">
+<div class="modal-box">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><h3 style="font-weight:800">Artist Login</h3><button onclick="closeLogin()" style="background:none;border:none;color:#fff;font-size:22px">✕</button></div>
+<p style="font-size:12px;color:#888;margin-bottom:12px">Login to upload your music. New artist? Just enter email - we will create account.</p>
+<input id="email" placeholder="Email">
+<input id="password" type="password" placeholder="Password">
+<button class="btn-o" style="width:100%;margin-top:10px" onclick="artistLogin()">Login / Sign Up</button>
+<div style="margin-top:18px;border-top:1px solid #222;padding-top:14px">
+<h4 style="font-size:13px">Upload Song (after login)</h4>
+<input id="songTitle" placeholder="Song Title">
+<input id="songArtist" placeholder="Artist Name">
+<input id="songUrl" placeholder="Paste MP3 link OR file_url">
+<button class="btn-b" style="width:100%;margin-top:8px;background:#ff6a00;color:#000;border:none;font-weight:800" onclick="uploadSong()">Upload Song</button>
+<p id="loginMsg" style="font-size:11px;color:#ff6a00;margin-top:8px"></p>
+</div>
+</div>
+</div>
+
 <script>
-const SUPABASE_URL = "https://nxiygxnzlusasgzdknft.supabase.co";
-const SUPABASE_KEY = "sb_publishable_MJYDrg3qcgynvoRTWHQvAA_qt7nRTDw";
-const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const client = supabase.createClient("https://nxiygxnzlusasgzdknft.supabase.co", "sb_publishable_MJYDrg3qcgynvoRTWHQvAA_qt7nRTDw");
+let allSongs=[];
+function toggleSearch(){document.getElementById('searchBar').classList.toggle('show');document.getElementById('searchInput').focus()}
+function openLogin(){document.getElementById('loginModal').classList.add('show')}
+function closeLogin(){document.getElementById('loginModal').classList.remove('show')}
+function closePlayer(){document.getElementById('player').classList.remove('show');document.getElementById('audio').pause()}
 async function load(){
-  try{
-    const { data, error } = await supabaseClient.from('songs').select('*').order('created_at', {ascending:false});
-    if(error) throw error;
-    document.getElementById('count').textContent = data.length + " SONGS";
-    document.getElementById('grid').innerHTML = data.map(s=>{
-      const title=(s.title||'Untitled').replace(/'/g,"\\'");
-      const artist=(s.artist||'Unknown').replace(/'/g,"\\'");
-      const url=(s.file_url
+  const {data,error}=await client.from('songs').select('*').order('created_at',{ascending:false});
+  if(error){document.getElementById('count').innerText="Error: "+error.message;return}
+  allSongs=data; render(data);
+}
+function render(list){
+  document.getElementById('count').innerText=list.length+" SONGS";
+  document.getElementById('grid').innerHTML=list.map(s=>{
+    const u=(s.file_url||s.song_url||'').replace(/'/g,'');
+    const t=(s.title||'Untitled').replace(/'/g,'');
+    const a=(s.artist||'Unknown').replace(/'/g,'');
+    return `<div class="card" onclick="playSong('${t}','${a}','${u}')"><div class="art">♫<div class="badge">▶</div></div><div class="info"><h4>${s.title||'Untitled'}</h4><p>${s.artist||'Unknown'}</p></div></div>`;
+  }).join('');
+}
+function filterSongs(){
+  const q=document.getElementById('searchInput').value.toLowerCase();
+  const f=allSongs.filter(s=>(s.title||'').toLowerCase().includes(q)||(s.artist||'').toLowerCase().includes(q));
+  render(f);
+}
+function playSong(t,a,u){
+  if(!u){alert('No file_url for this song');return}
+  document.getElementById('nowTitle').innerText=t;
+  document.getElementById('nowArtist').innerText=a;
+  const ad=document.getElementById('audio');ad.src=u;document.getElementById('player').classList.add('show');ad.play();
+}
+async function artistLogin(){
+  const email=document.getElementById('email').value;
+  const pass=document.getElementById('password').value;
+  if(!email||!pass){document.getElementById('loginMsg').innerText='Enter email & password';return}
+  document.getElementById('loginMsg').innerText='Loading...';
+  let {error}=await client.auth.signInWithPassword({email,password:pass});
+  if(error){
+    const {error:e2}=await client.auth.signUp({email,password:pass});
+    if(e2){document.getElementById('loginMsg').innerText=e2.message;return}
+    document.getElementById('loginMsg').innerText='Account created! Check email then login.';
+  }else{document.getElementById('loginMsg').innerText='Logged in! Now you can upload.'}
+}
+async function uploadSong(){
+  const title=document.getElementById('songTitle').value;
+  const artist=document.getElementById('songArtist').value;
+  const url=document.getElementById('songUrl').value;
+  if(!title||!url){document.getElementById('loginMsg').innerText='Title + URL required';return}
+  const {error}=await client.from('songs').insert([{title,artist,file_url:url,song_url:url}]);
+  if(error){document.getElementById('loginMsg').innerText='Upload failed: '+error.message+' - Run INSERT policy in Supabase';return}
+  document.getElementById('loginMsg').innerText='Uploaded!'; load(); closeLogin();
+}
+load();
+</script>
+</body>
+</html>
