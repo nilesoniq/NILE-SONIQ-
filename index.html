@@ -2,120 +2,65 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>NILE SONIQ - Uganda's music, free to stream</title>
+<title>NILE SONIQ</title>
 <style>
 *{box-sizing:border-box}body{margin:0;background:#0e0e0e;color:#fff;font-family:system-ui}
-header{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;position:sticky;top:0;background:#0e0e0e;z-index:20;border-bottom:1px solid #1f1f1f}
-.logo{font-weight:900;letter-spacing:1px;font-size:20px} .logo span{color:#ff6a00}
-.pill{padding:9px 14px;border-radius:20px;border:1px solid #2a2a2a;background:#1a1a1a;color:#aaa;cursor:pointer;font-weight:600;font-size:13px}
-.pill.active{background:#ff6a00;color:#000;border-color:#ff6a00}.pill.show{display:inline-block}.pill.hide{display:none}
-.topnav{display:flex;gap:8px;margin:12px 18px;flex-wrap:wrap}
-.hero{margin:0 18px;background:#1a1a1a;border:1px solid #252525;border-radius:18px;padding:22px}
-.hero small{color:#ff6a00;letter-spacing:3px;font-weight:800;font-size:11px}.hero h1{margin:8px 0;font-size:30px;line-height:1.1}.hero h1 span{color:#ff6a00}
-.btn{border:0;padding:12px 18px;border-radius:24px;font-weight:800;cursor:pointer}
-.btn-orange{background:#ff6a00;color:#000}.btn-dark{background:#2a2a2a;color:#fff}
-.search{margin:16px 18px;background:#1a1a1a;border:1px solid #252525;border-radius:22px;padding:10px 14px;display:flex;align-items:center;gap:8px}
-.search input{background:transparent;border:0;outline:0;color:#fff;width:100%}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px;padding:0 18px}
-.card{background:#1a1a1a;border:1px solid #252525;border-radius:16px;overflow:hidden;padding:0}
-.card .img{height:130px;background:#222;display:grid;place-items:center;font-size:30px}
-.card .info{padding:10px}.card b{font-size:14px}.card small{color:#888}
-.playbtn{background:#ff6a00;color:#000;border:0;border-radius:20px;padding:8px;width:100%;margin-top:8px;font-weight:800;cursor:pointer}
-.orange{position:absolute;right:10px;bottom:45px;background:#ff6a00;width:36px;height:36px;border-radius:50%;display:grid;place-items:center;color:#000;font-weight:900}
-.player{position:fixed;left:0;right:0;bottom:0;background:#1a1a1a;border-top:1px solid #333;padding:10px 14px;display:flex;align-items:center;gap:10px;z-index:30}
-.stat{display:flex;gap:10px;margin:12px 0}.stat div{background:#1a1a1a;border:1px solid #252525;border-radius:14px;padding:12px;flex:1}.stat b{color:#ff6a00;font-size:22px}
-input,textarea{width:100%;padding:12px;margin:5px 0;background:#fff;color:#000;border:0;border-radius:6px;font-weight:600}
-textarea{background:#fff}
-.modal{position:fixed;inset:0;background:rgba(0,0,0,.75);display:none;place-items:center;z-index:99}.modal.open{display:grid}
-.box{background:#1e1e1e;border:1px solid #333;border-radius:18px;padding:18px;width:92%;max-width:380px}
-footer{text-align:center;padding:22px;color:#777;border-top:1px solid #1f1f1f;margin-top:30px}
-footer a{color:#ff6a00;text-decoration:none;margin:0 8px}
+header{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;background:#0e0e0e;position:sticky;top:0;z-index:20;border-bottom:1px solid #1f1f1f}
+.logo{font-weight:900;font-size:20px} .logo span{color:#ff6a00}
+.pill{padding:8px 14px;border-radius:20px;border:1px solid #2a2a2a;background:#1a1a1a;color:#aaa;font-weight:700;font-size:13px;cursor:pointer}
+.pill.active{background:#ff6a00;color:#000;border-color:#ff6a00}
+.sec{padding:18px 16px 8px;display:flex;justify-content:space-between}
+.sec h2{margin:0;font-size:16px}.sec small{color:#ff6a00;font-weight:800}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;padding:0 16px 10px}
+.card{background:#1a1a1a;border:1px solid #252525;border-radius:16px;overflow:hidden;position:relative}
+.hero{margin:12px 16px;background:#1a1a1a;border:1px solid #252525;border-radius:18px;padding:18px}
+.player{position:fixed;left:0;right:0;bottom:0;background:#1a1a1a;border-top:1px solid #333;padding:10px;display:flex;z-index:40}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;place-items:center;z-index:99}.modal.open{display:grid}
+.box{background:#1e1e1e;border:1px solid #333;border-radius:16px;padding:18px;width:92%;max-width:360px}
+input{width:100%;padding:11px;margin:5px 0;border-radius:8px;border:0}.btn{border:0;padding:10px;border-radius:20px;font-weight:800;cursor:pointer;width:100%}.btn-o{background:#ff6a00;color:#000}
 </style>
 </head>
 <body>
-<header>
-<div class="logo">NILE <span>SONIQ</span></div>
-<div style="display:flex;gap:8px;align-items:center">
-<span id="userEmail" style="font-size:11px;color:#888"></span>
-<button class="btn btn-orange" id="authBtn" onclick="openAuth()">Artist Login</button>
-</div>
-</header>
-
-<div class="topnav">
-<button class="pill show active" data-tab="home" id="homePill" onclick="switchTab('home')">🏠 Home</button>
-<button class="pill show" data-tab="artists" id="artPill" onclick="switchTab('artists')">🎤 Artists</button>
-<button class="pill hide" data-tab="dashboard" id="dashPill" onclick="switchTab('dashboard')">📊 Dashboard</button>
-<button class="pill hide" data-tab="admin" id="adminPill" onclick="switchTab('admin')">🛡️ Admin</button>
-</div>
+<header><div class="logo">NILE <span>SONIQ</span></div><button id="authBtn" class="pill" style="background:#ff6a00;color:#000" onclick="openAuth()">Artist Login</button></header>
+<div style="display:flex;gap:8px;padding:10px 16px"><button class="pill active" onclick="switchTab('home')">🏠 Home</button><button class="pill" onclick="switchTab('artists')">🎤 Artists</button><button class="pill" id="dashPill" style="display:none" onclick="switchTab('dashboard')">📊 Dashboard</button><button class="pill" id="adminPill" style="display:none" onclick="switchTab('admin')">🛡️ Admin</button></div>
 
 <div id="homePage">
-<div class="hero">
-<small>FREE FOREVER • MTN MOMO READY</small>
-<h1>Uganda's music,<br><span>free to stream</span></h1>
-<p style="color:#888;font-size:13px">Fans pay 0. Artists earn UGX per play.</p>
-<div style="display:flex;gap:10px;margin-top:12px"><button class="btn btn-orange" onclick="switchTab('home')">Explore music</button><button class="btn btn-dark" onclick="openAuth()">I'm an artist</button></div>
-</div>
-<div class="search"><span>⌕</span><input id="searchInput" placeholder="Search songs, artists..." oninput="renderHome()"></div>
-<div style="padding:0 18px;display:flex;align-items:center;gap:6px"><span>🔥</span><b>Trending</b><small id="songCount" style="color:#ff6a00;margin-left:6px"></small></div>
-<div id="homeSongs" class="grid" style="margin-top:10px"></div>
+<div class="hero"><small style="color:#ff6a00;letter-spacing:2px;font-weight:800;font-size:10px">FREE FOREVER • MTN MOMO READY</small><h1 style="margin:8px 0;line-height:1.1">Uganda's music,<br><span style="color:#ff6a00">free to stream</span></h1><small style="color:#888">Fans pay 0. Artists earn UGX per play.</small></div>
+<div style="margin:0 16px;background:#1a1a1a;border:1px solid #252525;border-radius:22px;padding:10px 14px;display:flex;gap:8px">⌕<input id="q" style="background:transparent;border:0;outline:0;color:#fff;width:100%" placeholder="Search songs, artists..." oninput="renderHome()"></div>
+
+<div class="sec"><h2>🔥 Trending • <small id="tC"></small></h2></div><div id="trendGrid" class="grid"></div>
+<div class="sec"><h2>🆕 New Releases</h2><small>Fresh</small></div><div id="newGrid" class="grid"></div>
+<div class="sec"><h2>🏆 Top Charts</h2><small>Most played</small></div><div id="chartGrid" class="grid"></div>
 </div>
 
-<div id="artistsPage" style="display:none;padding:0 18px"><h3>🎤 Artists</h3><div id="artistsList" class="grid"></div></div>
+<div id="artistsPage" style="display:none"><div class="sec"><h2>🎤 Artists</h2></div><div id="artistsList" class="grid"></div></div>
+<div id="dashboardPage" style="display:none;padding:16px"><h3>📊 Dashboard - Bio + Upload</h3><input id="editName" placeholder="Artist Name"><input id="editBio" placeholder="Bio"><input id="editAvatar" placeholder="Avatar link"><button class="btn btn-o" onclick="saveProfile()">Save Profile</button><div style="margin-top:12px"><b>Upload Song</b><input id="songTitle" placeholder="Title"><input id="songUrl" placeholder="MP3 link https://..."><button class="btn btn-o" onclick="uploadSong()">Upload</button></div><div id="mySongs" style="margin-top:10px"></div></div>
+<div id="adminPage" style="display:none;padding:16px"><h3>🛡️ Admin</h3><div id="adminSongs"></div></div>
 
-<div id="dashboardPage" style="display:none;padding:0 18px">
-<h3>📊 My Artist Dashboard</h3><small style="color:#888">Welcome boss! Manage your music.</small>
-<div class="stat"><div><small>Plays</small><br><b id="myPlays">0</b></div><div><small>UGX</small><br><b id="myUGX">0</b></div></div>
-<div><input id="editName" placeholder="Kaga Boy"><textarea id="editBio" placeholder="Your bio"></textarea><input id="editAvatar" placeholder="Avatar link"><button class="btn btn-orange" style="width:100%" onclick="saveProfile()">Save Profile</button></div>
-<div style="margin-top:18px"><b>Upload Song</b><input id="songTitle" placeholder="Song Title e.g. Kwete"><input id="songArtist" placeholder="Artist e.g. Kaga"><input id="songUrl" placeholder="MP3 link"><button class="btn" style="width:100%;background:#fff;color:#000;margin-top:6px" onclick="uploadSong()">Upload</button></div>
-<div id="mySongs" style="margin-top:14px"></div>
-</div>
-
-<div id="adminPage" style="display:none;padding:0 18px"><h3>🛡️ Admin Panel - Only kagaboy7@gmail.com</h3><div id="adminArtists"></div><div id="adminSongs" style="margin-top:12px"></div></div>
-
-<div id="player" class="player" style="display:none">
-<div style="width:36px;height:36px;background:#2a2a2a;border-radius:6px;display:grid;place-items:center">♫</div>
-<div style="flex:1"><b id="pTitle" style="font-size:13px">Eyiyu Kuda</b><br><small id="pArtist" style="color:#888;font-size:11px">Ston Boi Ft Kv</small><audio id="audio" controls style="width:100%;height:28px;margin-top:4px"></audio></div>
-<button onclick="closePlayer()" style="background:transparent;border:0;color:#fff;font-size:22px">✕</button>
-</div>
-
-<div id="authModal" class="modal"><div class="box">
-<div style="display:flex;justify-content:space-between"><h3>Artist Login</h3><span onclick="closeAuth()" style="cursor:pointer;font-size:22px">✕</span></div>
-<small style="color:#888">Login here, NOT in search bar!</small>
-<input id="lEmail" placeholder="Email = kagaboy7@gmail.com" style="background:#2a2a2a;color:#fff;margin-top:12px"><input id="lPass" type="password" placeholder="Password" style="background:#2a2a2a;color:#fff"><button class="btn btn-orange" style="width:100%;margin-top:10px" onclick="doLogin()">Login / Sign Up</button><small id="authMsg" style="color:#ff6a00"></small>
-<p style="margin-top:10px"><small style="color:#888">New artist? Just enter new email + name, we create account auto.</small></p>
-<input id="sName" placeholder="Your Artist Name (for new accounts)" style="background:#2a2a2a;color:#fff">
-</div></div>
-
-<footer><b style="color:#fff">NILE <span style="color:#ff6a00">SONIQ</span> © 2026</b><br><div style="margin-top:8px"><a href="#">Privacy</a><a href="#">Terms</a><a href="#">Contact</a></div></footer>
-
+<div id="player" class="player" style="display:none"><div style="flex:1"><b id="pT"></b><br><small id="pA" style="color:#888"></small><audio id="audio" controls style="width:100%;height:26px"></audio></div><button onclick="closePlayer()" style="background:0;border:0;color:#fff;font-size:20px">✕</button></div>
+<div id="authModal" class="modal"><div class="box"><h3>Artist Login</h3><input id="lEmail" placeholder="kagaboy7@gmail.com" style="background:#2a2a2a;color:#fff"><input id="lPass" type="password" placeholder="Password" style="background:#2a2a2a;color:#fff"><input id="sName" placeholder="Artist Name if new" style="background:#2a2a2a;color:#fff"><button class="btn btn-o" onclick="doLogin()">Login / Sign Up</button><button class="btn" style="background:#2a2a2a;color:#fff;margin-top:6px" onclick="closeAuth()">Close</button><small id="msg" style="color:#ff6a00"></small></div></div>
+<footer style="text-align:center;padding:20px;color:#666;border-top:1px solid #1f1f1f;margin-top:30px">NILE <span style="color:#ff6a00">SONIQ</span> © 2026<br><small>Privacy | Terms | kagaboy7@gmail.com – For AdSense</small></footer>
 <script>
 const ADMIN=["kagaboy7@gmail.com"];
-let users=JSON.parse(localStorage.getItem("ns_users")||"[]");
-let songs=JSON.parse(localStorage.getItem("ns_songs")||'[{"id":1,"title":"Eyiyu Kuda","artist":"Ston Boi Ft Kv","url":"https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3","cover":"","plays":1,"status":"approved","artistId":0}]');
+const DEF=[{id:1,title:"Eyiyu Kuda",artist:"Ston Boi Ft Kv",url:"https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",plays:12,status:"approved",artistId:0,date:Date.now()-100000},{id:2,title:"Kwete",artist:"Kaga Boy",url:"https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",plays:25,status:"approved",artistId:0,date:Date.now()-50000},{id:3,title:"Nile Flow",artist:"Kaga Boy",url:"https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3",plays:30,status:"approved",artistId:0,date:Date.now()}];
+let users=JSON.parse(localStorage.getItem("ns_users")||"[]");let songs=JSON.parse(localStorage.getItem("ns_songs")||"null");if(!songs||songs.length==0)songs=DEF;if(!songs.some(s=>s.status=="approved"))songs=DEF;localStorage.setItem("ns_songs",JSON.stringify(songs));
 let cur=JSON.parse(localStorage.getItem("ns_cur")||"null");
 function save(){localStorage.setItem("ns_users",JSON.stringify(users));localStorage.setItem("ns_songs",JSON.stringify(songs));localStorage.setItem("ns_cur",JSON.stringify(cur));}
-function switchTab(t){document.getElementById("homePage").style.display=t=="home"?"block":"none";document.getElementById("artistsPage").style.display=t=="artists"?"block":"none";document.getElementById("dashboardPage").style.display=t=="dashboard"?"block":"none";document.getElementById("adminPage").style.display=t=="admin"?"block":"none";document.querySelectorAll(".pill").forEach(p=>p.classList.remove("active"));document.querySelector(`[data-tab=${t}]`)?.classList.add("active");if(t=="home")renderHome();if(t=="artists")renderArtists();if(t=="dashboard")renderDash();if(t=="admin")renderAdmin();}
-function updateNav(){const dash=document.getElementById("dashPill"), adm=document.getElementById("adminPill"), btn=document.getElementById("authBtn"), em=document.getElementById("userEmail");if(!cur){dash.className="pill hide";adm.className="pill hide";btn.textContent="Artist Login";em.textContent="";return;}dash.className="pill show";btn.textContent="Logout";em.textContent=cur.email;if(ADMIN.includes(cur.email.toLowerCase())){adm.className="pill show";}else{adm.className="pill hide";}}
+function switchTab(t){document.getElementById("homePage").style.display=t=="home"?"block":"none";document.getElementById("artistsPage").style.display=t=="artists"?"block":"none";document.getElementById("dashboardPage").style.display=t=="dashboard"?"block":"none";document.getElementById("adminPage").style.display=t=="admin"?"block":"none";if(t=="home")renderHome();if(t=="artists")renderArtists();if(t=="dashboard")renderDash();if(t=="admin")renderAdmin();}
+function updateNav(){document.getElementById("dashPill").style.display=cur?"inline-block":"none";document.getElementById("adminPill").style.display=cur&&ADMIN.includes(cur.email)?"inline-block":"none";document.getElementById("authBtn").textContent=cur?`Logout (${cur.email})`:"Artist Login";}
 function openAuth(){if(cur){if(confirm("Logout?")){cur=null;save();updateNav();switchTab("home");}return;}document.getElementById("authModal").classList.add("open");}
 function closeAuth(){document.getElementById("authModal").classList.remove("open");}
-function doLogin(){
- const email=document.getElementById("lEmail").value.trim().toLowerCase();const pass=document.getElementById("lPass").value;const name=document.getElementById("sName").value.trim()||email.split("@")[0];
- if(!email||!pass)return document.getElementById("authMsg").textContent="Enter email & pass";
- let u=users.find(x=>x.email==email);
- if(!u){u={id:Date.now(),name,email,pass,bio:"",avatar:"",verified:false};users.push(u);}
- else if(u.pass!=pass){return document.getElementById("authMsg").textContent="Wrong password";}
- cur=u;save();updateNav();closeAuth();switchTab(ADMIN.includes(cur.email)?"admin":"dashboard");
-}
-function saveProfile(){if(!cur)return;cur.name=document.getElementById("editName").value||cur.name;cur.bio=document.getElementById("editBio").value||cur.bio;cur.avatar=document.getElementById("editAvatar").value||cur.avatar;let i=users.findIndex(x=>x.id==cur.id);if(i>=0)users[i]=cur;save();alert("Saved!");}
-function uploadSong(){if(!cur)return;const t=document.getElementById("songTitle").value.trim(), a=document.getElementById("songArtist").value.trim()||cur.name, u=document.getElementById("songUrl").value.trim();if(!t||!u)return alert("Title + MP3 link needed");songs.push({id:Date.now(),title:t,artist:a,url:u,plays:0,status:"pending",artistId:cur.id,cover:""});save();renderDash();alert("Uploaded! Admin will approve");}
-function renderHome(){const q=(document.getElementById("searchInput").value||"").toLowerCase();let list=songs.filter(s=>s.status=="approved"&&(s.title.toLowerCase().includes(q)||s.artist.toLowerCase().includes(q)));document.getElementById("songCount").textContent=list.length+" SONGS";document.getElementById("homeSongs").innerHTML=list.map(s=>`<div class="card" style="position:relative"><div class="img">♫</div><div class="orange" onclick="playSong(${s.id})">▶</div><div class="info"><b>${s.title}</b><br><small>${s.artist} • ${s.plays} plays</small><button class="playbtn" onclick="playSong(${s.id})">Play</button></div></div>`).join("")||"<small style='padding:18px;color:#ff6a00'>Loading songs...</small>";}
-function renderArtists(){document.getElementById("artistsList").innerHTML=users.map(u=>`<div class="card"><div class="img">${u.avatar?`<img src="${u.avatar}" style="width:100%;height:100%;object-fit:cover">`:"🎤"}</div><div class="info"><b>${u.name}</b>${u.verified?' ✅':''}<br><small>${u.bio||'No bio'}</small></div></div>`).join("")||"<small>No artists</small>";}
-function renderDash(){if(!cur)return;document.getElementById("editName").value=cur.name;document.getElementById("editBio").value=cur.bio||"";document.getElementById("editAvatar").value=cur.avatar||"";let my=songs.filter(s=>s.artistId==cur.id);document.getElementById("myPlays").textContent=my.reduce((a,b)=>a+b.plays,0);document.getElementById("myUGX").textContent=my.reduce((a,b)=>a+b.plays,0)*10;document.getElementById("mySongs").innerHTML=my.map(s=>`🎵 ${s.title} - ${s.status} - ${s.plays} plays`).join("<br>");}
-function renderAdmin(){if(!cur||!ADMIN.includes(cur.email))return;document.getElementById("adminArtists").innerHTML=users.map(u=>`<div style="padding:6px;background:#1a1a1a;margin:4px 0;border-radius:8px">${u.name} (${u.email}) <button onclick="verifyUser(${u.id})" style="float:right">${u.verified?'Unverify':'Verify'}</button></div>`).join("");document.getElementById("adminSongs").innerHTML=songs.map(s=>`<div style="padding:6px;background:#1a1a1a;margin:4px 0;border-radius:8px">${s.title} by ${s.artist} - ${s.status} <button onclick="approveSong(${s.id})">Approve</button> <button onclick="deleteSong(${s.id})">Delete</button></div>`).join("");}
-function verifyUser(id){let u=users.find(x=>x.id==id);u.verified=!u.verified;save();renderAdmin();}
-function approveSong(id){let s=songs.find(x=>x.id==id);s.status="approved";save();renderAdmin();renderHome();}
-function deleteSong(id){songs=songs.filter(x=>x.id!=id);save();renderAdmin();renderDash();renderHome();}
-function playSong(id){let s=songs.find(x=>x.id==id);if(!s)return;s.plays++;save();document.getElementById("player").style.display="flex";document.getElementById("pTitle").textContent=s.title;document.getElementById("pArtist").textContent=s.artist;let aud=document.getElementById("audio");aud.src=s.url;aud.play();renderHome();}
+function doLogin(){const e=document.getElementById("lEmail").value.trim().toLowerCase(),p=document.getElementById("lPass").value,n=document.getElementById("sName").value.trim()||e.split("@")[0];if(!e||!p)return;let u=users.find(x=>x.email==e);if(!u){u={id:Date.now(),name:n,email:e,pass:p,bio:"",avatar:"",verified:false};users.push(u);}else if(u.pass!=p){document.getElementById("msg").textContent="Wrong pass";return;}cur=u;save();updateNav();closeAuth();switchTab(ADMIN.includes(e)?"admin":"dashboard");}
+function saveProfile(){cur.name=document.getElementById("editName").value||cur.name;cur.bio=document.getElementById("editBio").value;cur.avatar=document.getElementById("editAvatar").value;users[users.findIndex(x=>x.id==cur.id)]=cur;save();alert("Saved");}
+function uploadSong(){const t=document.getElementById("songTitle").value.trim(),u=document.getElementById("songUrl").value.trim();if(!t||!u)return alert("Title+link");songs.push({id:Date.now(),title:t,artist:cur.name,url:u,plays:0,status:"pending",artistId:cur.id,date:Date.now()});save();renderDash();alert("Uploaded - pending");}
+function card(s){return `<div class="card"><div style="height:110px;background:#222;display:grid;place-items:center;font-size:24px">♫</div><div style="position:absolute;right:8px;top:72px;background:#ff6a00;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;color:#000;font-weight:900;cursor:pointer" onclick="playSong(${s.id})">▶</div><div style="padding:8px"><b style="font-size:13px">${s.title}</b><br><small style="color:#888">${s.artist} • ${s.plays} plays</small><br><button onclick="playSong(${s.id})" style="width:100%;margin-top:6px;background:#252525;border:0;border-radius:16px;padding:7px;color:#fff">Play</button></div></div>`;}
+function renderHome(){let q=(document.getElementById("q").value||"").toLowerCase();let a=songs.filter(s=>s.status=="approved"&&(s.title.toLowerCase().includes(q)||s.artist.toLowerCase().includes(q)));let trend=a.slice(0,2);let news=[...a].sort((x,y)=>y.date-x.date).slice(0,2);let charts=[...a].sort((x,y)=>y.plays-x.plays).slice(0,2);document.getElementById("tC").textContent=a.length+" SONGS";document.getElementById("trendGrid").innerHTML=trend.map(card).join("");document.getElementById("newGrid").innerHTML=news.map(card).join("");document.getElementById("chartGrid").innerHTML=charts.map(card).join("");}
+function renderArtists(){document.getElementById("artistsList").innerHTML=users.map(u=>`<div class="card"><div style="height:80px;background:#222;display:grid;place-items:center">🎤</div><div style="padding:8px"><b>${u.name}</b></div></div>`).join("")||"<small>No artists</small>";}
+function renderDash(){if(!cur)return;document.getElementById("editName").value=cur.name;let my=songs.filter(s=>s.artistId==cur.id);document.getElementById("mySongs").innerHTML=my.map(s=>`🎵 ${s.title} - ${s.status}`).join("<br>");}
+function renderAdmin(){document.getElementById("adminSongs").innerHTML=songs.map(s=>`<div style="background:#1a1a1a;margin:4px 0;padding:8px;border-radius:8px">${s.title} - ${s.status} <button onclick="approveSong(${s.id})">Approve</button> <button onclick="deleteSong(${s.id})">Del</button></div>`).join("");}
+function approveSong(id){songs.find(x=>x.id==id).status="approved";save();renderAdmin();renderHome();}
+function deleteSong(id){songs=songs.filter(x=>x.id!=id);save();renderAdmin();renderHome();}
+function playSong(id){let s=songs.find(x=>x.id==id);s.plays++;save();document.getElementById("player").style.display="flex";document.getElementById("pT").textContent=s.title;document.getElementById("pA").textContent=s.artist;let au=document.getElementById("audio");au.src=s.url;au.play();renderHome();}
 function closePlayer(){document.getElementById("player").style.display="none";document.getElementById("audio").pause();}
 updateNav();renderHome();
 </script>
