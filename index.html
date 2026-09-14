@@ -32,7 +32,9 @@ content="NileSoniq — Uganda's music platform. Stream music, discover artists a
   padding:0;
 }
 
-html{scroll-behavior:smooth}
+html{
+  scroll-behavior:smooth;
+}
 
 body{
   font-family:Arial,Helvetica,sans-serif;
@@ -42,12 +44,27 @@ body{
   padding-bottom:100px;
 }
 
-button,input,textarea,select{font:inherit}
-button{cursor:pointer}
-a{color:inherit;text-decoration:none}
-img{max-width:100%;display:block}
+button,input,textarea,select{
+  font:inherit;
+}
 
-.hidden{display:none!important}
+button{
+  cursor:pointer;
+}
+
+a{
+  color:inherit;
+  text-decoration:none;
+}
+
+img{
+  max-width:100%;
+  display:block;
+}
+
+.hidden{
+  display:none!important;
+}
 
 header{
   position:sticky;
@@ -76,7 +93,9 @@ header{
   white-space:nowrap;
 }
 
-.logo span{color:var(--orange)}
+.logo span{
+  color:var(--orange);
+}
 
 nav{
   display:flex;
@@ -112,14 +131,18 @@ nav button.active{
   transition:.2s;
 }
 
-.btn:hover{transform:translateY(-1px)}
+.btn:hover{
+  transform:translateY(-1px);
+}
 
 .btn-orange{
   background:var(--orange);
   color:white;
 }
 
-.btn-orange:hover{background:var(--orange2)}
+.btn-orange:hover{
+  background:var(--orange2);
+}
 
 .btn-dark{
   background:#202020;
@@ -161,9 +184,13 @@ nav button.active{
   min-height:600px;
 }
 
-.page.active{display:block}
+.page.active{
+  display:block;
+}
 
-.hero{padding:70px 0 55px}
+.hero{
+  padding:70px 0 55px;
+}
 
 .hero-box{
   border:1px solid var(--border);
@@ -194,7 +221,9 @@ nav button.active{
   margin-bottom:22px;
 }
 
-.hero h1 span{color:var(--orange)}
+.hero h1 span{
+  color:var(--orange);
+}
 
 .hero p{
   color:#bdbdbd;
@@ -209,7 +238,9 @@ nav button.active{
   gap:12px;
 }
 
-.section{padding:35px 0}
+.section{
+  padding:35px 0;
+}
 
 .section-heading{
   display:flex;
@@ -218,10 +249,18 @@ nav button.active{
   margin-bottom:22px;
 }
 
-.section-heading h2{font-size:28px}
-.section-heading p{color:var(--muted);font-size:14px}
+.section-heading h2{
+  font-size:28px;
+}
 
-.search-box{margin-bottom:30px}
+.section-heading p{
+  color:var(--muted);
+  font-size:14px;
+}
+
+.search-box{
+  margin-bottom:30px;
+}
 
 .search-box input{
   width:100%;
@@ -233,12 +272,9 @@ nav button.active{
   outline:none;
 }
 
-.search-box input:focus{border-color:var(--orange)}
-
-
-/* =========================================================
-   ADVERTISEMENT SPACE
-========================================================= */
+.search-box input:focus{
+  border-color:var(--orange);
+}
 
 .ad-space{
   margin:10px 0 10px;
@@ -265,11 +301,6 @@ nav button.active{
   font-size:13px;
   margin-bottom:4px;
 }
-
-
-/* =========================================================
-   SONG GRID
-========================================================= */
 
 .song-grid{
   display:grid;
@@ -333,7 +364,9 @@ nav button.active{
   font-size:18px;
 }
 
-.song-info{padding:13px 3px 5px}
+.song-info{
+  padding:13px 3px 5px;
+}
 
 .song-title{
   font-weight:800;
@@ -355,11 +388,6 @@ nav button.active{
   font-size:12px;
   margin-top:10px;
 }
-
-
-/* =========================================================
-   ARTISTS
-========================================================= */
 
 .artist-grid{
   display:grid;
@@ -402,20 +430,26 @@ nav button.active{
   font-weight:bold;
 }
 
-.artist-card h3{margin-bottom:4px}
-.artist-card p{color:var(--muted);font-size:13px}
+.artist-card h3{
+  margin-bottom:4px;
+}
 
-
-/* =========================================================
-   DASHBOARD
-========================================================= */
+.artist-card p{
+  color:var(--muted);
+  font-size:13px;
+}
 
 .dashboard-header{
   padding:45px 0 25px;
 }
 
-.dashboard-header h1{font-size:38px}
-.dashboard-header p{color:var(--muted)}
+.dashboard-header h1{
+  font-size:38px;
+}
+
+.dashboard-header p{
+  color:var(--muted);
+}
 
 .stats-grid{
   display:grid;
@@ -438,7 +472,9 @@ nav button.active{
   margin-bottom:8px;
 }
 
-.stat-card strong{font-size:28px}
+.stat-card strong{
+  font-size:28px;
+}
 
 .dashboard-card{
   background:var(--card);
@@ -448,7 +484,9 @@ nav button.active{
   margin-bottom:20px;
 }
 
-.dashboard-card h2{margin-bottom:18px}
+.dashboard-card h2{
+  margin-bottom:18px;
+}
 
 .form-grid{
   display:grid;
@@ -456,9 +494,13 @@ nav button.active{
   gap:15px;
 }
 
-.field{margin-bottom:15px}
+.field{
+  margin-bottom:15px;
+}
 
-.field.full{grid-column:1/-1}
+.field.full{
+  grid-column:1/-1;
+}
 
 .field label{
   display:block;
@@ -490,7 +532,9 @@ nav button.active{
   resize:vertical;
 }
 
-input[type=file]{padding:10px}
+input[type=file]{
+  padding:10px;
+}
 
 .table-wrap{
   width:100%;
@@ -515,7 +559,9 @@ th{
   text-transform:uppercase;
 }
 
-td{font-size:14px}
+td{
+  font-size:14px;
+}
 
 .status{
   display:inline-block;
@@ -584,22 +630,33 @@ td{font-size:14px}
   border-color:var(--orange);
 }
 
+/* Admin button shown only after admin authentication */
 .footer-admin{
   background:transparent;
   border:none;
   color:#777;
   padding:0;
   font-size:13px;
+  cursor:pointer;
 }
 
 .footer-admin:hover{
   color:var(--orange);
 }
 
+/* Always-visible Admin Login link */
+.footer-admin-login{
+  background:transparent;
+  border:none;
+  color:#777;
+  padding:0;
+  font-size:13px;
+  cursor:pointer;
+}
 
-/* =========================================================
-   MODAL
-========================================================= */
+.footer-admin-login:hover{
+  color:var(--orange);
+}
 
 .modal{
   display:none;
@@ -612,7 +669,9 @@ td{font-size:14px}
   padding:20px;
 }
 
-.modal.show{display:flex}
+.modal.show{
+  display:flex;
+}
 
 .modal-box{
   width:min(450px,100%);
@@ -669,7 +728,9 @@ td{font-size:14px}
   font-size:13px;
 }
 
-.message.show{display:block}
+.message.show{
+  display:block;
+}
 
 .message.error{
   background:rgba(255,64,64,.12);
@@ -682,11 +743,6 @@ td{font-size:14px}
   color:#64e39a;
   border:1px solid rgba(46,204,113,.2);
 }
-
-
-/* =========================================================
-   PLAYER
-========================================================= */
 
 .player{
   position:fixed;
@@ -730,7 +786,9 @@ td{font-size:14px}
   object-fit:cover;
 }
 
-.now-title{min-width:0}
+.now-title{
+  min-width:0;
+}
 
 .now-title strong,
 .now-title span{
@@ -771,11 +829,6 @@ td{font-size:14px}
   max-width:300px;
   height:36px;
 }
-
-
-/* =========================================================
-   EMPTY / LOADING / FOOTER
-========================================================= */
 
 .empty{
   padding:40px 20px;
@@ -818,11 +871,6 @@ footer{
   flex-wrap:wrap;
 }
 
-
-/* =========================================================
-   RESPONSIVE
-========================================================= */
-
 @media(max-width:950px){
 
   .song-grid,
@@ -837,7 +885,6 @@ footer{
   .player-right{
     display:none;
   }
-
 }
 
 @media(max-width:760px){
@@ -896,7 +943,6 @@ footer{
   .field.full{
     grid-column:auto;
   }
-
 }
 
 @media(max-width:480px){
@@ -958,6 +1004,9 @@ footer{
     min-height:100px;
   }
 
+  .footer-links{
+    gap:12px;
+  }
 }
 </style>
 </head>
@@ -1001,7 +1050,7 @@ Dashboard
 
 <button id="loginButton"
 class="btn btn-dark"
-onclick="openAuthModal()">
+onclick="openAuthModal('artist')">
 Artist Login
 </button>
 
@@ -1020,18 +1069,10 @@ Logout
 
 <main>
 
-
-<!-- =======================================================
-     HOME
-======================================================= -->
-
 <section id="homePage"
 class="page active">
 
 <div class="container">
-
-
-<!-- HERO -->
 
 <div class="hero">
 
@@ -1060,7 +1101,7 @@ Start Listening
 </button>
 
 <button class="btn btn-dark"
-onclick="openAuthModal()">
+onclick="openAuthModal('artist')">
 Upload Your Music
 </button>
 
@@ -1069,9 +1110,6 @@ Upload Your Music
 </div>
 
 </div>
-
-
-<!-- SEARCH -->
 
 <div class="search-box">
 
@@ -1082,11 +1120,6 @@ placeholder="Search songs or artists..."
 oninput="searchSongs()">
 
 </div>
-
-
-<!-- =======================================================
-     ADVERTISEMENT
-======================================================= -->
 
 <section class="ad-space"
 aria-label="Advertisement">
@@ -1102,11 +1135,6 @@ Space reserved for ads
 </div>
 
 </section>
-
-
-<!-- =======================================================
-     NEW RELEASES
-======================================================= -->
 
 <section id="newReleases"
 class="section">
@@ -1138,11 +1166,6 @@ Loading new releases...
 
 </section>
 
-
-<!-- =======================================================
-     TOP CHARTS
-======================================================= -->
-
 <section id="topCharts"
 class="section">
 
@@ -1172,11 +1195,6 @@ Loading top charts...
 </div>
 
 </section>
-
-
-<!-- =======================================================
-     TRENDING
-======================================================= -->
 
 <section id="trending"
 class="section">
@@ -1208,15 +1226,10 @@ Loading music...
 
 </section>
 
-
 </div>
 
 </section>
 
-
-<!-- =======================================================
-     ARTISTS
-======================================================= -->
 
 <section id="artistsPage"
 class="page">
@@ -1249,10 +1262,6 @@ Loading artists...
 </section>
 
 
-<!-- =======================================================
-     DASHBOARD
-======================================================= -->
-
 <section id="dashboardPage"
 class="page">
 
@@ -1270,7 +1279,6 @@ Manage your profile and music.
 
 </div>
 
-
 <div id="dashboardLoggedOut"
 class="empty">
 
@@ -1283,16 +1291,14 @@ Login or create an artist account to access your dashboard.
 </p>
 
 <button class="btn btn-orange"
-onclick="openAuthModal()">
+onclick="openAuthModal('artist')">
 Artist Login
 </button>
 
 </div>
 
-
 <div id="dashboardContent"
 class="hidden">
-
 
 <div class="stats-grid">
 
@@ -1308,7 +1314,6 @@ Total Plays
 
 </div>
 
-
 <div class="stat-card">
 
 <span>
@@ -1320,7 +1325,6 @@ UGX 0
 </strong>
 
 </div>
-
 
 <div class="stat-card">
 
@@ -1335,7 +1339,6 @@ Your Songs
 </div>
 
 </div>
-
 
 <div class="dashboard-card">
 
@@ -1361,7 +1364,6 @@ placeholder="Your artist name">
 
 </div>
 
-
 <div class="field">
 
 <label>
@@ -1375,7 +1377,6 @@ placeholder="e.g. Arua, Uganda">
 
 </div>
 
-
 <div class="field full">
 
 <label>
@@ -1387,7 +1388,6 @@ id="artistBio"
 placeholder="Tell fans about yourself..."></textarea>
 
 </div>
-
 
 <div class="field full">
 
@@ -1410,7 +1410,6 @@ Save Profile
 </button>
 
 </div>
-
 
 <div class="dashboard-card">
 
@@ -1436,7 +1435,6 @@ placeholder="Song title">
 
 </div>
 
-
 <div class="field">
 
 <label>
@@ -1450,7 +1448,6 @@ placeholder="Artist name">
 
 </div>
 
-
 <div class="field">
 
 <label>
@@ -1463,7 +1460,6 @@ type="file"
 accept="audio/*">
 
 </div>
-
 
 <div class="field">
 
@@ -1491,7 +1487,6 @@ Uploaded songs are sent for admin approval before appearing publicly.
 </p>
 
 </div>
-
 
 <div class="dashboard-card">
 
@@ -1529,10 +1524,6 @@ My Songs
 </section>
 
 
-<!-- =======================================================
-     ADMIN
-======================================================= -->
-
 <section id="adminPage"
 class="page">
 
@@ -1555,7 +1546,6 @@ ADMIN
 
 </div>
 
-
 <div id="adminDenied"
 class="empty hidden">
 
@@ -1569,10 +1559,8 @@ You do not have permission to access this section.
 
 </div>
 
-
 <div id="adminContent"
 class="hidden">
-
 
 <div class="admin-tabs">
 
@@ -1594,7 +1582,6 @@ Administrators
 </button>
 
 </div>
-
 
 <div id="adminSongsPanel"
 class="dashboard-card">
@@ -1629,7 +1616,6 @@ class="message"></div>
 </div>
 
 </div>
-
 
 <div id="adminWithdrawalsPanel"
 class="dashboard-card hidden">
@@ -1666,7 +1652,6 @@ class="message"></div>
 
 </div>
 
-
 <div id="adminManagementPanel"
 class="dashboard-card hidden">
 
@@ -1691,7 +1676,6 @@ type="email"
 placeholder="artist@example.com">
 
 </div>
-
 
 <div class="field">
 
@@ -1719,7 +1703,6 @@ Super Admin
 onclick="addAdministrator()">
 Add Administrator
 </button>
-
 
 <div style="margin-top:25px;"
 class="table-wrap">
@@ -1754,10 +1737,6 @@ class="table-wrap">
 </main>
 
 
-<!-- =======================================================
-     FOOTER
-======================================================= -->
-
 <footer>
 
 <div class="container">
@@ -1776,7 +1755,6 @@ Uganda's music, free to stream.
 
 </div>
 
-
 <div class="footer-links">
 
 <a href="#"
@@ -1793,6 +1771,15 @@ Terms
 Contact
 </a>
 
+<!-- ALWAYS VISIBLE -->
+<button
+id="adminLoginLink"
+class="footer-admin-login"
+onclick="openAuthModal('admin')">
+Admin Login
+</button>
+
+<!-- ONLY VISIBLE AFTER SUCCESSFUL ADMIN LOGIN -->
 <button
 id="adminFooterLink"
 class="footer-admin hidden"
@@ -1808,10 +1795,6 @@ Admin
 
 </footer>
 
-
-<!-- =======================================================
-     AUTH MODAL
-======================================================= -->
 
 <div id="authModal"
 class="modal">
@@ -1831,7 +1814,6 @@ onclick="closeAuthModal()">
 
 </div>
 
-
 <div class="auth-tabs">
 
 <button id="loginTab"
@@ -1847,10 +1829,8 @@ Create Account
 
 </div>
 
-
 <div id="authMessage"
 class="message"></div>
-
 
 <div id="signupNameField"
 class="field hidden">
@@ -1866,7 +1846,6 @@ placeholder="Your artist name">
 
 </div>
 
-
 <div class="field">
 
 <label>
@@ -1879,7 +1858,6 @@ type="email"
 placeholder="you@example.com">
 
 </div>
-
 
 <div class="field">
 
@@ -1894,7 +1872,6 @@ placeholder="Password">
 
 </div>
 
-
 <button id="authSubmit"
 class="btn btn-orange"
 style="width:100%;"
@@ -1906,10 +1883,6 @@ Login
 
 </div>
 
-
-<!-- =======================================================
-     PLAYER
-======================================================= -->
 
 <div class="player">
 
@@ -1934,7 +1907,6 @@ Select a song
 
 </div>
 
-
 <div class="player-controls">
 
 <button class="player-play"
@@ -1943,7 +1915,6 @@ onclick="togglePlay()">
 </button>
 
 </div>
-
 
 <div class="player-right">
 
@@ -1993,6 +1964,13 @@ let newReleaseSongs = [];
 let topChartSongs = [];
 
 let currentAuthMode = "login";
+
+/*
+  NEW:
+  Remembers whether the login window was opened
+  as Artist Login or Admin Login.
+*/
+let currentAuthContext = "artist";
 
 let currentPlayingSong = null;
 
@@ -2597,7 +2575,20 @@ async function showAdminTab(tab){
    AUTH
 ========================================================= */
 
-function openAuthModal(){
+/*
+  UPDATED:
+  openAuthModal can now open as either:
+
+  openAuthModal('artist')
+  openAuthModal('admin')
+*/
+
+function openAuthModal(context="artist"){
+
+  currentAuthContext =
+    context === "admin"
+      ? "admin"
+      : "artist";
 
   document
     .getElementById("authModal")
@@ -2606,6 +2597,12 @@ function openAuthModal(){
   clearMessage(
     "authMessage"
   );
+
+  /*
+    Always start on Login when opening
+    the modal.
+  */
+  setAuthMode("login");
 
 }
 
@@ -2618,6 +2615,12 @@ function closeAuthModal(){
 
 }
 
+
+/*
+  UPDATED:
+  Keeps Admin Login title when the
+  admin login button is used.
+*/
 
 function setAuthMode(mode){
 
@@ -2663,13 +2666,24 @@ function setAuthMode(mode){
       "hidden"
     );
 
+
     title.textContent =
-      "Artist Login";
+      currentAuthContext === "admin"
+        ? "Admin Login"
+        : "Artist Login";
+
 
     submit.textContent =
       "Login";
 
   }else{
+
+    /*
+      If someone opens Create Account,
+      it is always an artist account.
+    */
+
+    currentAuthContext = "artist";
 
     loginTab.classList.remove(
       "active"
@@ -2752,6 +2766,97 @@ async function submitAuth(){
 
       if(error){
         throw error;
+      }
+
+
+      /*
+        Check whether the account is really
+        an administrator when Admin Login
+        was selected.
+      */
+
+      if(currentAuthContext === "admin"){
+
+        /*
+          Give Supabase a moment to update
+          the authenticated session.
+        */
+
+        await new Promise(
+          resolve =>
+            setTimeout(
+              resolve,
+              300
+            )
+        );
+
+        const {
+          data:adminData,
+          error:adminError
+        } = await sb
+          .from("admins")
+          .select(
+            "id,user_id,email,role,active"
+          )
+          .eq(
+            "user_id",
+            currentUser?.id
+          )
+          .eq(
+            "active",
+            true
+          )
+          .maybeSingle();
+
+
+        if(
+          adminError ||
+          !adminData
+        ){
+
+          await sb.auth.signOut();
+
+          currentUser = null;
+          currentAdmin = null;
+
+          showMessage(
+            "authMessage",
+            "This account is not an active NileSoniq administrator.",
+            "error"
+          );
+
+          return;
+
+        }
+
+
+        currentAdmin =
+          adminData;
+
+
+        showMessage(
+          "authMessage",
+          "Admin login successful.",
+          "success"
+        );
+
+
+        setTimeout(
+          async () => {
+
+            closeAuthModal();
+
+            await updateUI();
+
+            await showPage("admin");
+
+          },
+          700
+        );
+
+
+        return;
+
       }
 
 
@@ -2985,7 +3090,7 @@ async function saveArtistProfile(){
 
   if(!currentUser){
 
-    openAuthModal();
+    openAuthModal("artist");
 
     return;
 
@@ -3145,7 +3250,7 @@ async function uploadSong(){
 
   if(!currentUser){
 
-    openAuthModal();
+    openAuthModal("artist");
 
     return;
 
@@ -3411,7 +3516,7 @@ async function uploadSong(){
 
 
 /* =========================================================
-   PUBLIC SONGS / TRENDING
+   PUBLIC SONGS
 ========================================================= */
 
 async function loadSongs(){
@@ -3486,10 +3591,6 @@ async function loadSongs(){
 
 }
 
-
-/* =========================================================
-   NEW RELEASES
-========================================================= */
 
 async function loadNewReleases(){
 
@@ -3575,10 +3676,6 @@ async function loadNewReleases(){
 
 }
 
-
-/* =========================================================
-   TOP CHARTS
-========================================================= */
 
 async function loadTopCharts(){
 
@@ -3673,7 +3770,7 @@ async function loadTopCharts(){
 
 
 /* =========================================================
-   GENERIC SONG CARD RENDERER
+   SONG CARDS
 ========================================================= */
 
 function renderSongCards(
@@ -3748,7 +3845,6 @@ function renderSongCards(
             </button>
 
           </div>
-
 
           <div class="song-info">
 
@@ -3880,10 +3976,6 @@ function searchSongs(){
 
 }
 
-
-/* =========================================================
-   FIND SONG IN ALL HOME SECTIONS
-========================================================= */
 
 function findSongById(songId){
 
@@ -4695,10 +4787,6 @@ async function loadAdminSongs(){
 }
 
 
-/* =========================================================
-   APPROVE SONG
-========================================================= */
-
 async function approveSong(songId){
 
   if(!currentUser){
@@ -4778,10 +4866,6 @@ async function approveSong(songId){
 
 }
 
-
-/* =========================================================
-   REJECT SONG
-========================================================= */
 
 async function rejectSong(songId){
 
@@ -5394,10 +5478,6 @@ async function loadAdministrators(){
 }
 
 
-/* =========================================================
-   ADD ADMINISTRATOR
-========================================================= */
-
 async function addAdministrator(){
 
   if(!isCurrentUserSuperAdmin()){
@@ -5488,10 +5568,6 @@ async function addAdministrator(){
 
 }
 
-
-/* =========================================================
-   ACTIVATE / DEACTIVATE ADMIN
-========================================================= */
 
 async function toggleAdministrator(
   userId,
@@ -5764,7 +5840,7 @@ function showTerms(){
 
 
 /* =========================================================
-   CLOSE AUTH MODAL
+   CLOSE AUTH MODAL WHEN CLICKING OUTSIDE
 ========================================================= */
 
 document
