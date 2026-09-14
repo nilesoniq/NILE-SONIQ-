@@ -1,1 +1,50 @@
-<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>NILE SONIQ</title><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><style>*{margin:0;padding:0;box-sizing:border-box}body{background:#0a0a0a;color:#fff;font-family:sans-serif}.h{display:flex;justify-content:space-between;padding:16px 20px;border-bottom:1px solid #222;position:sticky;top:0;background:#0a0a0a}.l{font-weight:800;font-size:22px}.l span{color:#ccff00}.b{background:#ccff00;color:#000;padding:10px 18px;border-radius:100px;font-weight:700;border:none}.hero{padding:32px 20px}.hero h1{font-size:42px;line-height:.9}.hero em{color:#ccff00;font-style:normal}.stats{display:flex;gap:10px;margin-top:18px}.st{background:#151515;border:1px solid #222;padding:10px;border-radius:12px;flex:1}.st b{color:#ccff00;font-size:20px;display:block}.up{margin:20px;background:#151515;border:1px dashed #333;border-radius:16px;padding:18px}.in{width:100%;background:#0a0a0a;border:1px solid #222;border-radius:10px;padding:12px;color:#fff;margin-bottom:10px}.song{display:flex;gap:12px;align-items:center;padding:14px 0;border-bottom:1px solid #151515}.cv{width:52px;height:52px;background:linear-gradient(135deg,#ccff00,#00ff88);border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:800;color:#000}.pl{position:fixed;bottom:0;left:0;right:0;background:#151515;border-top:1px solid #222;padding:12px;display:flex;gap:12px;align-items:center}</style></head><body><div class="h"><div class="l">NILE <span>SONIQ</span></div><button class="b" onclick="document.getElementById('up').scrollIntoView({behavior:'smooth'})">+ UPLOAD</button></div><div class="hero"><h1>VOICE OF<br><em>THE NILE</em><br>TO WORLD</h1><p>First platform for Northern Uganda.</p><div class="stats"><div class="st"><b id="ts">0</b><span>SONGS</span></div><div class="st"><b id="tp">0</b><span>PLAYS</span></div><div class="st"><b>3K</b><span>/1K</span></div></div></div><div class="up" id="up"><h3>ARTIST UPLOAD</h3><input id="ti" class="in" placeholder="Song Title"><input id="ar" class="in" placeholder="Artist Name"><input id="af" type="file" accept="audio/*" class="in"><button class="b" style="width:100%;padding:14px" onclick="up()" id="ub">UPLOAD</button><div style="font-size:11px;color:#666;margin-top:8px" id="us">Connected</div></div><div style="padding:0 20px 120px" id="sl">Loading...</div><div class="pl" id="pl" style="display:none"><div class="cv" id="pc">NS</div><div style="flex:1"><b id="pt" style="font-size:13px">No song</b></div><div class="b" id="pp" onclick="tg()" style="width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center">></div></div><audio id="au" style="display:none"></audio><script>const U="https://nxiygxnzlusasgzdknft.supabase.co",K="sb_publishable_MJYDrg3qcgynvoRTWHQvAA_qt7nRTDw",C=supabase.createClient(U,K);let S=[],A=document.getElementById('au'),P=!1;async function L(){const{d,e}=await C.from('songs').select('*').order('created_at',{ascending:false});if(e){document.getElementById('sl').innerHTML='Run SQL in Supabase first!';return}S=d||[];document.getElementById('ts').innerText=d.length;document.getElementById('tp').innerText=d.reduce((a,b)=>a+(b.plays||0),0);document.getElementById('sl').innerHTML=d.length?d.map((s,i)=>`<div class="song" onclick="play(${i})"><div class="cv">${(s.artist||'N')[0].toUpperCase()}</div><div style="flex:1"><b>${s.title}</b><br><span style="font-size:12px;color:#666">${s.artist} • ${s.plays||0}</span></div><div class="b" style="width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center">></div></div>`).join(''):'<div style="text-align:center;color:#666;padding:40px">No songs yet</div>'}async function up(){const t=document.getElementById('ti').value,a=document.getElementById('ar').value,f=document.getElementById('af').files[0];if(!t||!a||!f){alert('Fill all');return}document.getElementById('ub').innerText='UPLOADING...';try{const n=Date.now()+'-'+f.name.replace(/[^a-zA-Z0-9.-]/g,'');const{error:ue}=await C.storage.from('songs').upload(n,f);if(ue)throw ue;const{data:ud}=C.storage.from('songs').getPublicUrl(n);const{error:de}=await C.from('songs').insert({title:t,artist:a,file_url:ud.publicUrl,plays:0});if(de)throw de;document.getElementById('us').innerText='Live!';document.getElementById('ub').innerText='UPLOAD';L()}catch(e){alert(e.message);document.getElementById('ub').innerText='UPLOAD'}}function play(i){const s=S[i];document.getElementById('pl').style.display='flex';document.getElementById('pt').innerText=s.title+' - '+s.artist;document.getElementById('pc').innerText=s.artist[0].toUpperCase();A.src=s.file_url;A.play();P=!0;document.getElementById('pp').innerText='||';C.from('songs').update({plays:(s.plays||0)+1}).eq('id',s.id).then(()=>{s.plays=(s.plays||0)+1})}function tg(){if(P){A.pause();P=!1;document.getElementById('pp').innerText='>';}else{A.play();P=!0;document.getElementById('pp').innerText='||'}}L()</script></body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NILE SONIQ - Free Forever</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:system-ui,sans-serif}
+body{background:#0a0a0a;color:#fff}
+header{display:flex;justify-content:space-between;align-items:center;padding:18px 20px;border-bottom:1px solid #1e1e1e;position:sticky;top:0;background:#0a0a0a;z-index:20}
+.logo{font-weight:900;font-size:22px}.logo span{color:#ff6a00}
+.artist-btn{background:#ff6a00;color:#000;padding:10px 18px;border-radius:999px;font-weight:800;border:none}
+.hero{margin:16px;background:#171717;border:1px solid #242424;border-radius:24px;padding:28px 20px}
+.free{color:#ff6a00;letter-spacing:3px;font-size:11px;font-weight:800;margin-bottom:14px}
+.hero h1{font-size:36px;line-height:0.95;font-weight:900;margin-bottom:14px}.hero h1 span{color:#ff6a00}
+.hero p{color:#8a8a8a;font-size:14px;margin-bottom:22px;max-width:320px}
+.btn-o{background:#ff6a00;color:#000;padding:13px 22px;border-radius:999px;font-weight:800;border:none}
+.btn-b{background:#1e1e1e;color:#fff;padding:13px 22px;border-radius:999px;border:1px solid #2a2a2a}
+.ad{margin:16px;border:1px dashed #2a2a2a;border-radius:16px;padding:24px;text-align:center;color:#555;letter-spacing:3px;font-size:11px;background:#0f0f0f}
+.sec{padding:8px 16px 120px}.sec-head{font-size:18px;font-weight:800;margin:8px 0}
+.count{color:#ff6a00;font-size:12px;font-weight:700;margin:6px 0 12px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.card{background:#151515;border:1px solid #222;border-radius:18px;overflow:hidden}
+.art{aspect-ratio:1;background:#1c1c1c;display:flex;align-items:center;justify-content:center;position:relative;font-size:56px;color:#2a2a2a}
+.badge{position:absolute;bottom:10px;right:10px;background:#ff6a00;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#000;font-weight:900}
+.info{padding:11px 10px}.info h4{font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.info p{font-size:11px;color:#777}
+.player{position:fixed;bottom:0;left:0;right:0;background:#181818;border-top:1px solid #2a2a2a;padding:14px 16px;display:none;align-items:center;gap:12px}
+.player.show{display:flex}
+</style>
+</head>
+<body>
+<header><div class="logo">NILE <span>MUSIC</span></div><div style="display:flex;gap:12px;align-items:center"><span style="font-size:22px">⌕</span><button class="artist-btn">Artist login</button></div></header>
+<div class="hero"><div class="free">FREE FOREVER</div><h1>Uganda's music,<br><span>free to stream</span></h1><p>Fans pay nothing. Artists earn from every play and download their music brings in.</p><div style="display:flex;gap:10px"><button class="btn-o">Explore music</button><button class="btn-b">I'm an artist</button></div></div>
+<div class="ad">SPONSORED — AD SPACE</div>
+<div class="sec"><div class="sec-head">🔥 Trending today</div><div class="count" id="count">Loading songs...</div><div class="grid" id="grid"></div></div>
+<div class="player" id="player"><div style="width:48px;height:48px;background:#222;border-radius:10px;display:flex;align-items:center;justify-content:center">♪</div><div style="flex:1"><div id="nowTitle" style="font-size:13px;font-weight:700">Title</div><div id="nowArtist" style="font-size:11px;color:#888">Artist</div><audio id="audio" controls style="width:100%;height:32px;margin-top:6px"></audio></div><button onclick="closePlayer()" style="background:none;border:none;color:#fff;font-size:22px">✕</button></div>
+<script>
+const SUPABASE_URL = "https://nxiygxnzlusasgzdknft.supabase.co";
+const SUPABASE_KEY = "sb_publishable_MJYDrg3qcgynvoRTWHQvAA_qt7nRTDw";
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+async function load(){
+  try{
+    const { data, error } = await supabaseClient.from('songs').select('*').order('created_at', {ascending:false});
+    if(error) throw error;
+    document.getElementById('count').textContent = data.length + " SONGS";
+    document.getElementById('grid').innerHTML = data.map(s=>{
+      const title=(s.title||'Untitled').replace(/'/g,"\\'");
+      const artist=(s.artist||'Unknown').replace(/'/g,"\\'");
+      const url=(s.file_url
