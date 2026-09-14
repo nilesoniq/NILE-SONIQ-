@@ -235,6 +235,42 @@ nav button.active{
 
 .search-box input:focus{border-color:var(--orange)}
 
+
+/* =========================================================
+   ADVERTISEMENT SPACE
+========================================================= */
+
+.ad-space{
+  margin:10px 0 10px;
+  min-height:120px;
+  border:1px dashed #333;
+  border-radius:18px;
+  background:
+    linear-gradient(
+      135deg,
+      #101010,
+      #0c0c0c
+    );
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+  color:#666;
+  font-size:12px;
+}
+
+.ad-space strong{
+  display:block;
+  color:#888;
+  font-size:13px;
+  margin-bottom:4px;
+}
+
+
+/* =========================================================
+   SONG GRID
+========================================================= */
+
 .song-grid{
   display:grid;
   grid-template-columns:repeat(4,1fr);
@@ -320,6 +356,11 @@ nav button.active{
   margin-top:10px;
 }
 
+
+/* =========================================================
+   ARTISTS
+========================================================= */
+
 .artist-grid{
   display:grid;
   grid-template-columns:repeat(4,1fr);
@@ -363,6 +404,11 @@ nav button.active{
 
 .artist-card h3{margin-bottom:4px}
 .artist-card p{color:var(--muted);font-size:13px}
+
+
+/* =========================================================
+   DASHBOARD
+========================================================= */
 
 .dashboard-header{
   padding:45px 0 25px;
@@ -550,6 +596,11 @@ td{font-size:14px}
   color:var(--orange);
 }
 
+
+/* =========================================================
+   MODAL
+========================================================= */
+
 .modal{
   display:none;
   position:fixed;
@@ -631,6 +682,11 @@ td{font-size:14px}
   color:#64e39a;
   border:1px solid rgba(46,204,113,.2);
 }
+
+
+/* =========================================================
+   PLAYER
+========================================================= */
 
 .player{
   position:fixed;
@@ -716,6 +772,11 @@ td{font-size:14px}
   height:36px;
 }
 
+
+/* =========================================================
+   EMPTY / LOADING / FOOTER
+========================================================= */
+
 .empty{
   padding:40px 20px;
   text-align:center;
@@ -757,8 +818,15 @@ footer{
   flex-wrap:wrap;
 }
 
+
+/* =========================================================
+   RESPONSIVE
+========================================================= */
+
 @media(max-width:950px){
-  .song-grid,.artist-grid{
+
+  .song-grid,
+  .artist-grid{
     grid-template-columns:repeat(3,1fr);
   }
 
@@ -766,13 +834,21 @@ footer{
     grid-template-columns:1fr auto;
   }
 
-  .player-right{display:none}
+  .player-right{
+    display:none;
+  }
+
 }
 
 @media(max-width:760px){
-  .header-inner{position:relative}
 
-  .menu-btn{display:block}
+  .header-inner{
+    position:relative;
+  }
+
+  .menu-btn{
+    display:block;
+  }
 
   nav{
     display:none;
@@ -788,43 +864,65 @@ footer{
     align-items:stretch;
   }
 
-  nav.open{display:flex}
+  nav.open{
+    display:flex;
+  }
 
-  nav button{text-align:left}
+  nav button{
+    text-align:left;
+  }
 
-  .auth-buttons .btn-dark{display:none}
+  .auth-buttons .btn-dark{
+    display:none;
+  }
 
-  .hero-box{padding:45px 25px}
+  .hero-box{
+    padding:45px 25px;
+  }
 
-  .song-grid,.artist-grid{
+  .song-grid,
+  .artist-grid{
     grid-template-columns:repeat(2,1fr);
   }
 
-  .stats-grid{grid-template-columns:1fr}
+  .stats-grid{
+    grid-template-columns:1fr;
+  }
 
-  .form-grid{grid-template-columns:1fr}
+  .form-grid{
+    grid-template-columns:1fr;
+  }
 
-  .field.full{grid-column:auto}
+  .field.full{
+    grid-column:auto;
+  }
+
 }
 
 @media(max-width:480px){
+
   .container{
     width:min(100% - 20px,1180px);
   }
 
-  .logo{font-size:20px}
+  .logo{
+    font-size:20px;
+  }
 
   .auth-buttons .btn{
     padding:9px 11px;
     font-size:12px;
   }
 
-  .song-grid,.artist-grid{
+  .song-grid,
+  .artist-grid{
     grid-template-columns:1fr 1fr;
     gap:10px;
   }
 
-  .song-card{padding:8px}
+  .song-card{
+    padding:8px;
+  }
 
   .hero{
     padding-top:25px;
@@ -835,18 +933,31 @@ footer{
     border-radius:20px;
   }
 
-  .hero p{font-size:16px}
+  .hero p{
+    font-size:16px;
+  }
 
-  .section-heading h2{font-size:23px}
+  .section-heading h2{
+    font-size:23px;
+  }
 
-  .player{padding:8px 10px}
+  .player{
+    padding:8px 10px;
+  }
 
-  .player-inner{gap:10px}
+  .player-inner{
+    gap:10px;
+  }
 
   .now-cover{
     width:42px;
     height:42px;
   }
+
+  .ad-space{
+    min-height:100px;
+  }
+
 }
 </style>
 </head>
@@ -854,63 +965,73 @@ footer{
 <body>
 
 <header>
-  <div class="header-inner">
 
-    <a href="#" class="logo"
-       onclick="showPage('home');return false;">
-      NILE <span>SONIQ</span>
-    </a>
+<div class="header-inner">
 
-    <button class="menu-btn"
-            onclick="toggleMenu()">☰</button>
+<a href="#"
+class="logo"
+onclick="showPage('home');return false;">
+NILE <span>SONIQ</span>
+</a>
 
-    <nav id="mainNav">
+<button class="menu-btn"
+onclick="toggleMenu()">☰</button>
 
-      <button data-page="home"
-              class="active"
-              onclick="showPage('home')">
-        Home
-      </button>
+<nav id="mainNav">
 
-      <button data-page="artists"
-              onclick="showPage('artists')">
-        Artists
-      </button>
+<button data-page="home"
+class="active"
+onclick="showPage('home')">
+Home
+</button>
 
-      <button data-page="dashboard"
-              onclick="showPage('dashboard')">
-        Dashboard
-      </button>
+<button data-page="artists"
+onclick="showPage('artists')">
+Artists
+</button>
 
-    </nav>
+<button data-page="dashboard"
+onclick="showPage('dashboard')">
+Dashboard
+</button>
 
-    <div class="auth-buttons">
+</nav>
 
-      <button id="loginButton"
-              class="btn btn-dark"
-              onclick="openAuthModal()">
-        Artist Login
-      </button>
+<div class="auth-buttons">
 
-      <button id="logoutButton"
-              class="btn btn-orange hidden"
-              onclick="logout()">
-        Logout
-      </button>
+<button id="loginButton"
+class="btn btn-dark"
+onclick="openAuthModal()">
+Artist Login
+</button>
 
-    </div>
+<button id="logoutButton"
+class="btn btn-orange hidden"
+onclick="logout()">
+Logout
+</button>
 
-  </div>
+</div>
+
+</div>
+
 </header>
 
 
 <main>
 
-<!-- ================= HOME ================= -->
 
-<section id="homePage" class="page active">
+<!-- =======================================================
+     HOME
+======================================================= -->
+
+<section id="homePage"
+class="page active">
 
 <div class="container">
+
+
+<!-- HERO -->
 
 <div class="hero">
 
@@ -934,7 +1055,7 @@ the world.
 <div class="hero-actions">
 
 <button class="btn btn-orange"
-onclick="document.getElementById('trending').scrollIntoView()">
+onclick="document.getElementById('newReleases').scrollIntoView()">
 Start Listening
 </button>
 
@@ -946,7 +1067,11 @@ Upload Your Music
 </div>
 
 </div>
+
 </div>
+
+
+<!-- SEARCH -->
 
 <div class="search-box">
 
@@ -958,40 +1083,165 @@ oninput="searchSongs()">
 
 </div>
 
-<section id="trending" class="section">
+
+<!-- =======================================================
+     ADVERTISEMENT
+======================================================= -->
+
+<section class="ad-space"
+aria-label="Advertisement">
+
+<div>
+
+<strong>
+ADVERTISEMENT
+</strong>
+
+Space reserved for ads
+
+</div>
+
+</section>
+
+
+<!-- =======================================================
+     NEW RELEASES
+======================================================= -->
+
+<section id="newReleases"
+class="section">
 
 <div class="section-heading">
 
 <div>
-<h2>Trending Songs</h2>
-<p>Fresh music from NileSoniq artists.</p>
-</div>
+
+<h2>
+New Releases
+</h2>
+
+<p>
+The latest approved music on NileSoniq.
+</p>
 
 </div>
 
-<div id="songsContainer" class="song-grid">
-<div class="loading">Loading music...</div>
+</div>
+
+<div id="newReleasesContainer"
+class="song-grid">
+
+<div class="loading">
+Loading new releases...
+</div>
+
 </div>
 
 </section>
 
+
+<!-- =======================================================
+     TOP CHARTS
+======================================================= -->
+
+<section id="topCharts"
+class="section">
+
+<div class="section-heading">
+
+<div>
+
+<h2>
+Top Charts
+</h2>
+
+<p>
+The most-played songs on NileSoniq.
+</p>
+
 </div>
+
+</div>
+
+<div id="topChartsContainer"
+class="song-grid">
+
+<div class="loading">
+Loading top charts...
+</div>
+
+</div>
+
 </section>
 
 
-<!-- ================= ARTISTS ================= -->
+<!-- =======================================================
+     TRENDING
+======================================================= -->
 
-<section id="artistsPage" class="page">
+<section id="trending"
+class="section">
+
+<div class="section-heading">
+
+<div>
+
+<h2>
+Trending Songs
+</h2>
+
+<p>
+Fresh music from NileSoniq artists.
+</p>
+
+</div>
+
+</div>
+
+<div id="songsContainer"
+class="song-grid">
+
+<div class="loading">
+Loading music...
+</div>
+
+</div>
+
+</section>
+
+
+</div>
+
+</section>
+
+
+<!-- =======================================================
+     ARTISTS
+======================================================= -->
+
+<section id="artistsPage"
+class="page">
 
 <div class="container">
 
 <div class="dashboard-header">
-<h1>NileSoniq Artists</h1>
-<p>Discover artists and their music.</p>
+
+<h1>
+NileSoniq Artists
+</h1>
+
+<p>
+Discover artists and their music.
+</p>
+
 </div>
 
-<div id="artistsContainer" class="artist-grid">
-<div class="loading">Loading artists...</div>
+<div id="artistsContainer"
+class="artist-grid">
+
+<div class="loading">
+Loading artists...
+</div>
+
 </div>
 
 </div>
@@ -999,20 +1249,34 @@ oninput="searchSongs()">
 </section>
 
 
-<!-- ================= DASHBOARD ================= -->
+<!-- =======================================================
+     DASHBOARD
+======================================================= -->
 
-<section id="dashboardPage" class="page">
+<section id="dashboardPage"
+class="page">
 
 <div class="container">
 
 <div class="dashboard-header">
-<h1>Artist Dashboard</h1>
-<p>Manage your profile and music.</p>
+
+<h1>
+Artist Dashboard
+</h1>
+
+<p>
+Manage your profile and music.
+</p>
+
 </div>
 
-<div id="dashboardLoggedOut" class="empty">
 
-<h3>Artist login required</h3>
+<div id="dashboardLoggedOut"
+class="empty">
+
+<h3>
+Artist login required
+</h3>
 
 <p style="margin:8px 0 18px;">
 Login or create an artist account to access your dashboard.
@@ -1026,23 +1290,48 @@ Artist Login
 </div>
 
 
-<div id="dashboardContent" class="hidden">
+<div id="dashboardContent"
+class="hidden">
+
 
 <div class="stats-grid">
 
 <div class="stat-card">
-<span>Total Plays</span>
-<strong id="totalPlays">0</strong>
+
+<span>
+Total Plays
+</span>
+
+<strong id="totalPlays">
+0
+</strong>
+
 </div>
 
-<div class="stat-card">
-<span>Estimated Earnings</span>
-<strong id="totalEarnings">UGX 0</strong>
-</div>
 
 <div class="stat-card">
-<span>Your Songs</span>
-<strong id="totalSongs">0</strong>
+
+<span>
+Estimated Earnings
+</span>
+
+<strong id="totalEarnings">
+UGX 0
+</strong>
+
+</div>
+
+
+<div class="stat-card">
+
+<span>
+Your Songs
+</span>
+
+<strong id="totalSongs">
+0
+</strong>
+
 </div>
 
 </div>
@@ -1050,37 +1339,67 @@ Artist Login
 
 <div class="dashboard-card">
 
-<h2>Artist Profile</h2>
+<h2>
+Artist Profile
+</h2>
 
-<div id="profileMessage" class="message"></div>
+<div id="profileMessage"
+class="message"></div>
 
 <div class="form-grid">
 
 <div class="field">
-<label>Artist Name</label>
-<input id="artistName"
+
+<label>
+Artist Name
+</label>
+
+<input
+id="artistName"
 type="text"
 placeholder="Your artist name">
+
 </div>
+
 
 <div class="field">
-<label>Location</label>
-<input id="artistLocation"
+
+<label>
+Location
+</label>
+
+<input
+id="artistLocation"
 type="text"
 placeholder="e.g. Arua, Uganda">
+
 </div>
 
+
 <div class="field full">
-<label>Bio</label>
-<textarea id="artistBio"
+
+<label>
+Bio
+</label>
+
+<textarea
+id="artistBio"
 placeholder="Tell fans about yourself..."></textarea>
+
 </div>
 
+
 <div class="field full">
-<label>Artist Photo</label>
-<input id="avatarFile"
+
+<label>
+Artist Photo
+</label>
+
+<input
+id="avatarFile"
 type="file"
 accept="image/*">
+
 </div>
 
 </div>
@@ -1095,38 +1414,68 @@ Save Profile
 
 <div class="dashboard-card">
 
-<h2>Upload New Song</h2>
+<h2>
+Upload New Song
+</h2>
 
-<div id="uploadMessage" class="message"></div>
+<div id="uploadMessage"
+class="message"></div>
 
 <div class="form-grid">
 
 <div class="field">
-<label>Song Title</label>
-<input id="songTitle"
+
+<label>
+Song Title
+</label>
+
+<input
+id="songTitle"
 type="text"
 placeholder="Song title">
+
 </div>
 
+
 <div class="field">
-<label>Artist Name</label>
-<input id="songArtist"
+
+<label>
+Artist Name
+</label>
+
+<input
+id="songArtist"
 type="text"
 placeholder="Artist name">
+
 </div>
 
+
 <div class="field">
-<label>Audio File</label>
-<input id="audioFile"
+
+<label>
+Audio File
+</label>
+
+<input
+id="audioFile"
 type="file"
 accept="audio/*">
+
 </div>
 
+
 <div class="field">
-<label>Cover Image</label>
-<input id="coverFile"
+
+<label>
+Cover Image
+</label>
+
+<input
+id="coverFile"
 type="file"
 accept="image/*">
+
 </div>
 
 </div>
@@ -1146,7 +1495,9 @@ Uploaded songs are sent for admin approval before appearing publicly.
 
 <div class="dashboard-card">
 
-<h2>My Songs</h2>
+<h2>
+My Songs
+</h2>
 
 <div class="table-wrap">
 
@@ -1172,26 +1523,33 @@ Uploaded songs are sent for admin approval before appearing publicly.
 </div>
 
 </div>
+
 </div>
+
 </section>
 
 
-<!-- ================= ADMIN ================= -->
+<!-- =======================================================
+     ADMIN
+======================================================= -->
 
-<section id="adminPage" class="page">
+<section id="adminPage"
+class="page">
 
 <div class="container">
 
 <div class="dashboard-header">
 
-<h1>Admin Dashboard</h1>
+<h1>
+Admin Dashboard
+</h1>
 
 <p>
 Manage NileSoniq music, withdrawals and administrators.
 </p>
 
 <div id="adminRoleBadge"
-     class="admin-badge hidden">
+class="admin-badge hidden">
 ADMIN
 </div>
 
@@ -1199,9 +1557,11 @@ ADMIN
 
 
 <div id="adminDenied"
-     class="empty hidden">
+class="empty hidden">
 
-<h3>Admin access required</h3>
+<h3>
+Admin access required
+</h3>
 
 <p style="margin-top:8px;">
 You do not have permission to access this section.
@@ -1211,39 +1571,40 @@ You do not have permission to access this section.
 
 
 <div id="adminContent"
-     class="hidden">
+class="hidden">
+
 
 <div class="admin-tabs">
 
 <button id="adminTabSongs"
-        class="active"
-        onclick="showAdminTab('songs')">
+class="active"
+onclick="showAdminTab('songs')">
 Songs
 </button>
 
 <button id="adminTabWithdrawals"
-        onclick="showAdminTab('withdrawals')">
+onclick="showAdminTab('withdrawals')">
 Withdrawals
 </button>
 
 <button id="adminTabAdmins"
-        class="hidden"
-        onclick="showAdminTab('admins')">
+class="hidden"
+onclick="showAdminTab('admins')">
 Administrators
 </button>
 
 </div>
 
 
-<!-- ADMIN SONGS -->
-
 <div id="adminSongsPanel"
-     class="dashboard-card">
+class="dashboard-card">
 
-<h2>Song Submissions</h2>
+<h2>
+Song Submissions
+</h2>
 
 <div id="adminMessage"
-     class="message"></div>
+class="message"></div>
 
 <div class="table-wrap">
 
@@ -1270,15 +1631,15 @@ Administrators
 </div>
 
 
-<!-- WITHDRAWALS -->
-
 <div id="adminWithdrawalsPanel"
-     class="dashboard-card hidden">
+class="dashboard-card hidden">
 
-<h2>Withdrawal Requests</h2>
+<h2>
+Withdrawal Requests
+</h2>
 
 <div id="withdrawalAdminMessage"
-     class="message"></div>
+class="message"></div>
 
 <div class="table-wrap">
 
@@ -1306,28 +1667,37 @@ Administrators
 </div>
 
 
-<!-- ADMIN MANAGEMENT -->
-
 <div id="adminManagementPanel"
-     class="dashboard-card hidden">
+class="dashboard-card hidden">
 
-<h2>Administrator Management</h2>
+<h2>
+Administrator Management
+</h2>
 
 <div id="adminManagementMessage"
-     class="message"></div>
+class="message"></div>
 
 <div class="form-grid">
 
 <div class="field">
-<label>Administrator Email</label>
 
-<input id="newAdminEmail"
-       type="email"
-       placeholder="artist@example.com">
+<label>
+Administrator Email
+</label>
+
+<input
+id="newAdminEmail"
+type="email"
+placeholder="artist@example.com">
+
 </div>
 
+
 <div class="field">
-<label>Role</label>
+
+<label>
+Role
+</label>
 
 <select id="newAdminRole">
 
@@ -1346,13 +1716,13 @@ Super Admin
 </div>
 
 <button class="btn btn-orange"
-        onclick="addAdministrator()">
+onclick="addAdministrator()">
 Add Administrator
 </button>
 
 
 <div style="margin-top:25px;"
-     class="table-wrap">
+class="table-wrap">
 
 <table>
 
@@ -1384,7 +1754,9 @@ Add Administrator
 </main>
 
 
-<!-- ================= FOOTER ================= -->
+<!-- =======================================================
+     FOOTER
+======================================================= -->
 
 <footer>
 
@@ -1403,6 +1775,7 @@ Uganda's music, free to stream.
 </div>
 
 </div>
+
 
 <div class="footer-links">
 
@@ -1436,9 +1809,12 @@ Admin
 </footer>
 
 
-<!-- ================= AUTH MODAL ================= -->
+<!-- =======================================================
+     AUTH MODAL
+======================================================= -->
 
-<div id="authModal" class="modal">
+<div id="authModal"
+class="modal">
 
 <div class="modal-box">
 
@@ -1455,6 +1831,7 @@ onclick="closeAuthModal()">
 
 </div>
 
+
 <div class="auth-tabs">
 
 <button id="loginTab"
@@ -1470,39 +1847,53 @@ Create Account
 
 </div>
 
+
 <div id="authMessage"
-     class="message"></div>
+class="message"></div>
+
 
 <div id="signupNameField"
-     class="field hidden">
+class="field hidden">
 
-<label>Artist Name</label>
+<label>
+Artist Name
+</label>
 
-<input id="signupArtistName"
+<input
+id="signupArtistName"
 type="text"
 placeholder="Your artist name">
 
 </div>
 
+
 <div class="field">
 
-<label>Email</label>
+<label>
+Email
+</label>
 
-<input id="authEmail"
+<input
+id="authEmail"
 type="email"
 placeholder="you@example.com">
 
 </div>
 
+
 <div class="field">
 
-<label>Password</label>
+<label>
+Password
+</label>
 
-<input id="authPassword"
+<input
+id="authPassword"
 type="password"
 placeholder="Password">
 
 </div>
+
 
 <button id="authSubmit"
 class="btn btn-orange"
@@ -1512,10 +1903,13 @@ Login
 </button>
 
 </div>
+
 </div>
 
 
-<!-- ================= PLAYER ================= -->
+<!-- =======================================================
+     PLAYER
+======================================================= -->
 
 <div class="player">
 
@@ -1524,7 +1918,7 @@ Login
 <div class="now-playing">
 
 <div id="nowCover"
-     class="now-cover"></div>
+class="now-cover"></div>
 
 <div class="now-title">
 
@@ -1540,6 +1934,7 @@ Select a song
 
 </div>
 
+
 <div class="player-controls">
 
 <button class="player-play"
@@ -1549,9 +1944,11 @@ onclick="togglePlay()">
 
 </div>
 
+
 <div class="player-right">
 
-<audio id="audioPlayer"
+<audio
+id="audioPlayer"
 controls
 preload="none"></audio>
 
@@ -1586,10 +1983,19 @@ window.supabase.createClient(
 ========================================================= */
 
 let currentUser = null;
+
 let currentArtist = null;
+
 let currentSongs = [];
+
+let newReleaseSongs = [];
+
+let topChartSongs = [];
+
 let currentAuthMode = "login";
+
 let currentPlayingSong = null;
+
 let currentAdmin = null;
 
 
@@ -1606,6 +2012,10 @@ async () => {
   await checkUser();
 
   await loadSongs();
+
+  await loadNewReleases();
+
+  await loadTopCharts();
 
   await loadArtists();
 
@@ -1646,6 +2056,7 @@ async function checkUser(){
       );
 
       return;
+
     }
 
     currentUser =
@@ -2035,6 +2446,7 @@ function updateAdminTabs(){
       "adminTabAdmins"
     );
 
+
   if(
     adminTab &&
     isCurrentUserSuperAdmin()
@@ -2111,9 +2523,11 @@ async function showAdminTab(tab){
   );
 
   if(adminTab){
+
     adminTab.classList.remove(
       "active"
     );
+
   }
 
 
@@ -2159,14 +2573,17 @@ async function showAdminTab(tab){
 
     }
 
+
     managementPanel.classList.remove(
       "hidden"
     );
 
     if(adminTab){
+
       adminTab.classList.add(
         "active"
       );
+
     }
 
     await loadAdministrators();
@@ -2273,6 +2690,7 @@ function setAuthMode(mode){
       "Create Account";
 
   }
+
 
   clearMessage(
     "authMessage"
@@ -2452,7 +2870,9 @@ async function logout(){
 
 
   currentUser = null;
+
   currentArtist = null;
+
   currentAdmin = null;
 
   await showPage("home");
@@ -2566,6 +2986,7 @@ async function saveArtistProfile(){
   if(!currentUser){
 
     openAuthModal();
+
     return;
 
   }
@@ -2725,6 +3146,7 @@ async function uploadSong(){
   if(!currentUser){
 
     openAuthModal();
+
     return;
 
   }
@@ -2989,7 +3411,7 @@ async function uploadSong(){
 
 
 /* =========================================================
-   PUBLIC SONGS
+   PUBLIC SONGS / TRENDING
 ========================================================= */
 
 async function loadSongs(){
@@ -3045,10 +3467,18 @@ async function loadSongs(){
     container.innerHTML = `
       <div class="empty"
            style="grid-column:1/-1;">
-        <h3>Could not load songs</h3>
+
+        <h3>
+          Could not load songs
+        </h3>
+
         <p style="margin-top:8px;">
-          ${escapeHtml(error.message || "Unknown error")}
+          ${escapeHtml(
+            error.message ||
+            "Unknown error"
+          )}
         </p>
+
       </div>
     `;
 
@@ -3057,12 +3487,211 @@ async function loadSongs(){
 }
 
 
-function renderSongs(songs){
+/* =========================================================
+   NEW RELEASES
+========================================================= */
+
+async function loadNewReleases(){
 
   const container =
     document.getElementById(
-      "songsContainer"
+      "newReleasesContainer"
     );
+
+
+  if(!container){
+    return;
+  }
+
+
+  container.innerHTML =
+    `<div class="loading">
+      Loading new releases...
+    </div>`;
+
+
+  try{
+
+    const {
+      data,
+      error
+    } = await sb
+      .from("songs")
+      .select("*")
+      .eq(
+        "approved",
+        true
+      )
+      .order(
+        "created_at",
+        {
+          ascending:false
+        }
+      )
+      .limit(8);
+
+
+    if(error){
+      throw error;
+    }
+
+
+    newReleaseSongs =
+      data || [];
+
+
+    renderNewReleases(
+      newReleaseSongs
+    );
+
+
+  }catch(error){
+
+    console.error(
+      "New releases error:",
+      error
+    );
+
+
+    container.innerHTML = `
+      <div class="empty"
+           style="grid-column:1/-1;">
+
+        <h3>
+          Could not load new releases
+        </h3>
+
+        <p style="margin-top:8px;">
+          ${escapeHtml(
+            error.message ||
+            "Unknown error"
+          )}
+        </p>
+
+      </div>
+    `;
+
+  }
+
+}
+
+
+/* =========================================================
+   TOP CHARTS
+========================================================= */
+
+async function loadTopCharts(){
+
+  const container =
+    document.getElementById(
+      "topChartsContainer"
+    );
+
+
+  if(!container){
+    return;
+  }
+
+
+  container.innerHTML =
+    `<div class="loading">
+      Loading top charts...
+    </div>`;
+
+
+  try{
+
+    const {
+      data,
+      error
+    } = await sb
+      .from("songs")
+      .select("*")
+      .eq(
+        "approved",
+        true
+      )
+      .order(
+        "plays",
+        {
+          ascending:false,
+          nullsFirst:false
+        }
+      )
+      .order(
+        "created_at",
+        {
+          ascending:false
+        }
+      )
+      .limit(8);
+
+
+    if(error){
+      throw error;
+    }
+
+
+    topChartSongs =
+      data || [];
+
+
+    renderTopCharts(
+      topChartSongs
+    );
+
+
+  }catch(error){
+
+    console.error(
+      "Top charts error:",
+      error
+    );
+
+
+    container.innerHTML = `
+      <div class="empty"
+           style="grid-column:1/-1;">
+
+        <h3>
+          Could not load top charts
+        </h3>
+
+        <p style="margin-top:8px;">
+          ${escapeHtml(
+            error.message ||
+            "Unknown error"
+          )}
+        </p>
+
+      </div>
+    `;
+
+  }
+
+}
+
+
+/* =========================================================
+   GENERIC SONG CARD RENDERER
+========================================================= */
+
+function renderSongCards(
+  songs,
+  containerId,
+  emptyTitle,
+  emptyText
+){
+
+  const container =
+    document.getElementById(
+      containerId
+    );
+
+
+  if(!container){
+    return;
+  }
 
 
   if(!songs || songs.length === 0){
@@ -3070,10 +3699,15 @@ function renderSongs(songs){
     container.innerHTML = `
       <div class="empty"
            style="grid-column:1/-1;">
-        <h3>No approved songs yet</h3>
+
+        <h3>
+          ${escapeHtml(emptyTitle)}
+        </h3>
+
         <p style="margin-top:8px;">
-          New music will appear here after approval.
+          ${escapeHtml(emptyText)}
         </p>
+
       </div>
     `;
 
@@ -3115,24 +3749,35 @@ function renderSongs(songs){
 
           </div>
 
+
           <div class="song-info">
 
             <div class="song-title">
-              ${escapeHtml(song.title || "Untitled")}
+              ${escapeHtml(
+                song.title ||
+                "Untitled"
+              )}
             </div>
 
             <div class="artist-name">
-              ${escapeHtml(song.artist || "Unknown Artist")}
+              ${escapeHtml(
+                song.artist ||
+                "Unknown Artist"
+              )}
             </div>
 
             <div class="song-meta">
 
               <span>
-                ${formatNumber(song.plays || 0)} plays
+                ${formatNumber(
+                  song.plays || 0
+                )} plays
               </span>
 
               <span>
-                ${formatNumber(song.likes || 0)} likes
+                ${formatNumber(
+                  song.likes || 0
+                )} likes
               </span>
 
             </div>
@@ -3143,6 +3788,42 @@ function renderSongs(songs){
       `;
 
     }).join("");
+
+}
+
+
+function renderSongs(songs){
+
+  renderSongCards(
+    songs,
+    "songsContainer",
+    "No approved songs yet",
+    "New music will appear here after approval."
+  );
+
+}
+
+
+function renderNewReleases(songs){
+
+  renderSongCards(
+    songs,
+    "newReleasesContainer",
+    "No new releases yet",
+    "New music will appear here after approval."
+  );
+
+}
+
+
+function renderTopCharts(songs){
+
+  renderSongCards(
+    songs,
+    "topChartsContainer",
+    "No chart data yet",
+    "Songs will appear here as they receive plays."
+  );
 
 }
 
@@ -3201,14 +3882,31 @@ function searchSongs(){
 
 
 /* =========================================================
+   FIND SONG IN ALL HOME SECTIONS
+========================================================= */
+
+function findSongById(songId){
+
+  return [
+    ...currentSongs,
+    ...newReleaseSongs,
+    ...topChartSongs
+  ].find(
+    song => song.id === songId
+  );
+
+}
+
+
+/* =========================================================
    PLAYER
 ========================================================= */
 
 async function playSong(songId){
 
   const song =
-    currentSongs.find(
-      item => item.id === songId
+    findSongById(
+      songId
     );
 
 
@@ -3243,19 +3941,22 @@ async function playSong(songId){
     );
 
 
-  player.src = url;
+  player.src =
+    url;
 
 
   document.getElementById(
     "nowTitle"
   ).textContent =
-    song.title || "Untitled";
+    song.title ||
+    "Untitled";
 
 
   document.getElementById(
     "nowArtist"
   ).textContent =
-    song.artist || "Unknown Artist";
+    song.artist ||
+    "Unknown Artist";
 
 
   const nowCover =
@@ -3281,7 +3982,9 @@ async function playSong(songId){
       align-items:center;
       justify-content:center;
       color:#ff6a00;
-      font-size:22px;">♪</div>`;
+      font-size:22px;">
+      ♪
+      </div>`;
 
   }
 
@@ -3347,7 +4050,8 @@ function setupAudioEvents(){
 
       document.querySelector(
         ".player-play"
-      ).textContent = "❚❚";
+      ).textContent =
+        "❚❚";
 
     }
   );
@@ -3359,7 +4063,8 @@ function setupAudioEvents(){
 
       document.querySelector(
         ".player-play"
-      ).textContent = "▶";
+      ).textContent =
+        "▶";
 
     }
   );
@@ -3412,24 +4117,59 @@ async function recordSongPlay(songId){
 }
 
 
-function updateLocalPlayCount(songId){
+function updateSongInList(
+  list,
+  songId
+){
 
   const song =
-    currentSongs.find(
-      s => s.id === songId
+    list.find(
+      item => item.id === songId
     );
 
 
   if(song){
 
     song.plays =
-      Number(song.plays || 0) + 1;
+      Number(
+        song.plays || 0
+      ) + 1;
 
   }
+
+}
+
+
+function updateLocalPlayCount(
+  songId
+){
+
+  updateSongInList(
+    currentSongs,
+    songId
+  );
+
+  updateSongInList(
+    newReleaseSongs,
+    songId
+  );
+
+  updateSongInList(
+    topChartSongs,
+    songId
+  );
 
 
   renderSongs(
     currentSongs
+  );
+
+  renderNewReleases(
+    newReleaseSongs
+  );
+
+  renderTopCharts(
+    topChartSongs
   );
 
 }
@@ -3453,7 +4193,9 @@ async function loadArtists(){
 
 
   container.innerHTML =
-    `<div class="loading">Loading artists...</div>`;
+    `<div class="loading">
+      Loading artists...
+    </div>`;
 
 
   try{
@@ -3498,13 +4240,17 @@ async function loadArtists(){
           artist.avatar_url
           ? `
             <img
-              src="${escapeAttribute(artist.avatar_url)}"
+              src="${escapeAttribute(
+                artist.avatar_url
+              )}"
               alt=""
               loading="lazy">
           `
           : `
             <div class="artist-avatar-placeholder">
-              ${getInitials(artist.name)}
+              ${getInitials(
+                artist.name
+              )}
             </div>
           `;
 
@@ -3577,9 +4323,11 @@ async function loadMySongs(){
   tbody.innerHTML = `
     <tr>
       <td colspan="4">
+
         <div class="loading">
           Loading your songs...
         </div>
+
       </td>
     </tr>
   `;
@@ -3619,9 +4367,11 @@ async function loadMySongs(){
       tbody.innerHTML = `
         <tr>
           <td colspan="4">
+
             <div class="empty">
               You have not uploaded any songs yet.
             </div>
+
           </td>
         </tr>
       `;
@@ -3665,9 +4415,11 @@ async function loadMySongs(){
               </td>
 
               <td>
+
                 <span class="status ${status}">
                   ${text}
                 </span>
+
               </td>
 
             </tr>
@@ -3694,12 +4446,16 @@ async function loadMySongs(){
     tbody.innerHTML = `
       <tr>
         <td colspan="4">
+
           <div class="empty">
+
             ${escapeHtml(
               error.message ||
               "Could not load songs."
             )}
+
           </div>
+
         </td>
       </tr>
     `;
@@ -3721,7 +4477,9 @@ function updateDashboardStats(
     songs.reduce(
       (sum,song) =>
         sum +
-        Number(song.plays || 0),
+        Number(
+          song.plays || 0
+        ),
       0
     );
 
@@ -3792,9 +4550,11 @@ async function loadAdminSongs(){
   tbody.innerHTML = `
     <tr>
       <td colspan="5">
+
         <div class="loading">
           Loading submissions...
         </div>
+
       </td>
     </tr>
   `;
@@ -3833,9 +4593,11 @@ async function loadAdminSongs(){
       tbody.innerHTML = `
         <tr>
           <td colspan="5">
+
             <div class="empty">
               No pending songs.
             </div>
+
           </td>
         </tr>
       `;
@@ -3872,9 +4634,11 @@ async function loadAdminSongs(){
             </td>
 
             <td>
+
               <span class="status pending">
                 Pending
               </span>
+
             </td>
 
             <td>
@@ -3912,12 +4676,16 @@ async function loadAdminSongs(){
     tbody.innerHTML = `
       <tr>
         <td colspan="5">
+
           <div class="empty">
+
             ${escapeHtml(
               error.message ||
               "Could not load submissions."
             )}
+
           </div>
+
         </td>
       </tr>
     `;
@@ -3989,6 +4757,10 @@ async function approveSong(songId){
     await loadAdminSongs();
 
     await loadSongs();
+
+    await loadNewReleases();
+
+    await loadTopCharts();
 
 
   }catch(error){
@@ -4124,9 +4896,11 @@ async function loadWithdrawals(){
   tbody.innerHTML = `
     <tr>
       <td colspan="6">
+
         <div class="loading">
           Loading withdrawals...
         </div>
+
       </td>
     </tr>
   `;
@@ -4162,9 +4936,11 @@ async function loadWithdrawals(){
       tbody.innerHTML = `
         <tr>
           <td colspan="6">
+
             <div class="empty">
               No withdrawal requests yet.
             </div>
+
           </td>
         </tr>
       `;
@@ -4182,7 +4958,8 @@ async function loadWithdrawals(){
 
             <td>
               ${escapeHtml(
-                item.artist_id || "Unknown"
+                item.artist_id ||
+                "Unknown"
               )}
             </td>
 
@@ -4205,13 +4982,19 @@ async function loadWithdrawals(){
             </td>
 
             <td>
+
               <span class="status ${escapeHtml(
-                item.status || "pending"
+                item.status ||
+                "pending"
               )}">
+
                 ${escapeHtml(
-                  item.status || "pending"
+                  item.status ||
+                  "pending"
                 )}
+
               </span>
+
             </td>
 
             <td>
@@ -4268,12 +5051,16 @@ async function loadWithdrawals(){
     tbody.innerHTML = `
       <tr>
         <td colspan="6">
+
           <div class="empty">
+
             ${escapeHtml(
               error.message ||
               "Could not load withdrawals."
             )}
+
           </div>
+
         </td>
       </tr>
     `;
@@ -4427,9 +5214,11 @@ async function loadAdministrators(){
   tbody.innerHTML = `
     <tr>
       <td colspan="4">
+
         <div class="loading">
           Loading administrators...
         </div>
+
       </td>
     </tr>
   `;
@@ -4467,9 +5256,11 @@ async function loadAdministrators(){
       tbody.innerHTML = `
         <tr>
           <td colspan="4">
+
             <div class="empty">
               No administrators found.
             </div>
+
           </td>
         </tr>
       `;
@@ -4491,23 +5282,30 @@ async function loadAdministrators(){
           <tr>
 
             <td>
+
               ${escapeHtml(
                 admin.email || ""
               )}
 
               ${
                 isMe
-                ? `<small style="color:#777;"> (You)</small>`
+                ? `<small style="color:#777;">
+                    (You)
+                   </small>`
                 : ""
               }
+
             </td>
 
             <td>
+
               <span class="admin-badge">
                 ${escapeHtml(
-                  admin.role || "admin"
+                  admin.role ||
+                  "admin"
                 )}
               </span>
+
             </td>
 
             <td>
@@ -4577,12 +5375,16 @@ async function loadAdministrators(){
     tbody.innerHTML = `
       <tr>
         <td colspan="4">
+
           <div class="empty">
+
             ${escapeHtml(
               error.message ||
               "Could not load administrators."
             )}
+
           </div>
+
         </td>
       </tr>
     `;
