@@ -390,10 +390,6 @@ nav button.active{
   margin-top:10px;
 }
 
-/* =========================
-   DOWNLOAD BUTTON
-========================= */
-
 .download-btn{
   width:100%;
   margin-top:12px;
@@ -418,8 +414,6 @@ nav button.active{
   cursor:not-allowed;
   transform:none;
 }
-
-/* ========================= */
 
 .artist-grid{
   display:grid;
@@ -1155,7 +1149,7 @@ Upload Your Music
 id="searchInput"
 type="search"
 placeholder="Search songs or artists..."
-oninput="searchSongs()">
+oninput="searchSongs">
 
 </div>
 
@@ -1969,10 +1963,6 @@ preload="none"></audio>
 
 <script>
 
-/* =========================================================
-   SUPABASE
-========================================================= */
-
 const SUPABASE_URL =
 "https://nxiygxnzlusasgzdknft.supabase.co";
 
@@ -1985,33 +1975,15 @@ window.supabase.createClient(
   SUPABASE_PUBLISHABLE_KEY
 );
 
-
-/* =========================================================
-   GLOBAL VARIABLES
-========================================================= */
-
 let currentUser = null;
-
 let currentArtist = null;
-
 let currentSongs = [];
-
 let newReleaseSongs = [];
-
 let topChartSongs = [];
-
 let currentAuthMode = "login";
-
 let currentAuthContext = "artist";
-
 let currentPlayingSong = null;
-
 let currentAdmin = null;
-
-
-/* =========================================================
-   START
-========================================================= */
 
 document.addEventListener(
 "DOMContentLoaded",
@@ -2033,11 +2005,6 @@ async () => {
 
 });
 
-
-/* =========================================================
-   AUTH STATE
-========================================================= */
-
 sb.auth.onAuthStateChange(
 async (_event, session) => {
 
@@ -2047,7 +2014,6 @@ async (_event, session) => {
   await updateUI();
 
 });
-
 
 async function checkUser(){
 
@@ -2081,11 +2047,6 @@ async function checkUser(){
   }
 
 }
-
-
-/* =========================================================
-   ADMIN CHECK
-========================================================= */
 
 async function isCurrentUserAdmin(){
 
@@ -2150,11 +2111,6 @@ async function isCurrentUserAdmin(){
 
 }
 
-
-/* =========================================================
-   SUPER ADMIN CHECK
-========================================================= */
-
 function isCurrentUserSuperAdmin(){
 
   return (
@@ -2164,11 +2120,6 @@ function isCurrentUserSuperAdmin(){
   );
 
 }
-
-
-/* =========================================================
-   UPDATE UI
-========================================================= */
 
 async function updateUI(){
 
@@ -2202,7 +2153,6 @@ async function updateUI(){
       "dashboardContent"
     );
 
-
   if(currentUser){
 
     loginButton.classList.add(
@@ -2221,10 +2171,8 @@ async function updateUI(){
       "hidden"
     );
 
-
     const isAdmin =
       await isCurrentUserAdmin();
-
 
     if(isAdmin){
 
@@ -2254,11 +2202,9 @@ async function updateUI(){
 
     }
 
-
     await loadArtistProfile();
 
     await loadMySongs();
-
 
     if(isAdmin){
 
@@ -2298,11 +2244,6 @@ async function updateUI(){
 
 }
 
-
-/* =========================================================
-   NAVIGATION
-========================================================= */
-
 async function showPage(page){
 
   const pages = [
@@ -2311,7 +2252,6 @@ async function showPage(page){
     "dashboard",
     "admin"
   ];
-
 
   pages.forEach(name => {
 
@@ -2331,7 +2271,6 @@ async function showPage(page){
 
   });
 
-
   document
     .querySelectorAll(
       "nav button[data-page]"
@@ -2345,18 +2284,15 @@ async function showPage(page){
 
     });
 
-
   document
     .getElementById("mainNav")
     .classList.remove("open");
-
 
   if(page === "artists"){
 
     await loadArtists();
 
   }
-
 
   if(page === "dashboard"){
 
@@ -2370,7 +2306,6 @@ async function showPage(page){
 
   }
 
-
   if(page === "admin"){
 
     const denied =
@@ -2382,7 +2317,6 @@ async function showPage(page){
       document.getElementById(
         "adminContent"
       );
-
 
     if(!currentUser){
 
@@ -2398,10 +2332,8 @@ async function showPage(page){
 
     }
 
-
     const isAdmin =
       await isCurrentUserAdmin();
-
 
     if(isAdmin){
 
@@ -2433,7 +2365,6 @@ async function showPage(page){
 
 }
 
-
 function toggleMenu(){
 
   document
@@ -2442,18 +2373,12 @@ function toggleMenu(){
 
 }
 
-
-/* =========================================================
-   ADMIN TABS
-========================================================= */
-
 function updateAdminTabs(){
 
   const adminTab =
     document.getElementById(
       "adminTabAdmins"
     );
-
 
   if(
     adminTab &&
@@ -2474,7 +2399,6 @@ function updateAdminTabs(){
 
 }
 
-
 async function showAdminTab(tab){
 
   const songsPanel =
@@ -2492,7 +2416,6 @@ async function showAdminTab(tab){
       "adminManagementPanel"
     );
 
-
   const songTab =
     document.getElementById(
       "adminTabSongs"
@@ -2508,7 +2431,6 @@ async function showAdminTab(tab){
       "adminTabAdmins"
     );
 
-
   songsPanel.classList.add(
     "hidden"
   );
@@ -2520,7 +2442,6 @@ async function showAdminTab(tab){
   managementPanel.classList.add(
     "hidden"
   );
-
 
   songTab.classList.remove(
     "active"
@@ -2538,7 +2459,6 @@ async function showAdminTab(tab){
 
   }
 
-
   if(tab === "songs"){
 
     songsPanel.classList.remove(
@@ -2552,7 +2472,6 @@ async function showAdminTab(tab){
     await loadAdminSongs();
 
   }
-
 
   if(tab === "withdrawals"){
 
@@ -2568,7 +2487,6 @@ async function showAdminTab(tab){
 
   }
 
-
   if(tab === "admins"){
 
     if(!isCurrentUserSuperAdmin()){
@@ -2580,7 +2498,6 @@ async function showAdminTab(tab){
       return;
 
     }
-
 
     managementPanel.classList.remove(
       "hidden"
@@ -2599,11 +2516,6 @@ async function showAdminTab(tab){
   }
 
 }
-
-
-/* =========================================================
-   AUTH
-========================================================= */
 
 function openAuthModal(context="artist"){
 
@@ -2624,7 +2536,6 @@ function openAuthModal(context="artist"){
 
 }
 
-
 function closeAuthModal(){
 
   document
@@ -2632,7 +2543,6 @@ function closeAuthModal(){
     .classList.remove("show");
 
 }
-
 
 function setAuthMode(mode){
 
@@ -2663,7 +2573,6 @@ function setAuthMode(mode){
       "authSubmit"
     );
 
-
   if(mode === "login"){
 
     loginTab.classList.add(
@@ -2678,12 +2587,10 @@ function setAuthMode(mode){
       "hidden"
     );
 
-
     title.textContent =
       currentAuthContext === "admin"
         ? "Admin Login"
         : "Artist Login";
-
 
     submit.textContent =
       "Login";
@@ -2712,13 +2619,11 @@ function setAuthMode(mode){
 
   }
 
-
   clearMessage(
     "authMessage"
   );
 
 }
-
 
 async function submitAuth(){
 
@@ -2745,7 +2650,6 @@ async function submitAuth(){
       .value
       .trim();
 
-
   if(!email || !password){
 
     showMessage(
@@ -2758,7 +2662,6 @@ async function submitAuth(){
 
   }
 
-
   try{
 
     if(currentAuthMode === "login"){
@@ -2770,13 +2673,11 @@ async function submitAuth(){
         password
       });
 
-
       if(error){
 
         throw error;
 
       }
-
 
       if(currentAuthContext === "admin"){
 
@@ -2787,7 +2688,6 @@ async function submitAuth(){
               300
             )
         );
-
 
         const {
           data:adminData,
@@ -2806,7 +2706,6 @@ async function submitAuth(){
             true
           )
           .maybeSingle();
-
 
         if(
           adminError ||
@@ -2828,17 +2727,14 @@ async function submitAuth(){
 
         }
 
-
         currentAdmin =
           adminData;
-
 
         showMessage(
           "authMessage",
           "Admin login successful.",
           "success"
         );
-
 
         setTimeout(
           async () => {
@@ -2853,11 +2749,9 @@ async function submitAuth(){
           700
         );
 
-
         return;
 
       }
-
 
       showMessage(
         "authMessage",
@@ -2865,12 +2759,10 @@ async function submitAuth(){
         "success"
       );
 
-
       setTimeout(
         closeAuthModal,
         700
       );
-
 
     }else{
 
@@ -2886,7 +2778,6 @@ async function submitAuth(){
 
       }
 
-
       const {
         data,
         error
@@ -2895,13 +2786,11 @@ async function submitAuth(){
         password
       });
 
-
       if(error){
 
         throw error;
 
       }
-
 
       if(data.user){
 
@@ -2919,7 +2808,6 @@ async function submitAuth(){
             }
           );
 
-
         if(artistError){
 
           console.error(
@@ -2930,7 +2818,6 @@ async function submitAuth(){
         }
 
       }
-
 
       showMessage(
         "authMessage",
@@ -2955,13 +2842,11 @@ async function submitAuth(){
 
 }
 
-
 async function logout(){
 
   const {
     error
   } = await sb.auth.signOut();
-
 
   if(error){
 
@@ -2974,28 +2859,19 @@ async function logout(){
 
   }
 
-
   currentUser = null;
-
   currentArtist = null;
-
   currentAdmin = null;
 
   await showPage("home");
 
 }
 
-
-/* =========================================================
-   ARTIST PROFILE
-========================================================= */
-
 async function loadArtistProfile(){
 
   if(!currentUser){
     return;
   }
-
 
   try{
 
@@ -3011,7 +2887,6 @@ async function loadArtistProfile(){
       )
       .maybeSingle();
 
-
     if(error){
 
       console.error(
@@ -3023,9 +2898,7 @@ async function loadArtistProfile(){
 
     }
 
-
     currentArtist = data;
-
 
     if(!data){
 
@@ -3045,7 +2918,6 @@ async function loadArtistProfile(){
 
     }
 
-
     document.getElementById(
       "artistName"
     ).value =
@@ -3061,12 +2933,10 @@ async function loadArtistProfile(){
     ).value =
       data.bio || "";
 
-
     const songArtist =
       document.getElementById(
         "songArtist"
       );
-
 
     if(
       songArtist &&
@@ -3086,7 +2956,6 @@ async function loadArtistProfile(){
 
 }
 
-
 async function saveArtistProfile(){
 
   if(!currentUser){
@@ -3096,7 +2965,6 @@ async function saveArtistProfile(){
     return;
 
   }
-
 
   const name =
     document
@@ -3129,7 +2997,6 @@ async function saveArtistProfile(){
       )
       .files[0];
 
-
   if(!name){
 
     showMessage(
@@ -3142,13 +3009,11 @@ async function saveArtistProfile(){
 
   }
 
-
   try{
 
     let avatarUrl =
       currentArtist?.avatar_url ||
       null;
-
 
     if(avatarFile){
 
@@ -3159,7 +3024,6 @@ async function saveArtistProfile(){
 
       const path =
         `${currentUser.id}/avatar-${Date.now()}.${extension}`;
-
 
       const {
         error:uploadError
@@ -3173,13 +3037,11 @@ async function saveArtistProfile(){
           }
         );
 
-
       if(uploadError){
 
         throw uploadError;
 
       }
-
 
       const {
         data
@@ -3187,12 +3049,10 @@ async function saveArtistProfile(){
         .from("avatars")
         .getPublicUrl(path);
 
-
       avatarUrl =
         data.publicUrl;
 
     }
-
 
     const {
       data,
@@ -3214,16 +3074,13 @@ async function saveArtistProfile(){
       .select()
       .single();
 
-
     if(error){
 
       throw error;
 
     }
 
-
     currentArtist = data;
-
 
     showMessage(
       "profileMessage",
@@ -3246,11 +3103,6 @@ async function saveArtistProfile(){
 
 }
 
-
-/* =========================================================
-   UPLOAD SONG
-========================================================= */
-
 async function uploadSong(){
 
   if(!currentUser){
@@ -3260,7 +3112,6 @@ async function uploadSong(){
     return;
 
   }
-
 
   const title =
     document
@@ -3292,14 +3143,12 @@ async function uploadSong(){
       )
       .files[0];
 
-
   if(!artistName){
 
     artistName =
       currentArtist?.name || "";
 
   }
-
 
   if(!title){
 
@@ -3313,7 +3162,6 @@ async function uploadSong(){
 
   }
 
-
   if(!artistName){
 
     showMessage(
@@ -3325,7 +3173,6 @@ async function uploadSong(){
     return;
 
   }
-
 
   if(!audioFile){
 
@@ -3339,24 +3186,20 @@ async function uploadSong(){
 
   }
 
-
   const uploadButton =
     document.getElementById(
       "uploadButton"
     );
-
 
   uploadButton.disabled = true;
 
   uploadButton.textContent =
     "Uploading...";
 
-
   try{
 
     const audioPath =
       `${currentUser.id}/${Date.now()}-${safeFileName(audioFile.name)}`;
-
 
     const {
       error:audioUploadError
@@ -3374,13 +3217,11 @@ async function uploadSong(){
         }
       );
 
-
     if(audioUploadError){
 
       throw audioUploadError;
 
     }
-
 
     const {
       data:audioPublic
@@ -3390,19 +3231,15 @@ async function uploadSong(){
         audioPath
       );
 
-
     const audioUrl =
       audioPublic.publicUrl;
 
-
     let coverUrl = null;
-
 
     if(coverFile){
 
       const coverPath =
         `${currentUser.id}/${Date.now()}-${safeFileName(coverFile.name)}`;
-
 
       const {
         error:coverUploadError
@@ -3420,13 +3257,11 @@ async function uploadSong(){
           }
         );
 
-
       if(coverUploadError){
 
         throw coverUploadError;
 
       }
-
 
       const {
         data:coverPublic
@@ -3436,12 +3271,10 @@ async function uploadSong(){
           coverPath
         );
 
-
       coverUrl =
         coverPublic.publicUrl;
 
     }
-
 
     const {
       error:songError
@@ -3469,20 +3302,17 @@ async function uploadSong(){
 
       });
 
-
     if(songError){
 
       throw songError;
 
     }
 
-
     showMessage(
       "uploadMessage",
       "Song uploaded successfully. It is waiting for admin approval.",
       "success"
     );
-
 
     document.getElementById(
       "songTitle"
@@ -3496,9 +3326,7 @@ async function uploadSong(){
       "coverFile"
     ).value = "";
 
-
     await loadMySongs();
-
 
   }catch(error){
 
@@ -3525,11 +3353,6 @@ async function uploadSong(){
 
 }
 
-
-/* =========================================================
-   PUBLIC SONGS
-========================================================= */
-
 async function loadSongs(){
 
   const container =
@@ -3537,10 +3360,8 @@ async function loadSongs(){
       "songsContainer"
     );
 
-
   container.innerHTML =
     `<div class="loading">Loading music...</div>`;
-
 
   try{
 
@@ -3561,22 +3382,18 @@ async function loadSongs(){
         }
       );
 
-
     if(error){
 
       throw error;
 
     }
 
-
     currentSongs =
       data || [];
-
 
     renderSongs(
       currentSongs
     );
-
 
   }catch(error){
 
@@ -3604,7 +3421,6 @@ async function loadSongs(){
 
 }
 
-
 async function loadNewReleases(){
 
   const container =
@@ -3612,17 +3428,14 @@ async function loadNewReleases(){
       "newReleasesContainer"
     );
 
-
   if(!container){
     return;
   }
-
 
   container.innerHTML =
     `<div class="loading">
       Loading new releases...
     </div>`;
-
 
   try{
 
@@ -3644,22 +3457,18 @@ async function loadNewReleases(){
       )
       .limit(8);
 
-
     if(error){
 
       throw error;
 
     }
 
-
     newReleaseSongs =
       data || [];
-
 
     renderNewReleases(
       newReleaseSongs
     );
-
 
   }catch(error){
 
@@ -3667,7 +3476,6 @@ async function loadNewReleases(){
       "New releases error:",
       error
     );
-
 
     container.innerHTML = `
       <div class="empty"
@@ -3691,7 +3499,6 @@ async function loadNewReleases(){
 
 }
 
-
 async function loadTopCharts(){
 
   const container =
@@ -3699,17 +3506,14 @@ async function loadTopCharts(){
       "topChartsContainer"
     );
 
-
   if(!container){
     return;
   }
-
 
   container.innerHTML =
     `<div class="loading">
       Loading top charts...
     </div>`;
-
 
   try{
 
@@ -3738,22 +3542,18 @@ async function loadTopCharts(){
       )
       .limit(8);
 
-
     if(error){
 
       throw error;
 
     }
 
-
     topChartSongs =
       data || [];
-
 
     renderTopCharts(
       topChartSongs
     );
-
 
   }catch(error){
 
@@ -3761,7 +3561,6 @@ async function loadTopCharts(){
       "Top charts error:",
       error
     );
-
 
     container.innerHTML = `
       <div class="empty"
@@ -3785,11 +3584,6 @@ async function loadTopCharts(){
 
 }
 
-
-/* =========================================================
-   SONG CARDS
-========================================================= */
-
 function renderSongCards(
   songs,
   containerId,
@@ -3802,11 +3596,9 @@ function renderSongCards(
       containerId
     );
 
-
   if(!container){
     return;
   }
-
 
   if(!songs || songs.length === 0){
 
@@ -3829,7 +3621,6 @@ function renderSongCards(
 
   }
 
-
   container.innerHTML =
     songs.map(song => {
 
@@ -3846,7 +3637,6 @@ function renderSongCards(
             ♪
           </div>
         `;
-
 
       return `
         <div class="song-card">
@@ -3910,7 +3700,6 @@ function renderSongCards(
 
 }
 
-
 function renderSongs(songs){
 
   renderSongCards(
@@ -3922,7 +3711,6 @@ function renderSongs(songs){
 
 }
 
-
 function renderNewReleases(songs){
 
   renderSongCards(
@@ -3933,7 +3721,6 @@ function renderNewReleases(songs){
   );
 
 }
-
 
 function renderTopCharts(songs){
 
@@ -3956,7 +3743,6 @@ async function downloadSong(songId){
   const song =
     findSongById(songId);
 
-
   if(!song){
 
     alert(
@@ -3967,11 +3753,9 @@ async function downloadSong(songId){
 
   }
 
-
   const url =
     song.audio_url ||
     song.file_url;
-
 
   if(!url){
 
@@ -3983,12 +3767,10 @@ async function downloadSong(songId){
 
   }
 
-
   try{
 
     const response =
       await fetch(url);
-
 
     if(!response.ok){
 
@@ -3998,44 +3780,49 @@ async function downloadSong(songId){
 
     }
 
-
     const blob =
       await response.blob();
-
 
     const blobUrl =
       URL.createObjectURL(
         blob
       );
 
-
     const link =
       document.createElement(
         "a"
       );
 
-
     link.href =
       blobUrl;
 
+    /*
+      Download filename:
+      Artist Name - Song Title.mp3
+    */
+
+    const artistName =
+      song.artist ||
+      "NileSoniq Artist";
+
+    const songTitle =
+      song.title ||
+      "NileSoniq Song";
 
     link.download =
       `${safeDownloadName(
-        song.title ||
-        "NileSoniq Song"
+        artistName
+      )} - ${safeDownloadName(
+        songTitle
       )}.mp3`;
-
 
     document.body.appendChild(
       link
     );
 
-
     link.click();
 
-
     link.remove();
-
 
     setTimeout(
       () => {
@@ -4046,21 +3833,12 @@ async function downloadSong(songId){
       1000
     );
 
-
   }catch(error){
 
     console.error(
       "Download error:",
       error
     );
-
-
-    /*
-      Fallback:
-      If the browser blocks the direct
-      download request, open the audio
-      file instead.
-    */
 
     try{
 
@@ -4102,7 +3880,6 @@ async function downloadSong(songId){
 
 }
 
-
 function safeDownloadName(name){
 
   return String(
@@ -4124,11 +3901,6 @@ function safeDownloadName(name){
 
 }
 
-
-/* =========================================================
-   SEARCH
-========================================================= */
-
 function searchSongs(){
 
   const input =
@@ -4140,7 +3912,6 @@ function searchSongs(){
       .toLowerCase()
       .trim();
 
-
   if(!input){
 
     renderSongs(
@@ -4150,7 +3921,6 @@ function searchSongs(){
     return;
 
   }
-
 
   const filtered =
     currentSongs.filter(song => {
@@ -4170,13 +3940,11 @@ function searchSongs(){
 
     });
 
-
   renderSongs(
     filtered
   );
 
 }
-
 
 function findSongById(songId){
 
@@ -4190,11 +3958,6 @@ function findSongById(songId){
 
 }
 
-
-/* =========================================================
-   PLAYER
-========================================================= */
-
 async function playSong(songId){
 
   const song =
@@ -4202,16 +3965,13 @@ async function playSong(songId){
       songId
     );
 
-
   if(!song){
     return;
   }
 
-
   const url =
     song.audio_url ||
     song.file_url;
-
 
   if(!url){
 
@@ -4223,20 +3983,16 @@ async function playSong(songId){
 
   }
 
-
   currentPlayingSong =
     song;
-
 
   const player =
     document.getElementById(
       "audioPlayer"
     );
 
-
   player.src =
     url;
-
 
   document.getElementById(
     "nowTitle"
@@ -4244,19 +4000,16 @@ async function playSong(songId){
     song.title ||
     "Untitled";
 
-
   document.getElementById(
     "nowArtist"
   ).textContent =
     song.artist ||
     "Unknown Artist";
 
-
   const nowCover =
     document.getElementById(
       "nowCover"
     );
-
 
   if(song.cover_url){
 
@@ -4281,7 +4034,6 @@ async function playSong(songId){
 
   }
 
-
   try{
 
     await player.play();
@@ -4295,13 +4047,11 @@ async function playSong(songId){
 
   }
 
-
   await recordSongPlay(
     song.id
   );
 
 }
-
 
 function togglePlay(){
 
@@ -4310,11 +4060,9 @@ function togglePlay(){
       "audioPlayer"
     );
 
-
   if(!player.src){
     return;
   }
-
 
   if(player.paused){
 
@@ -4328,14 +4076,12 @@ function togglePlay(){
 
 }
 
-
 function setupAudioEvents(){
 
   const player =
     document.getElementById(
       "audioPlayer"
     );
-
 
   player.addEventListener(
     "play",
@@ -4348,7 +4094,6 @@ function setupAudioEvents(){
 
     }
   );
-
 
   player.addEventListener(
     "pause",
@@ -4364,17 +4109,11 @@ function setupAudioEvents(){
 
 }
 
-
-/* =========================================================
-   PLAY COUNT
-========================================================= */
-
 async function recordSongPlay(songId){
 
   if(!songId){
     return;
   }
-
 
   try{
 
@@ -4386,7 +4125,6 @@ async function recordSongPlay(songId){
         song_id:songId
       }
     );
-
 
     if(!error){
 
@@ -4409,7 +4147,6 @@ async function recordSongPlay(songId){
 
 }
 
-
 function updateSongInList(
   list,
   songId
@@ -4419,7 +4156,6 @@ function updateSongInList(
     list.find(
       item => item.id === songId
     );
-
 
   if(song){
 
@@ -4431,7 +4167,6 @@ function updateSongInList(
   }
 
 }
-
 
 function updateLocalPlayCount(
   songId
@@ -4452,7 +4187,6 @@ function updateLocalPlayCount(
     songId
   );
 
-
   renderSongs(
     currentSongs
   );
@@ -4467,11 +4201,6 @@ function updateLocalPlayCount(
 
 }
 
-
-/* =========================================================
-   ARTISTS
-========================================================= */
-
 async function loadArtists(){
 
   const container =
@@ -4479,17 +4208,14 @@ async function loadArtists(){
       "artistsContainer"
     );
 
-
   if(!container){
     return;
   }
-
 
   container.innerHTML =
     `<div class="loading">
       Loading artists...
     </div>`;
-
 
   try{
 
@@ -4506,13 +4232,11 @@ async function loadArtists(){
         }
       );
 
-
     if(error){
 
       throw error;
 
     }
-
 
     if(!data || data.length === 0){
 
@@ -4526,7 +4250,6 @@ async function loadArtists(){
       return;
 
     }
-
 
     container.innerHTML =
       data.map(artist => {
@@ -4548,7 +4271,6 @@ async function loadArtists(){
               )}
             </div>
           `;
-
 
         return `
           <div class="artist-card">
@@ -4576,7 +4298,6 @@ async function loadArtists(){
 
       }).join("");
 
-
   }catch(error){
 
     console.error(error);
@@ -4592,28 +4313,20 @@ async function loadArtists(){
 
 }
 
-
-/* =========================================================
-   MY SONGS
-========================================================= */
-
 async function loadMySongs(){
 
   if(!currentUser){
     return;
   }
 
-
   const tbody =
     document.getElementById(
       "mySongsTable"
     );
 
-
   if(!tbody){
     return;
   }
-
 
   tbody.innerHTML = `
     <tr>
@@ -4626,7 +4339,6 @@ async function loadMySongs(){
       </td>
     </tr>
   `;
-
 
   try{
 
@@ -4647,17 +4359,14 @@ async function loadMySongs(){
         }
       );
 
-
     if(error){
 
       throw error;
 
     }
 
-
     const songs =
       data || [];
-
 
     if(songs.length === 0){
 
@@ -4687,7 +4396,6 @@ async function loadMySongs(){
             song.approved === true
             ? "Approved"
             : "Pending";
-
 
           return `
             <tr>
@@ -4726,11 +4434,9 @@ async function loadMySongs(){
 
     }
 
-
     updateDashboardStats(
       songs
     );
-
 
   }catch(error){
 
@@ -4738,7 +4444,6 @@ async function loadMySongs(){
       "My songs error:",
       error
     );
-
 
     tbody.innerHTML = `
       <tr>
@@ -4761,11 +4466,6 @@ async function loadMySongs(){
 
 }
 
-
-/* =========================================================
-   STATS
-========================================================= */
-
 function updateDashboardStats(
   songs=[]
 ){
@@ -4780,14 +4480,11 @@ function updateDashboardStats(
       0
     );
 
-
   const totalSongs =
     songs.length;
 
-
   const earnings =
     totalPlays * 0.5;
-
 
   document.getElementById(
     "totalPlays"
@@ -4796,14 +4493,12 @@ function updateDashboardStats(
       totalPlays
     );
 
-
   document.getElementById(
     "totalSongs"
   ).textContent =
     formatNumber(
       totalSongs
     );
-
 
   document.getElementById(
     "totalEarnings"
@@ -4817,32 +4512,23 @@ function updateDashboardStats(
 
 }
 
-
-/* =========================================================
-   ADMIN SONGS
-========================================================= */
-
 async function loadAdminSongs(){
 
   if(!currentUser){
     return;
   }
 
-
   const isAdmin =
     await isCurrentUserAdmin();
-
 
   if(!isAdmin){
     return;
   }
 
-
   const tbody =
     document.getElementById(
       "adminSongsTable"
     );
-
 
   tbody.innerHTML = `
     <tr>
@@ -4855,7 +4541,6 @@ async function loadAdminSongs(){
       </td>
     </tr>
   `;
-
 
   try{
 
@@ -4872,20 +4557,17 @@ async function loadAdminSongs(){
         }
       );
 
-
     if(error){
 
       throw error;
 
     }
 
-
     const pending =
       (data || []).filter(
         song =>
           song.approved !== true
       );
-
 
     if(pending.length === 0){
 
@@ -4904,7 +4586,6 @@ async function loadAdminSongs(){
       return;
 
     }
-
 
     tbody.innerHTML =
       pending.map(song => {
@@ -4963,14 +4644,12 @@ async function loadAdminSongs(){
 
       }).join("");
 
-
   }catch(error){
 
     console.error(
       "Admin songs error:",
       error
     );
-
 
     tbody.innerHTML = `
       <tr>
@@ -4993,7 +4672,6 @@ async function loadAdminSongs(){
 
 }
 
-
 async function approveSong(songId){
 
   if(!currentUser){
@@ -5006,10 +4684,8 @@ async function approveSong(songId){
 
   }
 
-
   const isAdmin =
     await isCurrentUserAdmin();
-
 
   if(!isAdmin){
 
@@ -5020,7 +4696,6 @@ async function approveSong(songId){
     return;
 
   }
-
 
   try{
 
@@ -5036,20 +4711,17 @@ async function approveSong(songId){
         songId
       );
 
-
     if(error){
 
       throw error;
 
     }
 
-
     showMessage(
       "adminMessage",
       "Song approved successfully.",
       "success"
     );
-
 
     await loadAdminSongs();
 
@@ -5058,7 +4730,6 @@ async function approveSong(songId){
     await loadNewReleases();
 
     await loadTopCharts();
-
 
   }catch(error){
 
@@ -5075,7 +4746,6 @@ async function approveSong(songId){
 
 }
 
-
 async function rejectSong(songId){
 
   if(!currentUser){
@@ -5088,10 +4758,8 @@ async function rejectSong(songId){
 
   }
 
-
   const isAdmin =
     await isCurrentUserAdmin();
-
 
   if(!isAdmin){
 
@@ -5103,17 +4771,14 @@ async function rejectSong(songId){
 
   }
 
-
   const confirmed =
     confirm(
       "Reject this song submission?"
     );
 
-
   if(!confirmed){
     return;
   }
-
 
   try{
 
@@ -5129,13 +4794,11 @@ async function rejectSong(songId){
         songId
       );
 
-
     if(error){
 
       throw error;
 
     }
-
 
     showMessage(
       "adminMessage",
@@ -5143,9 +4806,7 @@ async function rejectSong(songId){
       "success"
     );
 
-
     await loadAdminSongs();
-
 
   }catch(error){
 
@@ -5162,32 +4823,23 @@ async function rejectSong(songId){
 
 }
 
-
-/* =========================================================
-   WITHDRAWALS
-========================================================= */
-
 async function loadWithdrawals(){
 
   if(!currentUser){
     return;
   }
 
-
   const isAdmin =
     await isCurrentUserAdmin();
-
 
   if(!isAdmin){
     return;
   }
 
-
   const tbody =
     document.getElementById(
       "withdrawalsTable"
     );
-
 
   tbody.innerHTML = `
     <tr>
@@ -5200,7 +4852,6 @@ async function loadWithdrawals(){
       </td>
     </tr>
   `;
-
 
   try{
 
@@ -5217,17 +4868,14 @@ async function loadWithdrawals(){
         }
       );
 
-
     if(error){
 
       throw error;
 
     }
 
-
     const withdrawals =
       data || [];
-
 
     if(withdrawals.length === 0){
 
@@ -5246,7 +4894,6 @@ async function loadWithdrawals(){
       return;
 
     }
-
 
     tbody.innerHTML =
       withdrawals.map(item => {
@@ -5337,14 +4984,12 @@ async function loadWithdrawals(){
 
       }).join("");
 
-
   }catch(error){
 
     console.error(
       "Withdrawals error:",
       error
     );
-
 
     tbody.innerHTML = `
       <tr>
@@ -5367,7 +5012,6 @@ async function loadWithdrawals(){
 
 }
 
-
 async function updateWithdrawalStatus(
   withdrawalId,
   status
@@ -5375,7 +5019,6 @@ async function updateWithdrawalStatus(
 
   const isAdmin =
     await isCurrentUserAdmin();
-
 
   if(!isAdmin){
 
@@ -5386,7 +5029,6 @@ async function updateWithdrawalStatus(
     return;
 
   }
-
 
   try{
 
@@ -5407,13 +5049,11 @@ async function updateWithdrawalStatus(
         withdrawalId
       );
 
-
     if(error){
 
       throw error;
 
     }
-
 
     showMessage(
       "withdrawalAdminMessage",
@@ -5421,9 +5061,7 @@ async function updateWithdrawalStatus(
       "success"
     );
 
-
     await loadWithdrawals();
-
 
   }catch(error){
 
@@ -5440,7 +5078,6 @@ async function updateWithdrawalStatus(
 
 }
 
-
 async function approveWithdrawal(id){
 
   await updateWithdrawalStatus(
@@ -5449,7 +5086,6 @@ async function approveWithdrawal(id){
   );
 
 }
-
 
 async function rejectWithdrawal(id){
 
@@ -5463,14 +5099,12 @@ async function rejectWithdrawal(id){
 
   }
 
-
   await updateWithdrawalStatus(
     id,
     "rejected"
   );
 
 }
-
 
 async function markWithdrawalPaid(id){
 
@@ -5484,18 +5118,12 @@ async function markWithdrawalPaid(id){
 
   }
 
-
   await updateWithdrawalStatus(
     id,
     "paid"
   );
 
 }
-
-
-/* =========================================================
-   ADMINISTRATORS
-========================================================= */
 
 async function loadAdministrators(){
 
@@ -5505,12 +5133,10 @@ async function loadAdministrators(){
 
   }
 
-
   const tbody =
     document.getElementById(
       "adminsTable"
     );
-
 
   tbody.innerHTML = `
     <tr>
@@ -5523,7 +5149,6 @@ async function loadAdministrators(){
       </td>
     </tr>
   `;
-
 
   try{
 
@@ -5542,17 +5167,14 @@ async function loadAdministrators(){
         }
       );
 
-
     if(error){
 
       throw error;
 
     }
 
-
     const admins =
       data || [];
-
 
     if(admins.length === 0){
 
@@ -5572,14 +5194,12 @@ async function loadAdministrators(){
 
     }
 
-
     tbody.innerHTML =
       admins.map(admin => {
 
         const isMe =
           admin.user_id ===
           currentUser.id;
-
 
         return `
           <tr>
@@ -5666,14 +5286,12 @@ async function loadAdministrators(){
 
       }).join("");
 
-
   }catch(error){
 
     console.error(
       "Admin list error:",
       error
     );
-
 
     tbody.innerHTML = `
       <tr>
@@ -5696,7 +5314,6 @@ async function loadAdministrators(){
 
 }
 
-
 async function addAdministrator(){
 
   if(!isCurrentUserSuperAdmin()){
@@ -5708,7 +5325,6 @@ async function addAdministrator(){
     return;
 
   }
-
 
   const email =
     document
@@ -5725,7 +5341,6 @@ async function addAdministrator(){
       )
       .value;
 
-
   if(!email){
 
     showMessage(
@@ -5737,7 +5352,6 @@ async function addAdministrator(){
     return;
 
   }
-
 
   try{
 
@@ -5752,13 +5366,11 @@ async function addAdministrator(){
       }
     );
 
-
     if(error){
 
       throw error;
 
     }
-
 
     showMessage(
       "adminManagementMessage",
@@ -5766,14 +5378,11 @@ async function addAdministrator(){
       "success"
     );
 
-
     document.getElementById(
       "newAdminEmail"
     ).value = "";
 
-
     await loadAdministrators();
-
 
   }catch(error){
 
@@ -5790,7 +5399,6 @@ async function addAdministrator(){
 
 }
 
-
 async function toggleAdministrator(
   userId,
   currentStatus
@@ -5806,16 +5414,13 @@ async function toggleAdministrator(
 
   }
 
-
   const newStatus =
     !currentStatus;
-
 
   const action =
     newStatus
     ? "activate"
     : "deactivate";
-
 
   if(
     !confirm(
@@ -5826,7 +5431,6 @@ async function toggleAdministrator(
     return;
 
   }
-
 
   try{
 
@@ -5842,13 +5446,11 @@ async function toggleAdministrator(
         userId
       );
 
-
     if(error){
 
       throw error;
 
     }
-
 
     showMessage(
       "adminManagementMessage",
@@ -5856,9 +5458,7 @@ async function toggleAdministrator(
       "success"
     );
 
-
     await loadAdministrators();
-
 
   }catch(error){
 
@@ -5875,11 +5475,6 @@ async function toggleAdministrator(
 
 }
 
-
-/* =========================================================
-   UTILITIES
-========================================================= */
-
 function showMessage(
   elementId,
   message,
@@ -5891,11 +5486,9 @@ function showMessage(
       elementId
     );
 
-
   if(!element){
     return;
   }
-
 
   element.textContent =
     message;
@@ -5906,7 +5499,6 @@ function showMessage(
 
 }
 
-
 function clearMessage(
   elementId
 ){
@@ -5916,11 +5508,9 @@ function clearMessage(
       elementId
     );
 
-
   if(!element){
     return;
   }
-
 
   element.textContent = "";
 
@@ -5929,7 +5519,6 @@ function clearMessage(
 
 }
 
-
 function formatNumber(number){
 
   return Number(
@@ -5937,7 +5526,6 @@ function formatNumber(number){
   ).toLocaleString();
 
 }
-
 
 function getFileExtension(
   filename
@@ -5959,7 +5547,6 @@ function getFileExtension(
 
 }
 
-
 function safeFileName(
   filename
 ){
@@ -5973,17 +5560,14 @@ function safeFileName(
 
 }
 
-
 function getInitials(name){
 
   if(!name){
     return "NS";
   }
 
-
   const parts =
     name.trim().split(/\s+/);
-
 
   if(parts.length === 1){
 
@@ -5993,14 +5577,12 @@ function getInitials(name){
 
   }
 
-
   return (
     parts[0][0] +
     parts[1][0]
   ).toUpperCase();
 
 }
-
 
 function escapeHtml(value){
 
@@ -6030,17 +5612,11 @@ function escapeHtml(value){
 
 }
 
-
 function escapeAttribute(value){
 
   return escapeHtml(value);
 
 }
-
-
-/* =========================================================
-   PRIVACY / TERMS
-========================================================= */
 
 function showPrivacy(){
 
@@ -6052,7 +5628,6 @@ function showPrivacy(){
 
 }
 
-
 function showTerms(){
 
   alert(
@@ -6062,11 +5637,6 @@ function showTerms(){
   );
 
 }
-
-
-/* =========================================================
-   CLOSE AUTH MODAL WHEN CLICKING OUTSIDE
-========================================================= */
 
 document
   .getElementById("authModal")
