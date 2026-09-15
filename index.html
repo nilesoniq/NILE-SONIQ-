@@ -540,6 +540,7 @@ nav button.active{
       transparent 45%
     ),
     var(--card);
+  margin-bottom:20px;
 }
 
 .balance-card strong{
@@ -1532,7 +1533,7 @@ Upload Your Music
 id="searchInput"
 type="search"
 placeholder="Search songs or artists..."
-oninput="searchSongs()">
+oninput="searchSongs">
 
 </div>
 
@@ -5309,6 +5310,12 @@ async function loadMySongs(){
       songs
     );
 
+    /* FIX:
+       Always refresh available balance
+       whenever artist songs are loaded.
+    */
+    await updateAvailableBalance();
+
 
   }catch(error){
 
@@ -5334,6 +5341,11 @@ async function loadMySongs(){
         </td>
       </tr>
     `;
+
+    /* FIX:
+       Still try to refresh balance independently.
+    */
+    await updateAvailableBalance();
 
   }
 
@@ -5564,6 +5576,12 @@ async function loadMyWithdrawals(){
       </tr>
     `;
 
+    /* FIX:
+       Balance is refreshed independently instead
+       of being left stale after a withdrawal error.
+    */
+    await updateAvailableBalance();
+
   }
 
 }
@@ -5574,7 +5592,7 @@ async function loadMyWithdrawals(){
 ========================================================= */
 
 async function updateAvailableBalance(
-  withdrawals=[]
+  withdrawals = null
 ){
 
   if(!currentUser){
@@ -5582,11 +5600,17 @@ async function updateAvailableBalance(
   }
 
 
+  const balanceElement =
+    document.getElementById(
+      "availableBalance"
+    );
+
+
   try{
 
     const {
       data:songs,
-      error
+      error:songsError
     } = await sb
       .from("songs")
       .select(
@@ -5598,9 +5622,9 @@ async function updateAvailableBalance(
       );
 
 
-    if(error){
+    if(songsError){
 
-      throw error;
+      throw songsError;
 
     }
 
@@ -5621,8 +5645,70 @@ async function updateAvailableBalance(
       EARNINGS_PER_PLAY;
 
 
+    let withdrawalList =
+      Array.isArray(withdrawals)
+        ? withdrawals
+        : null;
+
+
+    /*
+      IMPORTANT FIX:
+
+      If withdrawals were not supplied,
+      fetch them here.
+
+      This prevents the balance from
+      accidentally showing the full earnings
+      when loadMySongs() calls this function.
+    */
+    if(withdrawalList === null){
+
+      const {
+        data:withdrawalData,
+        error:withdrawalError
+      } = await sb
+        .from("withdrawal_requests")
+        .select(
+          "amount,status"
+        )
+        .eq(
+          "artist_id",
+          currentUser.id
+        );
+
+
+      if(withdrawalError){
+
+        console.warn(
+          "Withdrawal balance query error. Showing earnings without deductions:",
+          withdrawalError
+        );
+
+        withdrawalList = [];
+
+      }else{
+
+        withdrawalList =
+          withdrawalData || [];
+
+      }
+
+    }
+
+
+    /*
+      Only these withdrawals reduce
+      the available balance:
+
+      pending
+      processing
+      paid
+
+      Rejected withdrawals do NOT reduce
+      the available balance.
+    */
     const alreadyRequested =
-      (withdrawals || [])
+      withdrawalList
       .filter(item =>
         [
           "pending",
@@ -5650,12 +5736,6 @@ async function updateAvailableBalance(
       );
 
 
-    const balanceElement =
-      document.getElementById(
-        "availableBalance"
-      );
-
-
     if(balanceElement){
 
       balanceElement.textContent =
@@ -5675,6 +5755,11 @@ async function updateAvailableBalance(
       "Available balance error:",
       error
     );
+
+    /*
+      Do not replace the existing displayed
+      balance with UGX 0 when the query fails.
+    */
 
   }
 
