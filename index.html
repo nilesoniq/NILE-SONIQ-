@@ -1445,6 +1445,38 @@ footer{
   .artist-profile-song-actions{width:100%;margin-left:75px}
 }
 
+
+/* =========================================================
+   ANALYTICS + PLATFORM WALLET
+========================================================= */
+.analytics-grid{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:14px;
+  margin:18px 0;
+}
+.analytics-card{
+  background:#151515;
+  border:1px solid var(--border);
+  border-radius:16px;
+  padding:18px;
+}
+.analytics-card span{display:block;color:#888;font-size:12px;margin-bottom:8px}
+.analytics-card strong{font-size:25px;display:block}
+.analytics-card small{display:block;color:#777;margin-top:7px}
+.analytics-toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.analytics-live{font-size:12px;color:#78d49a}
+.analytics-live::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:#35c878;margin-right:7px}
+.analytics-two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.analytics-list{width:100%;border-collapse:collapse}
+.analytics-list th,.analytics-list td{padding:10px 8px;border-bottom:1px solid var(--border);text-align:left}
+.analytics-list th{font-size:11px;color:#888}
+.wallet-box{background:linear-gradient(135deg,#171717,#111);border:1px solid var(--border);border-radius:18px;padding:22px}
+.wallet-balance{font-size:34px;font-weight:900;margin:8px 0 18px}
+.wallet-note{color:#888;font-size:12px;line-height:1.5;margin-top:10px}
+@media(max-width:900px){.analytics-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.analytics-two{grid-template-columns:1fr}}
+@media(max-width:520px){.analytics-grid{grid-template-columns:1fr}.wallet-balance{font-size:28px}}
+
 </style>
 </head>
 
@@ -2066,8 +2098,13 @@ You do not have permission to access this section.
 
 <div class="admin-tabs">
 
-<button id="adminTabSongs"
+<button id="adminTabAnalytics"
 class="active"
+onclick="showAdminTab('analytics')">
+Analytics
+</button>
+
+<button id="adminTabSongs"
 onclick="showAdminTab('songs')">
 Songs
 </button>
@@ -2075,6 +2112,11 @@ Songs
 <button id="adminTabWithdrawals"
 onclick="showAdminTab('withdrawals')">
 Withdrawals
+</button>
+
+<button id="adminTabWallet"
+onclick="showAdminTab('wallet')">
+Platform Wallet
 </button>
 
 <button id="adminTabAdmins"
@@ -2085,8 +2127,60 @@ Administrators
 
 </div>
 
-<div id="adminSongsPanel"
+<div id="adminAnalyticsPanel"
 class="dashboard-card">
+
+<div class="analytics-toolbar">
+  <div>
+    <h2>Live Analytics</h2>
+    <div class="analytics-live">Auto-refreshes every 30 seconds</div>
+  </div>
+  <button class="btn btn-orange" onclick="loadAdminAnalytics()">Refresh Now</button>
+</div>
+
+<div class="analytics-grid">
+  <div class="analytics-card"><span>Total Songs</span><strong id="analyticsTotalSongs">0</strong></div>
+  <div class="analytics-card"><span>Approved Songs</span><strong id="analyticsApprovedSongs">0</strong></div>
+  <div class="analytics-card"><span>Pending Songs</span><strong id="analyticsPendingSongs">0</strong></div>
+  <div class="analytics-card"><span>Total Artists</span><strong id="analyticsTotalArtists">0</strong></div>
+  <div class="analytics-card"><span>Total Plays</span><strong id="analyticsTotalPlays">0</strong></div>
+  <div class="analytics-card"><span>Total Likes</span><strong id="analyticsTotalLikes">0</strong></div>
+  <div class="analytics-card"><span>Total Withdrawals</span><strong id="analyticsTotalWithdrawals">0</strong></div>
+  <div class="analytics-card"><span>Pending Withdrawals</span><strong id="analyticsPendingWithdrawals">0</strong></div>
+</div>
+
+<div class="analytics-two">
+  <div class="analytics-card">
+    <h3>Top Songs</h3>
+    <div class="table-wrap">
+      <table class="analytics-list">
+        <thead><tr><th>Song</th><th>Artist</th><th>Plays</th></tr></thead>
+        <tbody id="analyticsTopSongs"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="analytics-card">
+    <h3>Top Artists</h3>
+    <div class="table-wrap">
+      <table class="analytics-list">
+        <thead><tr><th>Artist</th><th>Songs</th><th>Plays</th></tr></thead>
+        <tbody id="analyticsTopArtists"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="analytics-card" style="margin-top:16px;">
+  <h3>Withdrawal Money</h3>
+  <p style="color:#888;font-size:13px;line-height:1.5;margin-top:8px;">
+    Artists can request withdrawals, but real mobile-money transfers must be processed through a secure payment backend. Your mobile-money number and payment API secret must never be placed in this HTML file.
+  </p>
+</div>
+
+</div>
+
+<div id="adminSongsPanel"
+class="dashboard-card hidden">
 
 <h2>Song Submissions</h2>
 
@@ -2146,6 +2240,52 @@ class="message"></div>
 
 </table>
 
+</div>
+
+</div>
+
+<div id="adminWalletPanel"
+class="dashboard-card hidden">
+
+<h2>Platform Wallet</h2>
+
+<div class="wallet-box">
+  <div style="color:#888;font-size:12px;">Payout account</div>
+  <div id="platformWalletNumber" style="font-size:20px;font-weight:800;margin-top:5px;">Not configured</div>
+  <div class="wallet-balance" id="platformWalletBalance">UGX 0</div>
+  <div style="color:#888;font-size:12px;">Available platform balance shown here when a secure payment backend is connected.</div>
+</div>
+
+<div class="form-grid" style="margin-top:18px;">
+  <div class="field">
+    <label>Mobile Money Number</label>
+    <input id="platformWalletPhone" type="tel" inputmode="numeric" placeholder="e.g. 077xxxxxxx">
+  </div>
+  <div class="field">
+    <label>Network</label>
+    <select id="platformWalletNetwork">
+      <option value="MTN">MTN Mobile Money</option>
+      <option value="AIRTEL">Airtel Money</option>
+    </select>
+  </div>
+</div>
+
+<div class="form-grid">
+  <div class="field">
+    <label>Deposit Amount (UGX)</label>
+    <input id="platformDepositAmount" type="number" min="1000" step="100" placeholder="10000">
+  </div>
+</div>
+
+<div style="display:flex;gap:10px;flex-wrap:wrap;">
+  <button class="btn btn-orange" onclick="savePlatformWallet()">Save Account</button>
+  <button class="btn" onclick="startPlatformDeposit()">Deposit Money</button>
+</div>
+
+<div id="platformWalletMessage" class="message" style="margin-top:15px;"></div>
+
+<div class="wallet-note">
+  For safety, this screen only stores the payout account settings locally in this browser. Actual deposits and automatic artist payouts require a Supabase Edge Function/payment provider so your secret API keys are never exposed to website visitors.
 </div>
 
 </div>
@@ -3180,7 +3320,7 @@ async function showPage(page){
 
       updateAdminTabs();
 
-      await loadAdminSongs();
+      await showAdminTab("analytics");
 
     }else{
 
@@ -3229,51 +3369,26 @@ function updateAdminTabs(){
 
 async function showAdminTab(tab){
 
-  const songsPanel =
-    document.getElementById(
-      "adminSongsPanel"
-    );
+  const analyticsPanel = document.getElementById("adminAnalyticsPanel");
+  const songsPanel = document.getElementById("adminSongsPanel");
+  const withdrawalsPanel = document.getElementById("adminWithdrawalsPanel");
+  const walletPanel = document.getElementById("adminWalletPanel");
+  const managementPanel = document.getElementById("adminManagementPanel");
 
-  const withdrawalsPanel =
-    document.getElementById(
-      "adminWithdrawalsPanel"
-    );
+  const analyticsTab = document.getElementById("adminTabAnalytics");
+  const songTab = document.getElementById("adminTabSongs");
+  const withdrawalTab = document.getElementById("adminTabWithdrawals");
+  const walletTab = document.getElementById("adminTabWallet");
+  const adminTab = document.getElementById("adminTabAdmins");
 
-  const managementPanel =
-    document.getElementById(
-      "adminManagementPanel"
-    );
+  [analyticsPanel,songsPanel,withdrawalsPanel,walletPanel,managementPanel].forEach(el=>{if(el)el.classList.add("hidden")});
+  [analyticsTab,songTab,withdrawalTab,walletTab,adminTab].forEach(el=>{if(el)el.classList.remove("active")});
 
-  const songTab =
-    document.getElementById(
-      "adminTabSongs"
-    );
-
-  const withdrawalTab =
-    document.getElementById(
-      "adminTabWithdrawals"
-    );
-
-  const adminTab =
-    document.getElementById(
-      "adminTabAdmins"
-    );
-
-
-  songsPanel.classList.add("hidden");
-
-  withdrawalsPanel.classList.add("hidden");
-
-  managementPanel.classList.add("hidden");
-
-  songTab.classList.remove("active");
-
-  withdrawalTab.classList.remove("active");
-
-  if(adminTab){
-    adminTab.classList.remove("active");
+  if(tab === "analytics"){
+    analyticsPanel.classList.remove("hidden");
+    analyticsTab.classList.add("active");
+    await loadAdminAnalytics();
   }
-
 
   if(tab === "songs"){
 
@@ -3294,6 +3409,13 @@ async function showAdminTab(tab){
 
     await loadWithdrawals();
 
+  }
+
+
+  if(tab === "wallet"){
+    walletPanel.classList.remove("hidden");
+    walletTab.classList.add("active");
+    loadPlatformWallet();
   }
 
 
@@ -6983,6 +7105,130 @@ async function markWithdrawalPaid(id){
 
 }
 
+
+/* =========================================================
+   ADMIN ANALYTICS
+========================================================= */
+
+let adminAnalyticsTimer = null;
+
+function setAnalyticsValue(id,value){
+  const el=document.getElementById(id);
+  if(el) el.textContent=formatNumber(value || 0);
+}
+
+async function loadAdminAnalytics(){
+  if(!currentUser || !await isCurrentUserAdmin()) return;
+
+  const topSongsEl=document.getElementById("analyticsTopSongs");
+  const topArtistsEl=document.getElementById("analyticsTopArtists");
+  if(topSongsEl) topSongsEl.innerHTML='<tr><td colspan="3">Loading...</td></tr>';
+  if(topArtistsEl) topArtistsEl.innerHTML='<tr><td colspan="3">Loading...</td></tr>';
+
+  try{
+    const [songsResult,artistsResult,withdrawalsResult]=await Promise.all([
+      sb.from("songs").select("title,artist,artist_id,plays,likes,approved,created_at"),
+      sb.from("artists").select("user_id,name"),
+      sb.from("withdrawal_requests").select("amount,status")
+    ]);
+
+    if(songsResult.error) throw songsResult.error;
+    if(artistsResult.error) throw artistsResult.error;
+    if(withdrawalsResult.error) throw withdrawalsResult.error;
+
+    const songs=songsResult.data || [];
+    const artists=artistsResult.data || [];
+    const withdrawals=withdrawalsResult.data || [];
+
+    const approved=songs.filter(s=>s.approved===true);
+    const pending=songs.filter(s=>s.approved!==true);
+    const plays=songs.reduce((n,s)=>n+Number(s.plays||0),0);
+    const likes=songs.reduce((n,s)=>n+Number(s.likes||0),0);
+    const pendingWithdrawals=withdrawals.filter(w=>["pending","processing"].includes(String(w.status||"pending").toLowerCase()));
+
+    setAnalyticsValue("analyticsTotalSongs",songs.length);
+    setAnalyticsValue("analyticsApprovedSongs",approved.length);
+    setAnalyticsValue("analyticsPendingSongs",pending.length);
+    setAnalyticsValue("analyticsTotalArtists",artists.length);
+    setAnalyticsValue("analyticsTotalPlays",plays);
+    setAnalyticsValue("analyticsTotalLikes",likes);
+    setAnalyticsValue("analyticsTotalWithdrawals",withdrawals.length);
+    setAnalyticsValue("analyticsPendingWithdrawals",pendingWithdrawals.length);
+
+    const topSongs=[...songs].sort((a,b)=>Number(b.plays||0)-Number(a.plays||0)).slice(0,10);
+    if(topSongsEl){
+      topSongsEl.innerHTML=topSongs.length ? topSongs.map(song=>`<tr><td>${escapeHtml(song.title||"Untitled")}</td><td>${escapeHtml(song.artist||"Unknown")}</td><td>${formatNumber(song.plays||0)}</td></tr>`).join("") : '<tr><td colspan="3">No songs yet.</td></tr>';
+    }
+
+    const artistNames={};
+    artists.forEach(a=>{artistNames[a.user_id]=a.name||"Unknown Artist"});
+    const artistStats={};
+    songs.forEach(song=>{
+      const key=song.artist_id || song.artist || "unknown";
+      if(!artistStats[key]) artistStats[key]={name:artistNames[song.artist_id] || song.artist || "Unknown Artist",songs:0,plays:0};
+      artistStats[key].songs += 1;
+      artistStats[key].plays += Number(song.plays||0);
+    });
+    const topArtists=Object.values(artistStats).sort((a,b)=>b.plays-a.plays).slice(0,10);
+    if(topArtistsEl){
+      topArtistsEl.innerHTML=topArtists.length ? topArtists.map(a=>`<tr><td>${escapeHtml(a.name)}</td><td>${formatNumber(a.songs)}</td><td>${formatNumber(a.plays)}</td></tr>`).join("") : '<tr><td colspan="3">No artist data yet.</td></tr>';
+    }
+
+    if(!adminAnalyticsTimer){
+      adminAnalyticsTimer=setInterval(()=>{
+        const panel=document.getElementById("adminAnalyticsPanel");
+        if(panel && !panel.classList.contains("hidden")) loadAdminAnalytics();
+      },30000);
+    }
+  }catch(error){
+    console.error("Analytics error:",error);
+    if(topSongsEl) topSongsEl.innerHTML=`<tr><td colspan="3">${escapeHtml(error.message||"Could not load analytics.")}</td></tr>`;
+    if(topArtistsEl) topArtistsEl.innerHTML=`<tr><td colspan="3">${escapeHtml(error.message||"Could not load analytics.")}</td></tr>`;
+  }
+}
+
+/* =========================================================
+   PLATFORM WALLET SETTINGS
+========================================================= */
+
+function loadPlatformWallet(){
+  const saved=localStorage.getItem("nilesoniq_platform_wallet");
+  if(!saved) return;
+  try{
+    const data=JSON.parse(saved);
+    const phone=document.getElementById("platformWalletPhone");
+    const network=document.getElementById("platformWalletNetwork");
+    const number=document.getElementById("platformWalletNumber");
+    if(phone) phone.value=data.phone||"";
+    if(network) network.value=data.network||"MTN";
+    if(number) number.textContent=data.phone ? `${data.network||"MTN"} — ${data.phone}` : "Not configured";
+  }catch(e){console.warn("Wallet settings error",e)}
+}
+
+function savePlatformWallet(){
+  const phone=(document.getElementById("platformWalletPhone")?.value||"").trim();
+  const network=(document.getElementById("platformWalletNetwork")?.value||"MTN").trim();
+  if(!/^\+?256\d{9}$|^0\d{9}$/.test(phone.replace(/\s+/g,""))){
+    showMessage("platformWalletMessage","Enter a valid Ugandan mobile-money number.","error");
+    return;
+  }
+  localStorage.setItem("nilesoniq_platform_wallet",JSON.stringify({phone,network}));
+  const number=document.getElementById("platformWalletNumber");
+  if(number) number.textContent=`${network} — ${phone}`;
+  showMessage("platformWalletMessage","Platform payout account saved on this device.","success");
+}
+
+async function startPlatformDeposit(){
+  const phone=(document.getElementById("platformWalletPhone")?.value||"").trim();
+  const network=(document.getElementById("platformWalletNetwork")?.value||"MTN").trim();
+  const amount=Number(document.getElementById("platformDepositAmount")?.value||0);
+  if(!phone || !amount || amount<1000){
+    showMessage("platformWalletMessage","Enter the mobile-money number and a deposit amount of at least UGX 1,000.","error");
+    return;
+  }
+  showMessage("platformWalletMessage","Deposit request needs the secure payment backend. No money is moved by this HTML alone.","error");
+  console.warn("Connect this action to a Supabase Edge Function for",{phone,network,amount});
+}
 
 /* =========================================================
    ADMIN SONGS
