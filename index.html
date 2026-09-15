@@ -266,6 +266,7 @@ nav button.active{
 
 .search-box{
   margin-bottom:30px;
+  position:relative;
 }
 
 .search-box input{
@@ -273,13 +274,25 @@ nav button.active{
   background:#151515;
   border:1px solid var(--border);
   color:white;
-  padding:17px 20px;
+  padding:17px 50px 17px 20px;
   border-radius:15px;
   outline:none;
 }
 
 .search-box input:focus{
   border-color:var(--orange);
+  box-shadow:0 0 0 3px rgba(255,106,0,.08);
+}
+
+.search-box input::placeholder{
+  color:#777;
+}
+
+.search-status{
+  margin-top:10px;
+  color:#888;
+  font-size:13px;
+  min-height:20px;
 }
 
 .ad-space{
@@ -1031,9 +1044,7 @@ footer{
   border:1px solid rgba(46,204,113,.2);
 }
 
-/* =========================================================
-   MUSIC PLAYER
-========================================================= */
+/* MUSIC PLAYER */
 
 .player{
   position:fixed;
@@ -1207,7 +1218,6 @@ footer{
   .player-volume{
     display:none;
   }
-
 }
 
 /* MOBILE */
@@ -1296,7 +1306,6 @@ footer{
   .progress-row{
     width:100%;
   }
-
 }
 
 /* SMALL PHONES */
@@ -1498,15 +1507,45 @@ Upload Your Music
 </div>
 </div>
 
+<!-- SEARCH -->
+
 <div class="search-box">
 
 <input
 id="searchInput"
 type="search"
-placeholder="Search songs or artists..."
-oninput="searchSongs()">
+autocomplete="off"
+placeholder="Search songs or artists...">
+
+<div id="searchStatus"
+class="search-status"></div>
 
 </div>
+
+<!-- SEARCH RESULTS -->
+
+<section id="searchResultsSection"
+class="section hidden">
+
+<div class="section-heading">
+
+<div>
+
+<h2>Search Results</h2>
+
+<p id="searchResultsDescription">
+Songs matching your search.
+</p>
+
+</div>
+
+</div>
+
+<div id="searchResultsContainer"
+class="song-grid">
+</div>
+
+</section>
 
 <section class="ad-space">
 
@@ -2301,7 +2340,7 @@ align-items:center;
 justify-content:center;
 color:#ff6a00;
 font-size:22px;">
-♪ 
+♪
 </div>
 
 </div>
@@ -2426,6 +2465,7 @@ const EARNINGS_PER_PLAY = 0.5;
 
 let currentUser = null;
 let currentArtist = null;
+
 let currentSongs = [];
 let newReleaseSongs = [];
 let topChartSongs = [];
@@ -2443,6 +2483,13 @@ let playCountedForCurrentSong = false;
 
 
 /* =========================================================
+   SEARCH STATE
+========================================================= */
+
+let searchTimer = null;
+
+
+/* =========================================================
    STARTUP
 ========================================================= */
 
@@ -2451,6 +2498,8 @@ document.addEventListener(
 async () => {
 
   setupAudioEvents();
+
+  setupSearch();
 
   await checkUser();
 
@@ -2465,6 +2514,301 @@ async () => {
   await showPage("home");
 
 });
+
+
+/* =========================================================
+   SEARCH SETUP
+========================================================= */
+
+function setupSearch(){
+
+  const input =
+    document.getElementById(
+      "searchInput"
+    );
+
+  if(!input){
+    return;
+  }
+
+
+  input.addEventListener(
+    "input",
+    () => {
+
+      clearTimeout(searchTimer);
+
+      searchTimer =
+        setTimeout(
+          () => performSearch(),
+          120
+        );
+
+    }
+  );
+
+
+  input.addEventListener(
+    "keydown",
+    event => {
+
+      if(event.key === "Escape"){
+
+        input.value = "";
+
+        performSearch();
+
+        input.blur();
+
+      }
+
+    }
+  );
+
+}
+
+
+/* =========================================================
+   SEARCH SONGS
+========================================================= */
+
+function searchSongs(){
+
+  clearTimeout(searchTimer);
+
+  searchTimer =
+    setTimeout(
+      () => performSearch(),
+      120
+    );
+
+}
+
+
+/* =========================================================
+   PERFORM SEARCH
+========================================================= */
+
+function performSearch(){
+
+  const input =
+    document.getElementById(
+      "searchInput"
+    );
+
+  const resultsSection =
+    document.getElementById(
+      "searchResultsSection"
+    );
+
+  const resultsContainer =
+    document.getElementById(
+      "searchResultsContainer"
+    );
+
+  const status =
+    document.getElementById(
+      "searchStatus"
+    );
+
+  const description =
+    document.getElementById(
+      "searchResultsDescription"
+    );
+
+
+  if(!input || !resultsSection || !resultsContainer){
+    return;
+  }
+
+
+  const query =
+    normalizeSearchText(
+      input.value
+    );
+
+
+  /* EMPTY SEARCH */
+
+  if(!query){
+
+    resultsSection.classList.add(
+      "hidden"
+    );
+
+    resultsContainer.innerHTML = "";
+
+    if(status){
+
+      status.textContent = "";
+
+    }
+
+    showNormalMusicSections();
+
+    return;
+
+  }
+
+
+  /* SEARCH MODE */
+
+  hideNormalMusicSections();
+
+  resultsSection.classList.remove(
+    "hidden"
+  );
+
+
+  if(status){
+
+    status.textContent =
+      "Searching for \"" +
+      input.value.trim() +
+      "\"...";
+
+  }
+
+
+  const results =
+    currentSongs.filter(song => {
+
+      const title =
+        normalizeSearchText(
+          song.title
+        );
+
+      const artist =
+        normalizeSearchText(
+          song.artist
+        );
+
+
+      return (
+        title.includes(query) ||
+        artist.includes(query)
+      );
+
+    });
+
+
+  if(status){
+
+    status.textContent =
+      results.length +
+      (
+        results.length === 1
+        ? " result"
+        : " results"
+      );
+
+  }
+
+
+  if(description){
+
+    description.textContent =
+      results.length
+      ? "Songs matching your search."
+      : "No songs matched your search.";
+
+  }
+
+
+  renderSongCards(
+    results,
+    "searchResultsContainer",
+    "No songs found",
+    "Try another song title or artist name."
+  );
+
+}
+
+
+/* =========================================================
+   SEARCH NORMALIZATION
+========================================================= */
+
+function normalizeSearchText(value){
+
+  return String(
+    value ?? ""
+  )
+  .toLowerCase()
+  .normalize("NFD")
+  .replace(
+    /[\u0300-\u036f]/g,
+    ""
+  )
+  .trim()
+  .replace(
+    /\s+/g,
+    " "
+  );
+
+}
+
+
+/* =========================================================
+   HIDE NORMAL MUSIC SECTIONS
+========================================================= */
+
+function hideNormalMusicSections(){
+
+  const sections = [
+    "newReleases",
+    "topCharts",
+    "trending"
+  ];
+
+
+  sections.forEach(id => {
+
+    const element =
+      document.getElementById(id);
+
+    if(element){
+
+      element.classList.add(
+        "hidden"
+      );
+
+    }
+
+  });
+
+}
+
+
+/* =========================================================
+   SHOW NORMAL MUSIC SECTIONS
+========================================================= */
+
+function showNormalMusicSections(){
+
+  const sections = [
+    "newReleases",
+    "topCharts",
+    "trending"
+  ];
+
+
+  sections.forEach(id => {
+
+    const element =
+      document.getElementById(id);
+
+    if(element){
+
+      element.classList.remove(
+        "hidden"
+      );
+
+    }
+
+  });
+
+}
 
 
 /* =========================================================
@@ -3825,9 +4169,31 @@ async function loadSongs(){
 
     currentSongs = data || [];
 
+
     renderSongs(
       currentSongs
     );
+
+
+    /*
+      If the visitor already has a search query,
+      refresh the search results using the newly
+      loaded Supabase songs.
+    */
+
+    const searchInput =
+      document.getElementById(
+        "searchInput"
+      );
+
+    if(
+      searchInput &&
+      searchInput.value.trim()
+    ){
+
+      performSearch();
+
+    }
 
   }catch(error){
 
@@ -4261,12 +4627,6 @@ async function playSong(songId){
 
   updatePlayerButton();
 
-
-  /*
-    A new song is allowed to count once.
-    Pausing and playing the same song again
-    will not create another play.
-  */
 
   playCountedForCurrentSong = false;
 
@@ -4709,10 +5069,6 @@ async function recordSongPlay(songId){
   }
 
 
-  /*
-    Prevent accidental duplicate RPC calls.
-  */
-
   if(
     countedPlaySongId === songId &&
     playCountedForCurrentSong
@@ -4810,6 +5166,25 @@ function updateLocalPlayCount(
   refreshSongDisplays();
 
 
+  /*
+    Keep active search results updated too.
+  */
+
+  const searchInput =
+    document.getElementById(
+      "searchInput"
+    );
+
+  if(
+    searchInput &&
+    searchInput.value.trim()
+  ){
+
+    performSearch();
+
+  }
+
+
   if(currentUser){
 
     loadMySongs();
@@ -4832,6 +5207,21 @@ function refreshSongDisplays(){
   renderTopCharts(
     topChartSongs
   );
+
+
+  const searchInput =
+    document.getElementById(
+      "searchInput"
+    );
+
+  if(
+    searchInput &&
+    searchInput.value.trim()
+  ){
+
+    performSearch();
+
+  }
 
 }
 
@@ -4985,62 +5375,6 @@ function safeDownloadName(name){
     100
   ) ||
   "NileSoniq-Song";
-
-}
-
-
-/* =========================================================
-   SEARCH
-========================================================= */
-
-function searchSongs(){
-
-  const input =
-    document
-      .getElementById(
-        "searchInput"
-      )
-      .value
-      .toLowerCase()
-      .trim();
-
-
-  if(!input){
-
-    renderSongs(
-      currentSongs
-    );
-
-    return;
-
-  }
-
-
-  const filtered =
-    currentSongs.filter(song => {
-
-      const title =
-        String(
-          song.title || ""
-        ).toLowerCase();
-
-      const artist =
-        String(
-          song.artist || ""
-        ).toLowerCase();
-
-
-      return (
-        title.includes(input) ||
-        artist.includes(input)
-      );
-
-    });
-
-
-  renderSongs(
-    filtered
-  );
 
 }
 
