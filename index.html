@@ -489,6 +489,11 @@ nav button.active{
   font-size:13px;
 }
 
+
+/* =========================================================
+   DASHBOARD BASE
+========================================================= */
+
 .dashboard-header{
   padding:45px 0 25px;
 }
@@ -706,6 +711,269 @@ td{
   border-color:var(--orange);
 }
 
+
+/* =========================================================
+   SMALLER ARTIST DASHBOARD
+========================================================= */
+
+#dashboardPage .container{
+  width:min(940px,calc(100% - 32px));
+}
+
+#dashboardPage .dashboard-header{
+  padding:28px 0 16px;
+}
+
+#dashboardPage .dashboard-header h1{
+  font-size:28px;
+  letter-spacing:-.5px;
+}
+
+#dashboardPage .dashboard-header p{
+  font-size:12px;
+}
+
+#dashboardPage .stats-grid{
+  gap:10px;
+  margin-bottom:14px;
+}
+
+#dashboardPage .stat-card{
+  border-radius:12px;
+  padding:14px 16px;
+}
+
+#dashboardPage .stat-card span{
+  font-size:11px;
+  margin-bottom:5px;
+}
+
+#dashboardPage .stat-card strong{
+  font-size:21px;
+}
+
+#dashboardPage .balance-card{
+  margin-bottom:14px!important;
+}
+
+#dashboardPage .balance-card p{
+  font-size:10px!important;
+  margin-top:5px!important;
+}
+
+#dashboardPage .dashboard-card{
+  border-radius:12px;
+  padding:16px;
+  margin-bottom:12px;
+}
+
+#dashboardPage .dashboard-card h2{
+  font-size:17px;
+  margin-bottom:12px;
+}
+
+#dashboardPage .withdrawal-minimum{
+  font-size:11px;
+  margin-bottom:12px;
+}
+
+#dashboardPage .form-grid{
+  gap:10px;
+}
+
+#dashboardPage .field{
+  margin-bottom:10px;
+}
+
+#dashboardPage .field label{
+  font-size:11px;
+  margin-bottom:5px;
+}
+
+#dashboardPage .field input,
+#dashboardPage .field textarea,
+#dashboardPage .field select{
+  padding:9px 10px;
+  border-radius:8px;
+  font-size:12px;
+}
+
+#dashboardPage .field textarea{
+  min-height:75px;
+}
+
+#dashboardPage input[type=file]{
+  padding:7px;
+  font-size:11px;
+}
+
+#dashboardPage .dashboard-card .btn{
+  padding:8px 12px;
+  border-radius:8px;
+  font-size:11px;
+}
+
+#dashboardPage .dashboard-card p{
+  font-size:10px;
+}
+
+#dashboardPage table{
+  min-width:540px;
+}
+
+#dashboardPage th{
+  font-size:10px;
+}
+
+#dashboardPage th,
+#dashboardPage td{
+  padding:9px 8px;
+}
+
+#dashboardPage td{
+  font-size:11px;
+}
+
+#dashboardPage .status{
+  padding:4px 7px;
+  font-size:9px;
+}
+
+#dashboardPage .empty{
+  padding:25px 15px;
+}
+
+#dashboardPage .loading{
+  padding:20px;
+  font-size:11px;
+}
+
+
+/* =========================================================
+   SMALLER ADMIN DASHBOARD
+========================================================= */
+
+#adminPage .container{
+  width:min(980px,calc(100% - 32px));
+}
+
+#adminPage .dashboard-header{
+  padding:28px 0 16px;
+}
+
+#adminPage .dashboard-header h1{
+  font-size:28px;
+  letter-spacing:-.5px;
+}
+
+#adminPage .dashboard-header p{
+  font-size:12px;
+}
+
+#adminPage .admin-badge{
+  padding:4px 8px;
+  font-size:9px;
+  margin-top:5px;
+}
+
+#adminPage .admin-tabs{
+  gap:5px;
+  margin-bottom:12px;
+}
+
+#adminPage .admin-tabs button{
+  padding:7px 10px;
+  border-radius:7px;
+  font-size:10px;
+}
+
+#adminPage .dashboard-card{
+  border-radius:12px;
+  padding:15px;
+  margin-bottom:12px;
+}
+
+#adminPage .dashboard-card h2{
+  font-size:17px;
+  margin-bottom:12px;
+}
+
+#adminPage .message{
+  padding:8px;
+  font-size:10px;
+  border-radius:7px;
+  margin-bottom:10px;
+}
+
+#adminPage table{
+  min-width:720px;
+}
+
+#adminPage th{
+  font-size:9px;
+}
+
+#adminPage th,
+#adminPage td{
+  padding:8px 7px;
+}
+
+#adminPage td{
+  font-size:10px;
+}
+
+#adminPage .status{
+  padding:4px 7px;
+  font-size:9px;
+}
+
+#adminPage .btn{
+  padding:6px 8px!important;
+  border-radius:6px;
+  font-size:9px;
+}
+
+#adminPage .form-grid{
+  gap:9px;
+}
+
+#adminPage .field{
+  margin-bottom:8px;
+}
+
+#adminPage .field label{
+  font-size:10px;
+  margin-bottom:4px;
+}
+
+#adminPage .field input,
+#adminPage .field textarea,
+#adminPage .field select{
+  padding:8px 9px;
+  border-radius:7px;
+  font-size:11px;
+}
+
+#adminPage .admin-badge{
+  font-size:9px;
+  padding:4px 7px;
+}
+
+#adminPage .empty{
+  padding:25px 15px;
+  font-size:11px;
+}
+
+#adminPage .loading{
+  padding:20px;
+  font-size:11px;
+}
+
+
+/* =========================================================
+   FOOTER
+========================================================= */
+
 .footer-admin{
   background:transparent;
   border:none;
@@ -731,6 +999,11 @@ td{
 .footer-admin-login:hover{
   color:var(--orange);
 }
+
+
+/* =========================================================
+   MODAL
+========================================================= */
 
 .modal{
   display:none;
@@ -817,6 +1090,11 @@ td{
   color:#64e39a;
   border:1px solid rgba(46,204,113,.2);
 }
+
+
+/* =========================================================
+   PLAYER
+========================================================= */
 
 .player{
   position:fixed;
@@ -1027,6 +1305,10 @@ footer{
     grid-column:auto;
   }
 
+  #dashboardPage .stats-grid{
+    grid-template-columns:repeat(3,1fr);
+  }
+
 }
 
 
@@ -1129,6 +1411,15 @@ footer{
 
   .footer-links{
     gap:12px;
+  }
+
+  #dashboardPage .stats-grid{
+    grid-template-columns:1fr;
+  }
+
+  #dashboardPage .dashboard-header h1,
+  #adminPage .dashboard-header h1{
+    font-size:23px;
   }
 
 }
@@ -1354,6 +1645,7 @@ Loading music...
 
 </section>
 
+
 <section id="artistsPage"
 class="page">
 
@@ -1383,6 +1675,7 @@ Loading artists...
 </div>
 
 </section>
+
 
 <section id="dashboardPage"
 class="page">
@@ -1421,6 +1714,7 @@ Artist Login
 
 <div id="dashboardContent"
 class="hidden">
+
 
 <div class="stats-grid">
 
@@ -1463,12 +1757,7 @@ Your Songs
 </div>
 
 
-<!-- =====================================================
-     WITHDRAWAL BALANCE
-===================================================== -->
-
-<div class="stat-card balance-card"
-style="margin-bottom:25px;">
+<div class="stat-card balance-card">
 
 <span>
 Available Balance
@@ -1484,10 +1773,6 @@ Minimum withdrawal: UGX 10,000
 
 </div>
 
-
-<!-- =====================================================
-     WITHDRAW EARNINGS
-===================================================== -->
 
 <div class="dashboard-card">
 
@@ -1575,10 +1860,6 @@ Request Withdrawal
 </div>
 
 
-<!-- =====================================================
-     MY WITHDRAWALS
-===================================================== -->
-
 <div class="dashboard-card">
 
 <h2>
@@ -1624,10 +1905,6 @@ Loading withdrawals...
 
 </div>
 
-
-<!-- =====================================================
-     ARTIST PROFILE
-===================================================== -->
 
 <div class="dashboard-card">
 
@@ -1700,10 +1977,6 @@ Save Profile
 
 </div>
 
-
-<!-- =====================================================
-     UPLOAD SONG
-===================================================== -->
 
 <div class="dashboard-card">
 
@@ -1783,10 +2056,6 @@ Uploaded songs are sent for admin approval before appearing publicly.
 </div>
 
 
-<!-- =====================================================
-     MY SONGS
-===================================================== -->
-
 <div class="dashboard-card">
 
 <h2>
@@ -1824,10 +2093,6 @@ My Songs
 
 </section>
 
-
-<!-- =====================================================
-     ADMIN PAGE
-===================================================== -->
 
 <section id="adminPage"
 class="page">
@@ -1889,8 +2154,6 @@ Administrators
 </div>
 
 
-<!-- ADMIN SONGS -->
-
 <div id="adminSongsPanel"
 class="dashboard-card">
 
@@ -1927,8 +2190,6 @@ class="message"></div>
 
 </div>
 
-
-<!-- ADMIN WITHDRAWALS -->
 
 <div id="adminWithdrawalsPanel"
 class="dashboard-card hidden">
@@ -1967,8 +2228,6 @@ class="message"></div>
 
 </div>
 
-
-<!-- ADMIN MANAGEMENT -->
 
 <div id="adminManagementPanel"
 class="dashboard-card hidden">
@@ -2114,10 +2373,6 @@ Admin
 </footer>
 
 
-<!-- =====================================================
-     AUTH MODAL
-===================================================== -->
-
 <div id="authModal"
 class="modal">
 
@@ -2205,10 +2460,6 @@ Login
 
 </div>
 
-
-<!-- =====================================================
-     AUDIO PLAYER
-===================================================== -->
 
 <div class="player">
 
@@ -5370,13 +5621,6 @@ async function updateAvailableBalance(
       EARNINGS_PER_PLAY;
 
 
-    /*
-     * Pending, processing and paid
-     * withdrawals are reserved.
-     *
-     * Rejected withdrawals are NOT
-     * deducted from available balance.
-     */
     const alreadyRequested =
       (withdrawals || [])
       .filter(item =>
@@ -5482,10 +5726,6 @@ async function requestWithdrawal(){
     );
 
 
-  /* ---------------------------------------------------------
-     CHECK MINIMUM
-  --------------------------------------------------------- */
-
   if(
     !amount ||
     amount < WITHDRAWAL_MINIMUM
@@ -5502,10 +5742,6 @@ async function requestWithdrawal(){
   }
 
 
-  /* ---------------------------------------------------------
-     CHECK PAYMENT METHOD
-  --------------------------------------------------------- */
-
   if(!paymentMethod){
 
     showMessage(
@@ -5518,10 +5754,6 @@ async function requestWithdrawal(){
 
   }
 
-
-  /* ---------------------------------------------------------
-     CHECK PAYMENT DETAILS
-  --------------------------------------------------------- */
 
   if(!paymentDetails){
 
@@ -5550,10 +5782,6 @@ async function requestWithdrawal(){
 
   try{
 
-    /* -------------------------------------------------------
-       GET ARTIST SONGS
-    ------------------------------------------------------- */
-
     const {
       data:songs,
       error:songsError
@@ -5575,10 +5803,6 @@ async function requestWithdrawal(){
     }
 
 
-    /* -------------------------------------------------------
-       CALCULATE TOTAL EARNINGS
-    ------------------------------------------------------- */
-
     const totalPlays =
       (songs || []).reduce(
         (sum,song) =>
@@ -5594,10 +5818,6 @@ async function requestWithdrawal(){
       totalPlays *
       EARNINGS_PER_PLAY;
 
-
-    /* -------------------------------------------------------
-       GET PREVIOUS WITHDRAWALS
-    ------------------------------------------------------- */
 
     const {
       data:withdrawals,
@@ -5620,10 +5840,6 @@ async function requestWithdrawal(){
     }
 
 
-    /* -------------------------------------------------------
-       CALCULATE RESERVED MONEY
-    ------------------------------------------------------- */
-
     const alreadyRequested =
       (withdrawals || [])
       .filter(item =>
@@ -5645,10 +5861,6 @@ async function requestWithdrawal(){
       );
 
 
-    /* -------------------------------------------------------
-       AVAILABLE BALANCE
-    ------------------------------------------------------- */
-
     const available =
       Math.max(
         0,
@@ -5656,10 +5868,6 @@ async function requestWithdrawal(){
         alreadyRequested
       );
 
-
-    /* -------------------------------------------------------
-       CHECK AVAILABLE BALANCE
-    ------------------------------------------------------- */
 
     if(amount > available){
 
@@ -5673,10 +5881,6 @@ async function requestWithdrawal(){
 
     }
 
-
-    /* -------------------------------------------------------
-       DOUBLE CHECK MINIMUM
-    ------------------------------------------------------- */
 
     if(
       amount <
@@ -5697,10 +5901,6 @@ async function requestWithdrawal(){
     withdrawButton.textContent =
       "Submitting...";
 
-
-    /* -------------------------------------------------------
-       INSERT WITHDRAWAL REQUEST
-    ------------------------------------------------------- */
 
     const {
       error:insertError
@@ -5733,20 +5933,12 @@ async function requestWithdrawal(){
     }
 
 
-    /* -------------------------------------------------------
-       SUCCESS
-    ------------------------------------------------------- */
-
     showMessage(
       "withdrawalMessage",
       "Withdrawal request submitted successfully.",
       "success"
     );
 
-
-    /* -------------------------------------------------------
-       CLEAR FORM
-    ------------------------------------------------------- */
 
     amountInput.value = "";
 
@@ -5760,10 +5952,6 @@ async function requestWithdrawal(){
       "paymentDetails"
     ).value = "";
 
-
-    /* -------------------------------------------------------
-       REFRESH WITHDRAWALS AND BALANCE
-    ------------------------------------------------------- */
 
     await loadMyWithdrawals();
 
@@ -5866,10 +6054,6 @@ async function loadWithdrawals(){
       data || [];
 
 
-    /* -------------------------------------------------------
-       LOAD ARTIST NAMES
-    ------------------------------------------------------- */
-
     const {
       data:artists,
       error:artistsError
@@ -5945,17 +6129,12 @@ async function loadWithdrawals(){
         let actions = "";
 
 
-        /* ---------------------------------------------------
-           PENDING ACTIONS
-        --------------------------------------------------- */
-
         if(status === "pending"){
 
           actions = `
 
             <button
               class="btn btn-warning"
-              style="padding:7px 10px;"
               onclick="processWithdrawal('${item.id}')">
 
               Process
@@ -5964,7 +6143,7 @@ async function loadWithdrawals(){
 
             <button
               class="btn btn-danger"
-              style="padding:7px 10px;margin-left:4px;"
+              style="margin-left:4px;"
               onclick="rejectWithdrawal('${item.id}')">
 
               Reject
@@ -5976,17 +6155,12 @@ async function loadWithdrawals(){
         }
 
 
-        /* ---------------------------------------------------
-           PROCESSING ACTIONS
-        --------------------------------------------------- */
-
         if(status === "processing"){
 
           actions = `
 
             <button
               class="btn btn-success"
-              style="padding:7px 10px;"
               onclick="markWithdrawalPaid('${item.id}')">
 
               Mark Paid
@@ -5995,7 +6169,7 @@ async function loadWithdrawals(){
 
             <button
               class="btn btn-danger"
-              style="padding:7px 10px;margin-left:4px;"
+              style="margin-left:4px;"
               onclick="rejectWithdrawal('${item.id}')">
 
               Reject
@@ -6006,10 +6180,6 @@ async function loadWithdrawals(){
 
         }
 
-
-        /* ---------------------------------------------------
-           COMPLETED
-        --------------------------------------------------- */
 
         if(
           status === "paid" ||
@@ -6306,6 +6476,11 @@ async function loadAdminSongs(){
     );
 
 
+  if(!tbody){
+    return;
+  }
+
+
   tbody.innerHTML = `
     <tr>
       <td colspan="5">
@@ -6406,7 +6581,6 @@ async function loadAdminSongs(){
 
               <button
                 class="btn btn-success"
-                style="padding:8px 12px;"
                 onclick="approveSong('${song.id}')">
 
                 Approve
@@ -6415,7 +6589,7 @@ async function loadAdminSongs(){
 
               <button
                 class="btn btn-danger"
-                style="padding:8px 12px;margin-left:5px;"
+                style="margin-left:5px;"
                 onclick="rejectSong('${song.id}')">
 
                 Reject
@@ -6658,6 +6832,11 @@ async function loadAdministrators(){
     );
 
 
+  if(!tbody){
+    return;
+  }
+
+
   tbody.innerHTML = `
     <tr>
       <td colspan="4">
@@ -6789,7 +6968,6 @@ async function loadAdministrators(){
                       ? "btn-danger"
                       : "btn-success"
                     }"
-                    style="padding:7px 10px;"
                     onclick="toggleAdministrator(
                       '${admin.user_id}',
                       ${admin.active}
