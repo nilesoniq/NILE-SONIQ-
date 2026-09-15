@@ -526,6 +526,27 @@ nav button.active{
   font-size:28px;
 }
 
+.balance-card{
+  border-color:rgba(255,106,0,.35);
+  background:
+    radial-gradient(
+      circle at 90% 10%,
+      rgba(255,106,0,.12),
+      transparent 45%
+    ),
+    var(--card);
+}
+
+.balance-card strong{
+  color:var(--orange2);
+}
+
+.withdrawal-minimum{
+  color:var(--muted);
+  font-size:13px;
+  margin-bottom:18px;
+}
+
 .dashboard-card{
   background:var(--card);
   border:1px solid var(--border);
@@ -624,6 +645,11 @@ td{
 .status.pending{
   background:rgba(255,106,0,.12);
   color:var(--orange2);
+}
+
+.status.processing{
+  background:rgba(241,196,15,.12);
+  color:var(--warning);
 }
 
 .status.approved,
@@ -1215,7 +1241,7 @@ Upload Your Music
 id="searchInput"
 type="search"
 placeholder="Search songs or artists..."
-oninput="searchSongs()">
+oninput="searchSongs">
 
 </div>
 
@@ -1370,7 +1396,7 @@ Artist Dashboard
 </h1>
 
 <p>
-Manage your profile and music.
+Manage your profile, music and earnings.
 </p>
 
 </div>
@@ -1435,6 +1461,173 @@ Your Songs
 </div>
 
 </div>
+
+
+<!-- =====================================================
+     WITHDRAWAL BALANCE
+===================================================== -->
+
+<div class="stat-card balance-card"
+style="margin-bottom:25px;">
+
+<span>
+Available Balance
+</span>
+
+<strong id="availableBalance">
+UGX 0
+</strong>
+
+<p style="color:#777;font-size:12px;margin-top:8px;">
+Minimum withdrawal: UGX 10,000
+</p>
+
+</div>
+
+
+<!-- =====================================================
+     WITHDRAW EARNINGS
+===================================================== -->
+
+<div class="dashboard-card">
+
+<h2>
+Withdraw Earnings
+</h2>
+
+<p class="withdrawal-minimum">
+You can request a withdrawal when your available balance
+is at least <strong>UGX 10,000</strong>.
+</p>
+
+<div id="withdrawalMessage"
+class="message"></div>
+
+<div class="form-grid">
+
+<div class="field">
+
+<label>
+Amount to Withdraw
+</label>
+
+<input
+id="withdrawAmount"
+type="number"
+placeholder="e.g. 10000"
+min="10000"
+step="1000">
+
+</div>
+
+<div class="field">
+
+<label>
+Payment Method
+</label>
+
+<select id="paymentMethod">
+
+<option value="">
+Select payment method
+</option>
+
+<option value="MTN Mobile Money">
+MTN Mobile Money
+</option>
+
+<option value="Airtel Money">
+Airtel Money
+</option>
+
+<option value="Bank Transfer">
+Bank Transfer
+</option>
+
+</select>
+
+</div>
+
+<div class="field full">
+
+<label>
+Payment Details
+</label>
+
+<textarea
+id="paymentDetails"
+rows="3"
+placeholder="For Mobile Money enter your phone number. For bank transfer enter your account details."></textarea>
+
+</div>
+
+</div>
+
+<button
+id="withdrawButton"
+class="btn btn-orange"
+onclick="requestWithdrawal()">
+
+Request Withdrawal
+
+</button>
+
+</div>
+
+
+<!-- =====================================================
+     MY WITHDRAWALS
+===================================================== -->
+
+<div class="dashboard-card">
+
+<h2>
+My Withdrawal Requests
+</h2>
+
+<div class="table-wrap">
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>Amount</th>
+<th>Payment Method</th>
+<th>Status</th>
+<th>Date</th>
+
+</tr>
+
+</thead>
+
+<tbody id="myWithdrawalsTable">
+
+<tr>
+
+<td colspan="4">
+
+<div class="loading">
+Loading withdrawals...
+</div>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+</div>
+
+</div>
+
+
+<!-- =====================================================
+     ARTIST PROFILE
+===================================================== -->
 
 <div class="dashboard-card">
 
@@ -1506,6 +1699,11 @@ Save Profile
 </button>
 
 </div>
+
+
+<!-- =====================================================
+     UPLOAD SONG
+===================================================== -->
 
 <div class="dashboard-card">
 
@@ -1584,6 +1782,11 @@ Uploaded songs are sent for admin approval before appearing publicly.
 
 </div>
 
+
+<!-- =====================================================
+     MY SONGS
+===================================================== -->
+
 <div class="dashboard-card">
 
 <h2>
@@ -1620,6 +1823,11 @@ My Songs
 </div>
 
 </section>
+
+
+<!-- =====================================================
+     ADMIN PAGE
+===================================================== -->
 
 <section id="adminPage"
 class="page">
@@ -1680,6 +1888,9 @@ Administrators
 
 </div>
 
+
+<!-- ADMIN SONGS -->
+
 <div id="adminSongsPanel"
 class="dashboard-card">
 
@@ -1716,6 +1927,9 @@ class="message"></div>
 
 </div>
 
+
+<!-- ADMIN WITHDRAWALS -->
+
 <div id="adminWithdrawalsPanel"
 class="dashboard-card hidden">
 
@@ -1736,8 +1950,8 @@ class="message"></div>
 
 <th>Artist</th>
 <th>Amount</th>
-<th>Phone</th>
-<th>Network</th>
+<th>Payment Method</th>
+<th>Payment Details</th>
 <th>Status</th>
 <th>Action</th>
 
@@ -1752,6 +1966,9 @@ class="message"></div>
 </div>
 
 </div>
+
+
+<!-- ADMIN MANAGEMENT -->
 
 <div id="adminManagementPanel"
 class="dashboard-card hidden">
@@ -1839,6 +2056,7 @@ class="table-wrap">
 
 </main>
 
+
 <footer>
 
 <div class="container">
@@ -1894,6 +2112,11 @@ Admin
 </div>
 
 </footer>
+
+
+<!-- =====================================================
+     AUTH MODAL
+===================================================== -->
 
 <div id="authModal"
 class="modal">
@@ -1982,6 +2205,11 @@ Login
 
 </div>
 
+
+<!-- =====================================================
+     AUDIO PLAYER
+===================================================== -->
+
 <div class="player">
 
 <div class="player-inner">
@@ -2027,6 +2255,7 @@ preload="none"></audio>
 
 </div>
 
+
 <script>
 
 const SUPABASE_URL =
@@ -2041,6 +2270,10 @@ window.supabase.createClient(
   SUPABASE_PUBLISHABLE_KEY
 );
 
+const WITHDRAWAL_MINIMUM = 10000;
+
+const EARNINGS_PER_PLAY = 0.5;
+
 let currentUser = null;
 let currentArtist = null;
 let currentSongs = [];
@@ -2050,6 +2283,11 @@ let currentAuthMode = "login";
 let currentAuthContext = "artist";
 let currentPlayingSong = null;
 let currentAdmin = null;
+
+
+/* =========================================================
+   STARTUP
+========================================================= */
 
 document.addEventListener(
 "DOMContentLoaded",
@@ -2071,6 +2309,11 @@ async () => {
 
 });
 
+
+/* =========================================================
+   AUTH STATE
+========================================================= */
+
 sb.auth.onAuthStateChange(
 async (_event, session) => {
 
@@ -2080,6 +2323,7 @@ async (_event, session) => {
   await updateUI();
 
 });
+
 
 async function checkUser(){
 
@@ -2113,6 +2357,11 @@ async function checkUser(){
   }
 
 }
+
+
+/* =========================================================
+   ADMIN CHECK
+========================================================= */
 
 async function isCurrentUserAdmin(){
 
@@ -2177,6 +2426,7 @@ async function isCurrentUserAdmin(){
 
 }
 
+
 function isCurrentUserSuperAdmin(){
 
   return (
@@ -2186,6 +2436,11 @@ function isCurrentUserSuperAdmin(){
   );
 
 }
+
+
+/* =========================================================
+   UI UPDATE
+========================================================= */
 
 async function updateUI(){
 
@@ -2272,6 +2527,8 @@ async function updateUI(){
 
     await loadMySongs();
 
+    await loadMyWithdrawals();
+
     if(isAdmin){
 
       await loadAdminSongs();
@@ -2309,6 +2566,11 @@ async function updateUI(){
   }
 
 }
+
+
+/* =========================================================
+   PAGE NAVIGATION
+========================================================= */
 
 async function showPage(page){
 
@@ -2354,11 +2616,13 @@ async function showPage(page){
     .getElementById("mainNav")
     .classList.remove("open");
 
+
   if(page === "artists"){
 
     await loadArtists();
 
   }
+
 
   if(page === "dashboard"){
 
@@ -2368,9 +2632,12 @@ async function showPage(page){
 
       await loadMySongs();
 
+      await loadMyWithdrawals();
+
     }
 
   }
+
 
   if(page === "admin"){
 
@@ -2431,6 +2698,7 @@ async function showPage(page){
 
 }
 
+
 function toggleMenu(){
 
   document
@@ -2438,6 +2706,11 @@ function toggleMenu(){
     .classList.toggle("open");
 
 }
+
+
+/* =========================================================
+   ADMIN TABS
+========================================================= */
 
 function updateAdminTabs(){
 
@@ -2464,6 +2737,7 @@ function updateAdminTabs(){
   }
 
 }
+
 
 async function showAdminTab(tab){
 
@@ -2497,6 +2771,7 @@ async function showAdminTab(tab){
       "adminTabAdmins"
     );
 
+
   songsPanel.classList.add(
     "hidden"
   );
@@ -2517,6 +2792,7 @@ async function showAdminTab(tab){
     "active"
   );
 
+
   if(adminTab){
 
     adminTab.classList.remove(
@@ -2524,6 +2800,7 @@ async function showAdminTab(tab){
     );
 
   }
+
 
   if(tab === "songs"){
 
@@ -2539,6 +2816,7 @@ async function showAdminTab(tab){
 
   }
 
+
   if(tab === "withdrawals"){
 
     withdrawalsPanel.classList.remove(
@@ -2552,6 +2830,7 @@ async function showAdminTab(tab){
     await loadWithdrawals();
 
   }
+
 
   if(tab === "admins"){
 
@@ -2583,6 +2862,11 @@ async function showAdminTab(tab){
 
 }
 
+
+/* =========================================================
+   AUTH MODAL
+========================================================= */
+
 function openAuthModal(context="artist"){
 
   currentAuthContext =
@@ -2602,6 +2886,7 @@ function openAuthModal(context="artist"){
 
 }
 
+
 function closeAuthModal(){
 
   document
@@ -2609,6 +2894,7 @@ function closeAuthModal(){
     .classList.remove("show");
 
 }
+
 
 function setAuthMode(mode){
 
@@ -2638,6 +2924,7 @@ function setAuthMode(mode){
     document.getElementById(
       "authSubmit"
     );
+
 
   if(mode === "login"){
 
@@ -2691,6 +2978,7 @@ function setAuthMode(mode){
 
 }
 
+
 async function submitAuth(){
 
   const email =
@@ -2716,6 +3004,7 @@ async function submitAuth(){
       .value
       .trim();
 
+
   if(!email || !password){
 
     showMessage(
@@ -2727,6 +3016,7 @@ async function submitAuth(){
     return;
 
   }
+
 
   try{
 
@@ -2745,6 +3035,7 @@ async function submitAuth(){
 
       }
 
+
       if(currentAuthContext === "admin"){
 
         await new Promise(
@@ -2754,6 +3045,7 @@ async function submitAuth(){
               300
             )
         );
+
 
         const {
           data:adminData,
@@ -2772,6 +3064,7 @@ async function submitAuth(){
             true
           )
           .maybeSingle();
+
 
         if(
           adminError ||
@@ -2793,14 +3086,17 @@ async function submitAuth(){
 
         }
 
+
         currentAdmin =
           adminData;
+
 
         showMessage(
           "authMessage",
           "Admin login successful.",
           "success"
         );
+
 
         setTimeout(
           async () => {
@@ -2819,16 +3115,19 @@ async function submitAuth(){
 
       }
 
+
       showMessage(
         "authMessage",
         "Login successful.",
         "success"
       );
 
+
       setTimeout(
         closeAuthModal,
         700
       );
+
 
     }else{
 
@@ -2844,6 +3143,7 @@ async function submitAuth(){
 
       }
 
+
       const {
         data,
         error
@@ -2852,11 +3152,13 @@ async function submitAuth(){
         password
       });
 
+
       if(error){
 
         throw error;
 
       }
+
 
       if(data.user){
 
@@ -2874,6 +3176,7 @@ async function submitAuth(){
             }
           );
 
+
         if(artistError){
 
           console.error(
@@ -2884,6 +3187,7 @@ async function submitAuth(){
         }
 
       }
+
 
       showMessage(
         "authMessage",
@@ -2907,6 +3211,11 @@ async function submitAuth(){
   }
 
 }
+
+
+/* =========================================================
+   LOGOUT
+========================================================= */
 
 async function logout(){
 
@@ -2933,6 +3242,11 @@ async function logout(){
 
 }
 
+
+/* =========================================================
+   ARTIST PROFILE
+========================================================= */
+
 async function loadArtistProfile(){
 
   if(!currentUser){
@@ -2953,6 +3267,7 @@ async function loadArtistProfile(){
       )
       .maybeSingle();
 
+
     if(error){
 
       console.error(
@@ -2964,7 +3279,9 @@ async function loadArtistProfile(){
 
     }
 
+
     currentArtist = data;
+
 
     if(!data){
 
@@ -2984,6 +3301,7 @@ async function loadArtistProfile(){
 
     }
 
+
     document.getElementById(
       "artistName"
     ).value =
@@ -2999,10 +3317,12 @@ async function loadArtistProfile(){
     ).value =
       data.bio || "";
 
+
     const songArtist =
       document.getElementById(
         "songArtist"
       );
+
 
     if(
       songArtist &&
@@ -3022,6 +3342,7 @@ async function loadArtistProfile(){
 
 }
 
+
 async function saveArtistProfile(){
 
   if(!currentUser){
@@ -3031,6 +3352,7 @@ async function saveArtistProfile(){
     return;
 
   }
+
 
   const name =
     document
@@ -3063,6 +3385,7 @@ async function saveArtistProfile(){
       )
       .files[0];
 
+
   if(!name){
 
     showMessage(
@@ -3075,11 +3398,13 @@ async function saveArtistProfile(){
 
   }
 
+
   try{
 
     let avatarUrl =
       currentArtist?.avatar_url ||
       null;
+
 
     if(avatarFile){
 
@@ -3090,6 +3415,7 @@ async function saveArtistProfile(){
 
       const path =
         `${currentUser.id}/avatar-${Date.now()}.${extension}`;
+
 
       const {
         error:uploadError
@@ -3103,11 +3429,13 @@ async function saveArtistProfile(){
           }
         );
 
+
       if(uploadError){
 
         throw uploadError;
 
       }
+
 
       const {
         data
@@ -3115,10 +3443,12 @@ async function saveArtistProfile(){
         .from("avatars")
         .getPublicUrl(path);
 
+
       avatarUrl =
         data.publicUrl;
 
     }
+
 
     const {
       data,
@@ -3140,13 +3470,16 @@ async function saveArtistProfile(){
       .select()
       .single();
 
+
     if(error){
 
       throw error;
 
     }
 
+
     currentArtist = data;
+
 
     showMessage(
       "profileMessage",
@@ -3169,6 +3502,11 @@ async function saveArtistProfile(){
 
 }
 
+
+/* =========================================================
+   UPLOAD SONG
+========================================================= */
+
 async function uploadSong(){
 
   if(!currentUser){
@@ -3179,6 +3517,7 @@ async function uploadSong(){
 
   }
 
+
   const title =
     document
       .getElementById(
@@ -3186,6 +3525,7 @@ async function uploadSong(){
       )
       .value
       .trim();
+
 
   let artistName =
     document
@@ -3195,12 +3535,14 @@ async function uploadSong(){
       .value
       .trim();
 
+
   const audioFile =
     document
       .getElementById(
         "audioFile"
       )
       .files[0];
+
 
   const coverFile =
     document
@@ -3209,12 +3551,14 @@ async function uploadSong(){
       )
       .files[0];
 
+
   if(!artistName){
 
     artistName =
       currentArtist?.name || "";
 
   }
+
 
   if(!title){
 
@@ -3228,6 +3572,7 @@ async function uploadSong(){
 
   }
 
+
   if(!artistName){
 
     showMessage(
@@ -3239,6 +3584,7 @@ async function uploadSong(){
     return;
 
   }
+
 
   if(!audioFile){
 
@@ -3252,20 +3598,24 @@ async function uploadSong(){
 
   }
 
+
   const uploadButton =
     document.getElementById(
       "uploadButton"
     );
+
 
   uploadButton.disabled = true;
 
   uploadButton.textContent =
     "Uploading...";
 
+
   try{
 
     const audioPath =
       `${currentUser.id}/${Date.now()}-${safeFileName(audioFile.name)}`;
+
 
     const {
       error:audioUploadError
@@ -3283,11 +3633,13 @@ async function uploadSong(){
         }
       );
 
+
     if(audioUploadError){
 
       throw audioUploadError;
 
     }
+
 
     const {
       data:audioPublic
@@ -3297,15 +3649,19 @@ async function uploadSong(){
         audioPath
       );
 
+
     const audioUrl =
       audioPublic.publicUrl;
 
+
     let coverUrl = null;
+
 
     if(coverFile){
 
       const coverPath =
         `${currentUser.id}/${Date.now()}-${safeFileName(coverFile.name)}`;
+
 
       const {
         error:coverUploadError
@@ -3323,11 +3679,13 @@ async function uploadSong(){
           }
         );
 
+
       if(coverUploadError){
 
         throw coverUploadError;
 
       }
+
 
       const {
         data:coverPublic
@@ -3337,10 +3695,12 @@ async function uploadSong(){
           coverPath
         );
 
+
       coverUrl =
         coverPublic.publicUrl;
 
     }
+
 
     const {
       error:songError
@@ -3368,17 +3728,20 @@ async function uploadSong(){
 
       });
 
+
     if(songError){
 
       throw songError;
 
     }
 
+
     showMessage(
       "uploadMessage",
       "Song uploaded successfully. It is waiting for admin approval.",
       "success"
     );
+
 
     document.getElementById(
       "songTitle"
@@ -3392,6 +3755,7 @@ async function uploadSong(){
       "coverFile"
     ).value = "";
 
+
     await loadMySongs();
 
   }catch(error){
@@ -3400,6 +3764,7 @@ async function uploadSong(){
       "Upload error:",
       error
     );
+
 
     showMessage(
       "uploadMessage",
@@ -3419,6 +3784,11 @@ async function uploadSong(){
 
 }
 
+
+/* =========================================================
+   LOAD PUBLIC SONGS
+========================================================= */
+
 async function loadSongs(){
 
   const container =
@@ -3426,8 +3796,10 @@ async function loadSongs(){
       "songsContainer"
     );
 
+
   container.innerHTML =
     `<div class="loading">Loading music...</div>`;
+
 
   try{
 
@@ -3448,14 +3820,17 @@ async function loadSongs(){
         }
       );
 
+
     if(error){
 
       throw error;
 
     }
 
+
     currentSongs =
       data || [];
+
 
     renderSongs(
       currentSongs
@@ -3464,6 +3839,7 @@ async function loadSongs(){
   }catch(error){
 
     console.error(error);
+
 
     container.innerHTML = `
       <div class="empty"
@@ -3487,6 +3863,11 @@ async function loadSongs(){
 
 }
 
+
+/* =========================================================
+   NEW RELEASES
+========================================================= */
+
 async function loadNewReleases(){
 
   const container =
@@ -3494,14 +3875,17 @@ async function loadNewReleases(){
       "newReleasesContainer"
     );
 
+
   if(!container){
     return;
   }
+
 
   container.innerHTML =
     `<div class="loading">
       Loading new releases...
     </div>`;
+
 
   try{
 
@@ -3523,14 +3907,17 @@ async function loadNewReleases(){
       )
       .limit(8);
 
+
     if(error){
 
       throw error;
 
     }
 
+
     newReleaseSongs =
       data || [];
+
 
     renderNewReleases(
       newReleaseSongs
@@ -3542,6 +3929,7 @@ async function loadNewReleases(){
       "New releases error:",
       error
     );
+
 
     container.innerHTML = `
       <div class="empty"
@@ -3565,6 +3953,11 @@ async function loadNewReleases(){
 
 }
 
+
+/* =========================================================
+   TOP CHARTS
+========================================================= */
+
 async function loadTopCharts(){
 
   const container =
@@ -3572,14 +3965,17 @@ async function loadTopCharts(){
       "topChartsContainer"
     );
 
+
   if(!container){
     return;
   }
+
 
   container.innerHTML =
     `<div class="loading">
       Loading top charts...
     </div>`;
+
 
   try{
 
@@ -3608,14 +4004,17 @@ async function loadTopCharts(){
       )
       .limit(8);
 
+
     if(error){
 
       throw error;
 
     }
 
+
     topChartSongs =
       data || [];
+
 
     renderTopCharts(
       topChartSongs
@@ -3627,6 +4026,7 @@ async function loadTopCharts(){
       "Top charts error:",
       error
     );
+
 
     container.innerHTML = `
       <div class="empty"
@@ -3650,6 +4050,11 @@ async function loadTopCharts(){
 
 }
 
+
+/* =========================================================
+   SONG RENDERING
+========================================================= */
+
 function renderSongCards(
   songs,
   containerId,
@@ -3662,9 +4067,11 @@ function renderSongCards(
       containerId
     );
 
+
   if(!container){
     return;
   }
+
 
   if(!songs || songs.length === 0){
 
@@ -3687,6 +4094,7 @@ function renderSongCards(
 
   }
 
+
   container.innerHTML =
     songs.map(song => {
 
@@ -3703,6 +4111,7 @@ function renderSongCards(
             ♪
           </div>
         `;
+
 
       return `
         <div class="song-card">
@@ -3766,6 +4175,7 @@ function renderSongCards(
 
 }
 
+
 function renderSongs(songs){
 
   renderSongCards(
@@ -3777,6 +4187,7 @@ function renderSongs(songs){
 
 }
 
+
 function renderNewReleases(songs){
 
   renderSongCards(
@@ -3787,6 +4198,7 @@ function renderNewReleases(songs){
   );
 
 }
+
 
 function renderTopCharts(songs){
 
@@ -3801,13 +4213,14 @@ function renderTopCharts(songs){
 
 
 /* =========================================================
-   DOWNLOAD SONG
+   DOWNLOAD
 ========================================================= */
 
 async function downloadSong(songId){
 
   const song =
     findSongById(songId);
+
 
   if(!song){
 
@@ -3819,9 +4232,11 @@ async function downloadSong(songId){
 
   }
 
+
   const url =
     song.audio_url ||
     song.file_url;
+
 
   if(!url){
 
@@ -3833,10 +4248,12 @@ async function downloadSong(songId){
 
   }
 
+
   try{
 
     const response =
       await fetch(url);
+
 
     if(!response.ok){
 
@@ -3846,29 +4263,36 @@ async function downloadSong(songId){
 
     }
 
+
     const blob =
       await response.blob();
+
 
     const blobUrl =
       URL.createObjectURL(
         blob
       );
 
+
     const link =
       document.createElement(
         "a"
       );
 
+
     link.href =
       blobUrl;
+
 
     const artistName =
       song.artist ||
       "NileSoniq Artist";
 
+
     const songTitle =
       song.title ||
       "NileSoniq Song";
+
 
     link.download =
       `${safeDownloadName(
@@ -3877,13 +4301,16 @@ async function downloadSong(songId){
         songTitle
       )}.mp3`;
 
+
     document.body.appendChild(
       link
     );
 
+
     link.click();
 
     link.remove();
+
 
     setTimeout(
       () => {
@@ -3901,12 +4328,14 @@ async function downloadSong(songId){
       error
     );
 
+
     try{
 
       const link =
         document.createElement(
           "a"
         );
+
 
       link.href =
         url;
@@ -3917,9 +4346,11 @@ async function downloadSong(songId){
       link.rel =
         "noopener";
 
+
       document.body.appendChild(
         link
       );
+
 
       link.click();
 
@@ -3931,6 +4362,7 @@ async function downloadSong(songId){
         fallbackError
       );
 
+
       alert(
         "Download could not start. Please try again."
       );
@@ -3940,6 +4372,7 @@ async function downloadSong(songId){
   }
 
 }
+
 
 function safeDownloadName(name){
 
@@ -3962,6 +4395,11 @@ function safeDownloadName(name){
 
 }
 
+
+/* =========================================================
+   SEARCH
+========================================================= */
+
 function searchSongs(){
 
   const input =
@@ -3973,6 +4411,7 @@ function searchSongs(){
       .toLowerCase()
       .trim();
 
+
   if(!input){
 
     renderSongs(
@@ -3982,6 +4421,7 @@ function searchSongs(){
     return;
 
   }
+
 
   const filtered =
     currentSongs.filter(song => {
@@ -3994,6 +4434,7 @@ function searchSongs(){
         (song.artist || "")
         .toLowerCase();
 
+
       return (
         title.includes(input) ||
         artist.includes(input)
@@ -4001,11 +4442,13 @@ function searchSongs(){
 
     });
 
+
   renderSongs(
     filtered
   );
 
 }
+
 
 function findSongById(songId){
 
@@ -4019,6 +4462,11 @@ function findSongById(songId){
 
 }
 
+
+/* =========================================================
+   PLAYER
+========================================================= */
+
 async function playSong(songId){
 
   const song =
@@ -4026,13 +4474,16 @@ async function playSong(songId){
       songId
     );
 
+
   if(!song){
     return;
   }
 
+
   const url =
     song.audio_url ||
     song.file_url;
+
 
   if(!url){
 
@@ -4044,16 +4495,20 @@ async function playSong(songId){
 
   }
 
+
   currentPlayingSong =
     song;
+
 
   const player =
     document.getElementById(
       "audioPlayer"
     );
 
+
   player.src =
     url;
+
 
   document.getElementById(
     "nowTitle"
@@ -4061,16 +4516,19 @@ async function playSong(songId){
     song.title ||
     "Untitled";
 
+
   document.getElementById(
     "nowArtist"
   ).textContent =
     song.artist ||
     "Unknown Artist";
 
+
   const nowCover =
     document.getElementById(
       "nowCover"
     );
+
 
   if(song.cover_url){
 
@@ -4095,6 +4553,7 @@ async function playSong(songId){
 
   }
 
+
   try{
 
     await player.play();
@@ -4108,11 +4567,13 @@ async function playSong(songId){
 
   }
 
+
   await recordSongPlay(
     song.id
   );
 
 }
+
 
 function togglePlay(){
 
@@ -4121,9 +4582,11 @@ function togglePlay(){
       "audioPlayer"
     );
 
+
   if(!player.src){
     return;
   }
+
 
   if(player.paused){
 
@@ -4137,12 +4600,14 @@ function togglePlay(){
 
 }
 
+
 function setupAudioEvents(){
 
   const player =
     document.getElementById(
       "audioPlayer"
     );
+
 
   player.addEventListener(
     "play",
@@ -4155,6 +4620,7 @@ function setupAudioEvents(){
 
     }
   );
+
 
   player.addEventListener(
     "pause",
@@ -4170,11 +4636,13 @@ function setupAudioEvents(){
 
 }
 
+
 async function recordSongPlay(songId){
 
   if(!songId){
     return;
   }
+
 
   try{
 
@@ -4186,6 +4654,7 @@ async function recordSongPlay(songId){
         song_id:songId
       }
     );
+
 
     if(!error){
 
@@ -4208,6 +4677,7 @@ async function recordSongPlay(songId){
 
 }
 
+
 function updateSongInList(
   list,
   songId
@@ -4217,6 +4687,7 @@ function updateSongInList(
     list.find(
       item => item.id === songId
     );
+
 
   if(song){
 
@@ -4228,6 +4699,7 @@ function updateSongInList(
   }
 
 }
+
 
 function updateLocalPlayCount(
   songId
@@ -4248,6 +4720,7 @@ function updateLocalPlayCount(
     songId
   );
 
+
   renderSongs(
     currentSongs
   );
@@ -4260,7 +4733,19 @@ function updateLocalPlayCount(
     topChartSongs
   );
 
+
+  if(currentUser){
+
+    loadMySongs();
+
+  }
+
 }
+
+
+/* =========================================================
+   ARTISTS
+========================================================= */
 
 async function loadArtists(){
 
@@ -4269,14 +4754,17 @@ async function loadArtists(){
       "artistsContainer"
     );
 
+
   if(!container){
     return;
   }
+
 
   container.innerHTML =
     `<div class="loading">
       Loading artists...
     </div>`;
+
 
   try{
 
@@ -4293,11 +4781,13 @@ async function loadArtists(){
         }
       );
 
+
     if(error){
 
       throw error;
 
     }
+
 
     if(!data || data.length === 0){
 
@@ -4311,6 +4801,7 @@ async function loadArtists(){
       return;
 
     }
+
 
     container.innerHTML =
       data.map(artist => {
@@ -4332,6 +4823,7 @@ async function loadArtists(){
               )}
             </div>
           `;
+
 
         return `
           <div class="artist-card">
@@ -4359,9 +4851,11 @@ async function loadArtists(){
 
       }).join("");
 
+
   }catch(error){
 
     console.error(error);
+
 
     container.innerHTML = `
       <div class="empty"
@@ -4374,20 +4868,28 @@ async function loadArtists(){
 
 }
 
+
+/* =========================================================
+   MY SONGS
+========================================================= */
+
 async function loadMySongs(){
 
   if(!currentUser){
     return;
   }
 
+
   const tbody =
     document.getElementById(
       "mySongsTable"
     );
 
+
   if(!tbody){
     return;
   }
+
 
   tbody.innerHTML = `
     <tr>
@@ -4400,6 +4902,7 @@ async function loadMySongs(){
       </td>
     </tr>
   `;
+
 
   try{
 
@@ -4420,14 +4923,17 @@ async function loadMySongs(){
         }
       );
 
+
     if(error){
 
       throw error;
 
     }
 
+
     const songs =
       data || [];
+
 
     if(songs.length === 0){
 
@@ -4453,10 +4959,12 @@ async function loadMySongs(){
             ? "approved"
             : "pending";
 
+
           const text =
             song.approved === true
             ? "Approved"
             : "Pending";
+
 
           return `
             <tr>
@@ -4495,9 +5003,11 @@ async function loadMySongs(){
 
     }
 
+
     updateDashboardStats(
       songs
     );
+
 
   }catch(error){
 
@@ -4505,6 +5015,7 @@ async function loadMySongs(){
       "My songs error:",
       error
     );
+
 
     tbody.innerHTML = `
       <tr>
@@ -4527,6 +5038,11 @@ async function loadMySongs(){
 
 }
 
+
+/* =========================================================
+   DASHBOARD STATS
+========================================================= */
+
 function updateDashboardStats(
   songs=[]
 ){
@@ -4541,11 +5057,15 @@ function updateDashboardStats(
       0
     );
 
+
   const totalSongs =
     songs.length;
 
+
   const earnings =
-    totalPlays * 0.5;
+    totalPlays *
+    EARNINGS_PER_PLAY;
+
 
   document.getElementById(
     "totalPlays"
@@ -4554,12 +5074,14 @@ function updateDashboardStats(
       totalPlays
     );
 
+
   document.getElementById(
     "totalSongs"
   ).textContent =
     formatNumber(
       totalSongs
     );
+
 
   document.getElementById(
     "totalEarnings"
@@ -4571,7 +5093,1085 @@ function updateDashboardStats(
       )
     );
 
+
+  /*
+   * Refresh available balance after
+   * calculating current earnings.
+   */
+  if(currentUser){
+
+    loadMyWithdrawals();
+
+  }
+
 }
+
+
+/* =========================================================
+   ARTIST WITHDRAWAL SYSTEM
+========================================================= */
+
+async function loadMyWithdrawals(){
+
+  if(!currentUser){
+    return;
+  }
+
+
+  const tbody =
+    document.getElementById(
+      "myWithdrawalsTable"
+    );
+
+
+  if(!tbody){
+    return;
+  }
+
+
+  tbody.innerHTML = `
+    <tr>
+      <td colspan="4">
+
+        <div class="loading">
+          Loading withdrawals...
+        </div>
+
+      </td>
+    </tr>
+  `;
+
+
+  try{
+
+    const {
+      data,
+      error
+    } = await sb
+      .from("withdrawal_requests")
+      .select("*")
+      .eq(
+        "artist_id",
+        currentUser.id
+      )
+      .order(
+        "created_at",
+        {
+          ascending:false
+        }
+      );
+
+
+    if(error){
+
+      throw error;
+
+    }
+
+
+    const withdrawals =
+      data || [];
+
+
+    if(withdrawals.length === 0){
+
+      tbody.innerHTML = `
+        <tr>
+
+          <td colspan="4">
+
+            <div class="empty">
+              No withdrawal requests yet.
+            </div>
+
+          </td>
+
+        </tr>
+      `;
+
+    }else{
+
+      tbody.innerHTML =
+        withdrawals.map(item => {
+
+          const status =
+            item.status ||
+            "pending";
+
+
+          return `
+            <tr>
+
+              <td>
+                UGX ${formatNumber(
+                  item.amount || 0
+                )}
+              </td>
+
+              <td>
+                ${escapeHtml(
+                  item.payment_method ||
+                  ""
+                )}
+              </td>
+
+              <td>
+
+                <span class="status ${escapeHtml(
+                  status
+                )}">
+
+                  ${escapeHtml(
+                    formatStatus(
+                      status
+                    )
+                  )}
+
+                </span>
+
+              </td>
+
+              <td>
+                ${formatDate(
+                  item.created_at
+                )}
+              </td>
+
+            </tr>
+          `;
+
+        }).join("");
+
+    }
+
+
+    await updateAvailableBalance(
+      withdrawals
+    );
+
+
+  }catch(error){
+
+    console.error(
+      "My withdrawals error:",
+      error
+    );
+
+
+    tbody.innerHTML = `
+      <tr>
+
+        <td colspan="4">
+
+          <div class="empty">
+
+            Could not load withdrawal requests.
+
+          </div>
+
+        </td>
+
+      </tr>
+    `;
+
+  }
+
+}
+
+
+/* =========================================================
+   AVAILABLE BALANCE
+========================================================= */
+
+async function updateAvailableBalance(
+  withdrawals=[]
+){
+
+  if(!currentUser){
+    return;
+  }
+
+
+  try{
+
+    const {
+      data:songs,
+      error
+    } = await sb
+      .from("songs")
+      .select(
+        "plays"
+      )
+      .eq(
+        "artist_id",
+        currentUser.id
+      );
+
+
+    if(error){
+
+      throw error;
+
+    }
+
+
+    const totalPlays =
+      (songs || []).reduce(
+        (sum,song) =>
+          sum +
+          Number(
+            song.plays || 0
+          ),
+        0
+      );
+
+
+    const totalEarnings =
+      totalPlays *
+      EARNINGS_PER_PLAY;
+
+
+    /*
+     * Paid, processing and pending
+     * withdrawals are not available
+     * for another withdrawal.
+     */
+    const alreadyRequested =
+      (withdrawals || [])
+      .filter(item =>
+        [
+          "pending",
+          "processing",
+          "paid"
+        ].includes(
+          item.status
+        )
+      )
+      .reduce(
+        (sum,item) =>
+          sum +
+          Number(
+            item.amount || 0
+          ),
+        0
+      );
+
+
+    const available =
+      Math.max(
+        0,
+        totalEarnings -
+        alreadyRequested
+      );
+
+
+    const balanceElement =
+      document.getElementById(
+        "availableBalance"
+      );
+
+
+    if(balanceElement){
+
+      balanceElement.textContent =
+        "UGX " +
+        formatNumber(
+          Math.floor(
+            available
+          )
+        );
+
+    }
+
+
+  }catch(error){
+
+    console.error(
+      "Available balance error:",
+      error
+    );
+
+  }
+
+}
+
+
+/* =========================================================
+   REQUEST WITHDRAWAL
+========================================================= */
+
+async function requestWithdrawal(){
+
+  if(!currentUser){
+
+    openAuthModal("artist");
+
+    return;
+
+  }
+
+
+  const amountInput =
+    document.getElementById(
+      "withdrawAmount"
+    );
+
+
+  const paymentMethod =
+    document
+      .getElementById(
+        "paymentMethod"
+      )
+      .value
+      .trim();
+
+
+  const paymentDetails =
+    document
+      .getElementById(
+        "paymentDetails"
+      )
+      .value
+      .trim();
+
+
+  const amount =
+    Number(
+      amountInput.value
+    );
+
+
+  if(!amount || amount < WITHDRAWAL_MINIMUM){
+
+    showMessage(
+      "withdrawalMessage",
+      "The minimum withdrawal amount is UGX 10,000.",
+      "error"
+    );
+
+    return;
+
+  }
+
+
+  if(
+    !paymentMethod
+  ){
+
+    showMessage(
+      "withdrawalMessage",
+      "Please select a payment method.",
+      "error"
+    );
+
+    return;
+
+  }
+
+
+  if(
+    !paymentDetails
+  ){
+
+    showMessage(
+      "withdrawalMessage",
+      "Please enter your payment details.",
+      "error"
+    );
+
+    return;
+
+  }
+
+
+  const withdrawButton =
+    document.getElementById(
+      "withdrawButton"
+    );
+
+
+  withdrawButton.disabled = true;
+
+  withdrawButton.textContent =
+    "Checking balance...";
+
+
+  try{
+
+    /*
+     * Get the artist's songs.
+     */
+    const {
+      data:songs,
+      error:songsError
+    } = await sb
+      .from("songs")
+      .select(
+        "plays"
+      )
+      .eq(
+        "artist_id",
+        currentUser.id
+      );
+
+
+    if(songsError){
+
+      throw songsError;
+
+    }
+
+
+    const totalPlays =
+      (songs || []).reduce(
+        (sum,song) =>
+          sum +
+          Number(
+            song.plays || 0
+          ),
+        0
+      );
+
+
+    const totalEarnings =
+      totalPlays *
+      EARNINGS_PER_PLAY;
+
+
+    /*
+     * Get existing withdrawals.
+     */
+    const {
+      data:withdrawals,
+      error:withdrawalsError
+    } = await sb
+      .from("withdrawal_requests")
+      .select(
+        "amount,status"
+      )
+      .eq(
+        "artist_id",
+        currentUser.id
+      );
+
+
+    if(withdrawalsError){
+
+      throw withdrawalsError;
+
+    }
+
+
+    const alreadyRequested =
+      (withdrawals || [])
+      .filter(item =>
+        [
+          "pending",
+          "processing",
+          "paid"
+        ].includes(
+          item.status
+        )
+      )
+      .reduce(
+        (sum,item) =>
+          sum +
+          Number(
+            item.amount || 0
+          ),
+        0
+      );
+
+
+    const available =
+      Math.max(
+        0,
+        totalEarnings -
+        alreadyRequested
+      );
+
+
+    if(amount > available){
+
+      showMessage(
+        "withdrawalMessage",
+        "You do not have enough available balance for this withdrawal.",
+        "error"
+      );
+
+      return;
+
+    }
+
+
+    if(
+      amount < WITHDRAWAL_MINIMUM
+    ){
+
+      showMessage(
+        "withdrawalMessage",
+        "Minimum withdrawal is UGX 10,000.",
+        "error"
+      );
+
+      return;
+
+    }
+
+
+    withdrawButton.textContent =
+      "Submitting...";
+
+
+    const {
+      error:insertError
+    } = await sb
+      .from("withdrawal_requests")
+      .insert({
+
+        artist_id:
+          currentUser.id,
+
+        amount:
+          amount,
+
+        payment_method:
+          paymentMethod,
+
+        payment_details:
+          paymentDetails,
+
+        status:
+          "pending"
+
+      });
+
+
+    if(insertError){
+
+      throw insertError;
+
+    }
+
+
+    showMessage(
+      "withdrawalMessage",
+      "Withdrawal request submitted successfully.",
+      "success"
+    );
+
+
+    amountInput.value = "";
+
+    document.getElementById(
+      "paymentMethod"
+    ).value = "";
+
+    document.getElementById(
+      "paymentDetails"
+    ).value = "";
+
+
+    await loadMyWithdrawals();
+
+
+  }catch(error){
+
+    console.error(
+      "Withdrawal request error:",
+      error
+    );
+
+
+    showMessage(
+      "withdrawalMessage",
+      error.message ||
+      "Could not submit withdrawal request.",
+      "error"
+    );
+
+  }finally{
+
+    withdrawButton.disabled = false;
+
+    withdrawButton.textContent =
+      "Request Withdrawal";
+
+  }
+
+}
+
+
+/* =========================================================
+   ADMIN WITHDRAWALS
+========================================================= */
+
+async function loadWithdrawals(){
+
+  if(!currentUser){
+    return;
+  }
+
+
+  const isAdmin =
+    await isCurrentUserAdmin();
+
+
+  if(!isAdmin){
+    return;
+  }
+
+
+  const tbody =
+    document.getElementById(
+      "withdrawalsTable"
+    );
+
+
+  tbody.innerHTML = `
+    <tr>
+      <td colspan="6">
+
+        <div class="loading">
+          Loading withdrawals...
+        </div>
+
+      </td>
+    </tr>
+  `;
+
+
+  try{
+
+    const {
+      data,
+      error
+    } = await sb
+      .from("withdrawal_requests")
+      .select("*")
+      .order(
+        "created_at",
+        {
+          ascending:false
+        }
+      );
+
+
+    if(error){
+
+      throw error;
+
+    }
+
+
+    const withdrawals =
+      data || [];
+
+
+    /*
+     * Load artist names.
+     */
+    const {
+      data:artists,
+      error:artistsError
+    } = await sb
+      .from("artists")
+      .select(
+        "user_id,name"
+      );
+
+
+    if(artistsError){
+
+      console.warn(
+        "Artist names could not be loaded:",
+        artistsError
+      );
+
+    }
+
+
+    const artistMap = {};
+
+
+    (artists || [])
+    .forEach(artist => {
+
+      artistMap[
+        artist.user_id
+      ] =
+        artist.name ||
+        "Unknown Artist";
+
+    });
+
+
+    if(withdrawals.length === 0){
+
+      tbody.innerHTML = `
+        <tr>
+
+          <td colspan="6">
+
+            <div class="empty">
+              No withdrawal requests yet.
+            </div>
+
+          </td>
+
+        </tr>
+      `;
+
+      return;
+
+    }
+
+
+    tbody.innerHTML =
+      withdrawals.map(item => {
+
+        const status =
+          item.status ||
+          "pending";
+
+
+        const artistName =
+          artistMap[
+            item.artist_id
+          ] ||
+          item.artist_id ||
+          "Unknown Artist";
+
+
+        let actions = "";
+
+
+        if(status === "pending"){
+
+          actions = `
+
+            <button
+              class="btn btn-warning"
+              style="padding:7px 10px;"
+              onclick="processWithdrawal('${item.id}')">
+
+              Process
+
+            </button>
+
+            <button
+              class="btn btn-danger"
+              style="padding:7px 10px;margin-left:4px;"
+              onclick="rejectWithdrawal('${item.id}')">
+
+              Reject
+
+            </button>
+
+          `;
+
+        }
+
+
+        if(status === "processing"){
+
+          actions = `
+
+            <button
+              class="btn btn-success"
+              style="padding:7px 10px;"
+              onclick="markWithdrawalPaid('${item.id}')">
+
+              Mark Paid
+
+            </button>
+
+            <button
+              class="btn btn-danger"
+              style="padding:7px 10px;margin-left:4px;"
+              onclick="rejectWithdrawal('${item.id}')">
+
+              Reject
+
+            </button>
+
+          `;
+
+        }
+
+
+        if(
+          status === "paid" ||
+          status === "rejected"
+        ){
+
+          actions =
+            `<span style="color:#777;">
+              Completed
+             </span>`;
+
+        }
+
+
+        return `
+          <tr>
+
+            <td>
+              ${escapeHtml(
+                artistName
+              )}
+            </td>
+
+            <td>
+              UGX ${formatNumber(
+                item.amount || 0
+              )}
+            </td>
+
+            <td>
+              ${escapeHtml(
+                item.payment_method ||
+                ""
+              )}
+            </td>
+
+            <td>
+              ${escapeHtml(
+                item.payment_details ||
+                ""
+              )}
+            </td>
+
+            <td>
+
+              <span class="status ${escapeHtml(
+                status
+              )}">
+
+                ${escapeHtml(
+                  formatStatus(
+                    status
+                  )
+                )}
+
+              </span>
+
+            </td>
+
+            <td>
+              ${actions}
+            </td>
+
+          </tr>
+        `;
+
+      }).join("");
+
+
+  }catch(error){
+
+    console.error(
+      "Withdrawals error:",
+      error
+    );
+
+
+    tbody.innerHTML = `
+      <tr>
+
+        <td colspan="6">
+
+          <div class="empty">
+
+            ${escapeHtml(
+              error.message ||
+              "Could not load withdrawals."
+            )}
+
+          </div>
+
+        </td>
+
+      </tr>
+    `;
+
+  }
+
+}
+
+
+/* =========================================================
+   UPDATE WITHDRAWAL STATUS
+========================================================= */
+
+async function updateWithdrawalStatus(
+  withdrawalId,
+  status
+){
+
+  const isAdmin =
+    await isCurrentUserAdmin();
+
+
+  if(!isAdmin){
+
+    alert(
+      "You are not authorized."
+    );
+
+    return;
+
+  }
+
+
+  try{
+
+    const updateData = {
+      status:status
+    };
+
+
+    if(
+      status === "paid" ||
+      status === "rejected"
+    ){
+
+      updateData.processed_at =
+        new Date().toISOString();
+
+    }else{
+
+      updateData.processed_at =
+        null;
+
+    }
+
+
+    const {
+      error
+    } = await sb
+      .from("withdrawal_requests")
+      .update(
+        updateData
+      )
+      .eq(
+        "id",
+        withdrawalId
+      );
+
+
+    if(error){
+
+      throw error;
+
+    }
+
+
+    showMessage(
+      "withdrawalAdminMessage",
+      "Withdrawal updated successfully.",
+      "success"
+    );
+
+
+    await loadWithdrawals();
+
+
+  }catch(error){
+
+    console.error(error);
+
+
+    showMessage(
+      "withdrawalAdminMessage",
+      error.message ||
+      "Could not update withdrawal.",
+      "error"
+    );
+
+  }
+
+}
+
+
+/* =========================================================
+   PROCESS WITHDRAWAL
+========================================================= */
+
+async function processWithdrawal(id){
+
+  if(
+    !confirm(
+      "Move this withdrawal request to Processing?"
+    )
+  ){
+
+    return;
+
+  }
+
+
+  await updateWithdrawalStatus(
+    id,
+    "processing"
+  );
+
+}
+
+
+/* =========================================================
+   REJECT WITHDRAWAL
+========================================================= */
+
+async function rejectWithdrawal(id){
+
+  if(
+    !confirm(
+      "Reject this withdrawal request?"
+    )
+  ){
+
+    return;
+
+  }
+
+
+  await updateWithdrawalStatus(
+    id,
+    "rejected"
+  );
+
+}
+
+
+/* =========================================================
+   MARK WITHDRAWAL PAID
+========================================================= */
+
+async function markWithdrawalPaid(id){
+
+  if(
+    !confirm(
+      "Confirm that this payment has been made manually?"
+    )
+  ){
+
+    return;
+
+  }
+
+
+  await updateWithdrawalStatus(
+    id,
+    "paid"
+  );
+
+}
+
+
+/* =========================================================
+   ADMIN SONGS
+========================================================= */
 
 async function loadAdminSongs(){
 
@@ -4579,17 +6179,21 @@ async function loadAdminSongs(){
     return;
   }
 
+
   const isAdmin =
     await isCurrentUserAdmin();
+
 
   if(!isAdmin){
     return;
   }
 
+
   const tbody =
     document.getElementById(
       "adminSongsTable"
     );
+
 
   tbody.innerHTML = `
     <tr>
@@ -4602,6 +6206,7 @@ async function loadAdminSongs(){
       </td>
     </tr>
   `;
+
 
   try{
 
@@ -4618,17 +6223,20 @@ async function loadAdminSongs(){
         }
       );
 
+
     if(error){
 
       throw error;
 
     }
 
+
     const pending =
       (data || []).filter(
         song =>
           song.approved !== true
       );
+
 
     if(pending.length === 0){
 
@@ -4647,6 +6255,7 @@ async function loadAdminSongs(){
       return;
 
     }
+
 
     tbody.innerHTML =
       pending.map(song => {
@@ -4688,14 +6297,18 @@ async function loadAdminSongs(){
                 class="btn btn-success"
                 style="padding:8px 12px;"
                 onclick="approveSong('${song.id}')">
+
                 Approve
+
               </button>
 
               <button
                 class="btn btn-danger"
                 style="padding:8px 12px;margin-left:5px;"
                 onclick="rejectSong('${song.id}')">
+
                 Reject
+
               </button>
 
             </td>
@@ -4705,12 +6318,14 @@ async function loadAdminSongs(){
 
       }).join("");
 
+
   }catch(error){
 
     console.error(
       "Admin songs error:",
       error
     );
+
 
     tbody.innerHTML = `
       <tr>
@@ -4733,6 +6348,11 @@ async function loadAdminSongs(){
 
 }
 
+
+/* =========================================================
+   APPROVE SONG
+========================================================= */
+
 async function approveSong(songId){
 
   if(!currentUser){
@@ -4745,8 +6365,10 @@ async function approveSong(songId){
 
   }
 
+
   const isAdmin =
     await isCurrentUserAdmin();
+
 
   if(!isAdmin){
 
@@ -4757,6 +6379,7 @@ async function approveSong(songId){
     return;
 
   }
+
 
   try{
 
@@ -4772,17 +6395,20 @@ async function approveSong(songId){
         songId
       );
 
+
     if(error){
 
       throw error;
 
     }
 
+
     showMessage(
       "adminMessage",
       "Song approved successfully.",
       "success"
     );
+
 
     await loadAdminSongs();
 
@@ -4792,9 +6418,11 @@ async function approveSong(songId){
 
     await loadTopCharts();
 
+
   }catch(error){
 
     console.error(error);
+
 
     showMessage(
       "adminMessage",
@@ -4806,6 +6434,11 @@ async function approveSong(songId){
   }
 
 }
+
+
+/* =========================================================
+   REJECT SONG
+========================================================= */
 
 async function rejectSong(songId){
 
@@ -4819,8 +6452,10 @@ async function rejectSong(songId){
 
   }
 
+
   const isAdmin =
     await isCurrentUserAdmin();
+
 
   if(!isAdmin){
 
@@ -4832,14 +6467,17 @@ async function rejectSong(songId){
 
   }
 
+
   const confirmed =
     confirm(
       "Reject this song submission?"
     );
 
+
   if(!confirmed){
     return;
   }
+
 
   try{
 
@@ -4855,11 +6493,13 @@ async function rejectSong(songId){
         songId
       );
 
+
     if(error){
 
       throw error;
 
     }
+
 
     showMessage(
       "adminMessage",
@@ -4867,11 +6507,14 @@ async function rejectSong(songId){
       "success"
     );
 
+
     await loadAdminSongs();
+
 
   }catch(error){
 
     console.error(error);
+
 
     showMessage(
       "adminMessage",
@@ -4884,307 +6527,10 @@ async function rejectSong(songId){
 
 }
 
-async function loadWithdrawals(){
 
-  if(!currentUser){
-    return;
-  }
-
-  const isAdmin =
-    await isCurrentUserAdmin();
-
-  if(!isAdmin){
-    return;
-  }
-
-  const tbody =
-    document.getElementById(
-      "withdrawalsTable"
-    );
-
-  tbody.innerHTML = `
-    <tr>
-      <td colspan="6">
-
-        <div class="loading">
-          Loading withdrawals...
-        </div>
-
-      </td>
-    </tr>
-  `;
-
-  try{
-
-    const {
-      data,
-      error
-    } = await sb
-      .from("withdrawals")
-      .select("*")
-      .order(
-        "created_at",
-        {
-          ascending:false
-        }
-      );
-
-    if(error){
-
-      throw error;
-
-    }
-
-    const withdrawals =
-      data || [];
-
-    if(withdrawals.length === 0){
-
-      tbody.innerHTML = `
-        <tr>
-          <td colspan="6">
-
-            <div class="empty">
-              No withdrawal requests yet.
-            </div>
-
-          </td>
-        </tr>
-      `;
-
-      return;
-
-    }
-
-    tbody.innerHTML =
-      withdrawals.map(item => {
-
-        return `
-          <tr>
-
-            <td>
-              ${escapeHtml(
-                item.artist_id ||
-                "Unknown"
-              )}
-            </td>
-
-            <td>
-              UGX ${formatNumber(
-                item.amount || 0
-              )}
-            </td>
-
-            <td>
-              ${escapeHtml(
-                item.phone_number || ""
-              )}
-            </td>
-
-            <td>
-              ${escapeHtml(
-                item.network || "MTN"
-              )}
-            </td>
-
-            <td>
-
-              <span class="status ${escapeHtml(
-                item.status ||
-                "pending"
-              )}">
-
-                ${escapeHtml(
-                  item.status ||
-                  "pending"
-                )}
-
-              </span>
-
-            </td>
-
-            <td>
-
-              ${
-                item.status === "pending"
-                ? `
-                  <button
-                    class="btn btn-success"
-                    style="padding:7px 10px;"
-                    onclick="approveWithdrawal('${item.id}')">
-                    Approve
-                  </button>
-
-                  <button
-                    class="btn btn-danger"
-                    style="padding:7px 10px;margin-left:4px;"
-                    onclick="rejectWithdrawal('${item.id}')">
-                    Reject
-                  </button>
-                `
-                : ""
-              }
-
-              ${
-                item.status === "approved"
-                ? `
-                  <button
-                    class="btn btn-orange"
-                    style="padding:7px 10px;"
-                    onclick="markWithdrawalPaid('${item.id}')">
-                    Mark Paid
-                  </button>
-                `
-                : ""
-              }
-
-            </td>
-
-          </tr>
-        `;
-
-      }).join("");
-
-  }catch(error){
-
-    console.error(
-      "Withdrawals error:",
-      error
-    );
-
-    tbody.innerHTML = `
-      <tr>
-        <td colspan="6">
-
-          <div class="empty">
-
-            ${escapeHtml(
-              error.message ||
-              "Could not load withdrawals."
-            )}
-
-          </div>
-
-        </td>
-      </tr>
-    `;
-
-  }
-
-}
-
-async function updateWithdrawalStatus(
-  withdrawalId,
-  status
-){
-
-  const isAdmin =
-    await isCurrentUserAdmin();
-
-  if(!isAdmin){
-
-    alert(
-      "You are not authorized."
-    );
-
-    return;
-
-  }
-
-  try{
-
-    const {
-      error
-    } = await sb
-      .from("withdrawals")
-      .update({
-        status:status,
-        processed_at:
-          status === "paid" ||
-          status === "rejected"
-            ? new Date().toISOString()
-            : null
-      })
-      .eq(
-        "id",
-        withdrawalId
-      );
-
-    if(error){
-
-      throw error;
-
-    }
-
-    showMessage(
-      "withdrawalAdminMessage",
-      "Withdrawal updated successfully.",
-      "success"
-    );
-
-    await loadWithdrawals();
-
-  }catch(error){
-
-    console.error(error);
-
-    showMessage(
-      "withdrawalAdminMessage",
-      error.message ||
-      "Could not update withdrawal.",
-      "error"
-    );
-
-  }
-
-}
-
-async function approveWithdrawal(id){
-
-  await updateWithdrawalStatus(
-    id,
-    "approved"
-  );
-
-}
-
-async function rejectWithdrawal(id){
-
-  if(
-    !confirm(
-      "Reject this withdrawal request?"
-    )
-  ){
-
-    return;
-
-  }
-
-  await updateWithdrawalStatus(
-    id,
-    "rejected"
-  );
-
-}
-
-async function markWithdrawalPaid(id){
-
-  if(
-    !confirm(
-      "Confirm that this MTN payment has been made manually?"
-    )
-  ){
-
-    return;
-
-  }
-
-  await updateWithdrawalStatus(
-    id,
-    "paid"
-  );
-
-}
+/* =========================================================
+   ADMINISTRATORS
+========================================================= */
 
 async function loadAdministrators(){
 
@@ -5194,10 +6540,12 @@ async function loadAdministrators(){
 
   }
 
+
   const tbody =
     document.getElementById(
       "adminsTable"
     );
+
 
   tbody.innerHTML = `
     <tr>
@@ -5210,6 +6558,7 @@ async function loadAdministrators(){
       </td>
     </tr>
   `;
+
 
   try{
 
@@ -5228,14 +6577,17 @@ async function loadAdministrators(){
         }
       );
 
+
     if(error){
 
       throw error;
 
     }
 
+
     const admins =
       data || [];
+
 
     if(admins.length === 0){
 
@@ -5255,12 +6607,14 @@ async function loadAdministrators(){
 
     }
 
+
     tbody.innerHTML =
       admins.map(admin => {
 
         const isMe =
           admin.user_id ===
           currentUser.id;
+
 
         return `
           <tr>
@@ -5347,12 +6701,14 @@ async function loadAdministrators(){
 
       }).join("");
 
+
   }catch(error){
 
     console.error(
       "Admin list error:",
       error
     );
+
 
     tbody.innerHTML = `
       <tr>
@@ -5375,6 +6731,11 @@ async function loadAdministrators(){
 
 }
 
+
+/* =========================================================
+   ADD ADMIN
+========================================================= */
+
 async function addAdministrator(){
 
   if(!isCurrentUserSuperAdmin()){
@@ -5387,6 +6748,7 @@ async function addAdministrator(){
 
   }
 
+
   const email =
     document
       .getElementById(
@@ -5395,12 +6757,14 @@ async function addAdministrator(){
       .value
       .trim();
 
+
   const role =
     document
       .getElementById(
         "newAdminRole"
       )
       .value;
+
 
   if(!email){
 
@@ -5413,6 +6777,7 @@ async function addAdministrator(){
     return;
 
   }
+
 
   try{
 
@@ -5427,11 +6792,13 @@ async function addAdministrator(){
       }
     );
 
+
     if(error){
 
       throw error;
 
     }
+
 
     showMessage(
       "adminManagementMessage",
@@ -5439,15 +6806,19 @@ async function addAdministrator(){
       "success"
     );
 
+
     document.getElementById(
       "newAdminEmail"
     ).value = "";
 
+
     await loadAdministrators();
+
 
   }catch(error){
 
     console.error(error);
+
 
     showMessage(
       "adminManagementMessage",
@@ -5459,6 +6830,11 @@ async function addAdministrator(){
   }
 
 }
+
+
+/* =========================================================
+   TOGGLE ADMIN
+========================================================= */
 
 async function toggleAdministrator(
   userId,
@@ -5475,13 +6851,16 @@ async function toggleAdministrator(
 
   }
 
+
   const newStatus =
     !currentStatus;
+
 
   const action =
     newStatus
     ? "activate"
     : "deactivate";
+
 
   if(
     !confirm(
@@ -5492,6 +6871,7 @@ async function toggleAdministrator(
     return;
 
   }
+
 
   try{
 
@@ -5507,11 +6887,13 @@ async function toggleAdministrator(
         userId
       );
 
+
     if(error){
 
       throw error;
 
     }
+
 
     showMessage(
       "adminManagementMessage",
@@ -5519,11 +6901,14 @@ async function toggleAdministrator(
       "success"
     );
 
+
     await loadAdministrators();
+
 
   }catch(error){
 
     console.error(error);
+
 
     showMessage(
       "adminManagementMessage",
@@ -5536,6 +6921,11 @@ async function toggleAdministrator(
 
 }
 
+
+/* =========================================================
+   HELPERS
+========================================================= */
+
 function showMessage(
   elementId,
   message,
@@ -5547,18 +6937,22 @@ function showMessage(
       elementId
     );
 
+
   if(!element){
     return;
   }
 
+
   element.textContent =
     message;
+
 
   element.className =
     "message show " +
     type;
 
 }
+
 
 function clearMessage(
   elementId
@@ -5569,16 +6963,20 @@ function clearMessage(
       elementId
     );
 
+
   if(!element){
     return;
   }
 
+
   element.textContent = "";
+
 
   element.className =
     "message";
 
 }
+
 
 function formatNumber(number){
 
@@ -5588,12 +6986,70 @@ function formatNumber(number){
 
 }
 
+
+function formatDate(date){
+
+  if(!date){
+    return "-";
+  }
+
+
+  try{
+
+    return new Date(
+      date
+    ).toLocaleDateString(
+      undefined,
+      {
+        year:"numeric",
+        month:"short",
+        day:"numeric"
+      }
+    );
+
+  }catch(error){
+
+    return "-";
+
+  }
+
+}
+
+
+function formatStatus(status){
+
+  const labels = {
+
+    pending:
+      "Pending",
+
+    processing:
+      "Processing",
+
+    paid:
+      "Paid",
+
+    rejected:
+      "Rejected"
+
+  };
+
+
+  return labels[
+    status
+  ] ||
+  status;
+
+}
+
+
 function getFileExtension(
   filename
 ){
 
   const parts =
     filename.split(".");
+
 
   return (
     parts.length > 1
@@ -5608,6 +7064,7 @@ function getFileExtension(
 
 }
 
+
 function safeFileName(
   filename
 ){
@@ -5621,14 +7078,17 @@ function safeFileName(
 
 }
 
+
 function getInitials(name){
 
   if(!name){
     return "NS";
   }
 
+
   const parts =
     name.trim().split(/\s+/);
+
 
   if(parts.length === 1){
 
@@ -5638,12 +7098,14 @@ function getInitials(name){
 
   }
 
+
   return (
     parts[0][0] +
     parts[1][0]
   ).toUpperCase();
 
 }
+
 
 function escapeHtml(value){
 
@@ -5673,11 +7135,17 @@ function escapeHtml(value){
 
 }
 
+
 function escapeAttribute(value){
 
   return escapeHtml(value);
 
 }
+
+
+/* =========================================================
+   PRIVACY / TERMS
+========================================================= */
 
 function showPrivacy(){
 
@@ -5689,6 +7157,7 @@ function showPrivacy(){
 
 }
 
+
 function showTerms(){
 
   alert(
@@ -5698,6 +7167,11 @@ function showTerms(){
   );
 
 }
+
+
+/* =========================================================
+   CLOSE MODAL WHEN CLICKING OUTSIDE
+========================================================= */
 
 document
   .getElementById("authModal")
