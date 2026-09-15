@@ -1,108 +1,2050 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>NileSoniq — Uganda's Music, Free to Stream</title>
+
+<meta name="description"
+content="NileSoniq — Uganda's music platform. Stream music, discover artists and support Ugandan music.">
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<style>
+:root{
+  --bg:#0a0a0a;
+  --bg2:#111;
+  --card:#171717;
+  --orange:#ff6a00;
+  --orange2:#ff8a2b;
+  --white:#fff;
+  --muted:#a8a8a8;
+  --border:#292929;
+  --danger:#ff4040;
+  --success:#2ecc71;
+  --warning:#f1c40f;
+}
+
+*{
+  box-sizing:border-box;
+  margin:0;
+  padding:0;
+}
+
+html{
+  scroll-behavior:smooth;
+}
+
+body{
+  font-family:Arial,Helvetica,sans-serif;
+  background:var(--bg);
+  color:white;
+  line-height:1.5;
+  padding-bottom:100px;
+}
+
+button,input,textarea,select{
+  font:inherit;
+}
+
+button{
+  cursor:pointer;
+}
+
+a{
+  color:inherit;
+  text-decoration:none;
+}
+
+img{
+  max-width:100%;
+  display:block;
+}
+
+.hidden{
+  display:none!important;
+}
+
+header{
+  position:sticky;
+  top:0;
+  z-index:1000;
+  background:rgba(10,10,10,.96);
+  border-bottom:1px solid var(--border);
+  backdrop-filter:blur(15px);
+}
+
+.header-inner{
+  max-width:1250px;
+  margin:auto;
+  min-height:72px;
+  padding:0 20px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+}
+
+.logo{
+  font-size:25px;
+  font-weight:900;
+  letter-spacing:-1px;
+  white-space:nowrap;
+}
+
+.logo span{
+  color:var(--orange);
+}
+
+nav{
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+
+nav button{
+  background:transparent;
+  color:#ddd;
+  border:none;
+  padding:10px 12px;
+  border-radius:10px;
+}
+
+nav button:hover,
+nav button.active{
+  background:#1d1d1d;
+  color:var(--orange);
+}
+
+.auth-buttons{
+  display:flex;
+  gap:8px;
+  align-items:center;
+}
+
+.btn{
+  border:none;
+  border-radius:12px;
+  padding:11px 16px;
+  font-weight:700;
+  transition:.2s;
+}
+
+.btn:hover{
+  transform:translateY(-1px);
+}
+
+.btn-orange{
+  background:var(--orange);
+  color:white;
+}
+
+.btn-orange:hover{
+  background:var(--orange2);
+}
+
+.btn-dark{
+  background:#202020;
+  color:white;
+  border:1px solid var(--border);
+}
+
+.btn-danger{
+  background:var(--danger);
+  color:white;
+}
+
+.btn-success{
+  background:var(--success);
+  color:#08150d;
+}
+
+.btn-warning{
+  background:var(--warning);
+  color:#111;
+}
+
+.menu-btn{
+  display:none;
+  background:transparent;
+  color:white;
+  border:1px solid var(--border);
+  border-radius:9px;
+  padding:8px 11px;
+}
+
+.container{
+  width:min(1180px,calc(100% - 32px));
+  margin:auto;
+}
+
+.page{
+  display:none;
+  min-height:600px;
+}
+
+.page.active{
+  display:block;
+}
+
+.hero{
+  padding:70px 0 55px;
+}
+
+.hero-box{
+  border:1px solid var(--border);
+  background:
+    radial-gradient(circle at 90% 10%,rgba(255,106,0,.18),transparent 35%),
+    linear-gradient(135deg,#121212,#0c0c0c);
+  border-radius:28px;
+  padding:70px 55px;
+}
+
+.badge{
+  display:inline-flex;
+  background:rgba(255,106,0,.12);
+  border:1px solid rgba(255,106,0,.3);
+  color:var(--orange2);
+  padding:8px 13px;
+  border-radius:999px;
+  font-size:12px;
+  font-weight:800;
+  margin-bottom:22px;
+}
+
+.hero h1{
+  font-size:clamp(42px,7vw,78px);
+  line-height:.98;
+  max-width:800px;
+  letter-spacing:-3px;
+  margin-bottom:22px;
+}
+
+.hero h1 span{
+  color:var(--orange);
+}
+
+.hero p{
+  color:#bdbdbd;
+  max-width:650px;
+  font-size:19px;
+  margin-bottom:28px;
+}
+
+.hero-actions{
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+}
+
+.section{
+  padding:35px 0;
+}
+
+.section-heading{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  margin-bottom:22px;
+}
+
+.section-heading h2{
+  font-size:28px;
+}
+
+.section-heading p{
+  color:var(--muted);
+  font-size:14px;
+}
+
+.search-box{
+  margin-bottom:30px;
+}
+
+.search-box input{
+  width:100%;
+  background:#151515;
+  border:1px solid var(--border);
+  color:white;
+  padding:17px 20px;
+  border-radius:15px;
+  outline:none;
+}
+
+.search-box input:focus{
+  border-color:var(--orange);
+}
+
+.ad-space{
+  margin:10px 0 10px;
+  min-height:120px;
+  border:1px dashed #333;
+  border-radius:18px;
+  background:
+    linear-gradient(
+      135deg,
+      #101010,
+      #0c0c0c
+    );
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+  color:#666;
+  font-size:12px;
+}
+
+.ad-space strong{
+  display:block;
+  color:#888;
+  font-size:13px;
+  margin-bottom:4px;
+}
+
+.song-grid{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:18px;
+}
+
+.song-card{
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:18px;
+  padding:12px;
+  overflow:hidden;
+  transition:.25s;
+}
+
+.song-card:hover{
+  transform:translateY(-4px);
+  border-color:#3b3b3b;
+}
+
+.cover{
+  width:100%;
+  aspect-ratio:1;
+  border-radius:13px;
+  overflow:hidden;
+  background:#222;
+  position:relative;
+}
+
+.cover img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+}
+
+.cover-placeholder{
+  width:100%;
+  height:100%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:50px;
+  color:var(--orange);
+  background:linear-gradient(135deg,#242424,#111);
+}
+
+.play-circle{
+  width:48px;
+  height:48px;
+  border-radius:50%;
+  background:var(--orange);
+  color:white;
+  border:none;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  position:absolute;
+  right:10px;
+  bottom:10px;
+  font-size:18px;
+}
+
+.song-info{
+  padding:13px 3px 5px;
+}
+
+.song-title{
+  font-weight:800;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+.artist-name{
+  color:var(--muted);
+  font-size:14px;
+  margin-top:3px;
+}
+
+.song-meta{
+  display:flex;
+  justify-content:space-between;
+  color:#888;
+  font-size:12px;
+  margin-top:10px;
+}
+
+.artist-grid{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:18px;
+}
+
+.artist-card{
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:18px;
+  padding:20px;
+  text-align:center;
+}
+
+.artist-avatar{
+  width:100px;
+  height:100px;
+  border-radius:50%;
+  overflow:hidden;
+  margin:0 auto 14px;
+  background:#242424;
+  border:2px solid #333;
+}
+
+.artist-avatar img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+}
+
+.artist-avatar-placeholder{
+  width:100%;
+  height:100%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  color:var(--orange);
+  font-size:40px;
+  font-weight:bold;
+}
+
+.artist-card h3{
+  margin-bottom:4px;
+}
+
+.artist-card p{
+  color:var(--muted);
+  font-size:13px;
+}
+
+.dashboard-header{
+  padding:45px 0 25px;
+}
+
+.dashboard-header h1{
+  font-size:38px;
+}
+
+.dashboard-header p{
+  color:var(--muted);
+}
+
+.stats-grid{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:16px;
+  margin-bottom:25px;
+}
+
+.stat-card{
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:18px;
+  padding:22px;
+}
+
+.stat-card span{
+  display:block;
+  color:var(--muted);
+  font-size:13px;
+  margin-bottom:8px;
+}
+
+.stat-card strong{
+  font-size:28px;
+}
+
+.dashboard-card{
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:18px;
+  padding:22px;
+  margin-bottom:20px;
+}
+
+.dashboard-card h2{
+  margin-bottom:18px;
+}
+
+.form-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:15px;
+}
+
+.field{
+  margin-bottom:15px;
+}
+
+.field.full{
+  grid-column:1/-1;
+}
+
+.field label{
+  display:block;
+  color:#ccc;
+  font-size:13px;
+  margin-bottom:7px;
+}
+
+.field input,
+.field textarea,
+.field select{
+  width:100%;
+  background:#101010;
+  color:white;
+  border:1px solid var(--border);
+  border-radius:11px;
+  padding:13px;
+  outline:none;
+}
+
+.field input:focus,
+.field textarea:focus,
+.field select:focus{
+  border-color:var(--orange);
+}
+
+.field textarea{
+  min-height:110px;
+  resize:vertical;
+}
+
+input[type=file]{
+  padding:10px;
+}
+
+.table-wrap{
+  width:100%;
+  overflow-x:auto;
+}
+
+table{
+  width:100%;
+  border-collapse:collapse;
+  min-width:650px;
+}
+
+th,td{
+  text-align:left;
+  padding:13px 10px;
+  border-bottom:1px solid var(--border);
+}
+
+th{
+  color:#999;
+  font-size:12px;
+  text-transform:uppercase;
+}
+
+td{
+  font-size:14px;
+}
+
+.status{
+  display:inline-block;
+  padding:5px 9px;
+  border-radius:999px;
+  font-size:11px;
+  font-weight:bold;
+}
+
+.status.pending{
+  background:rgba(255,106,0,.12);
+  color:var(--orange2);
+}
+
+.status.approved,
+.status.paid{
+  background:rgba(46,204,113,.12);
+  color:var(--success);
+}
+
+.status.rejected{
+  background:rgba(255,64,64,.12);
+  color:#ff7777;
+}
+
+.status.active{
+  background:rgba(46,204,113,.12);
+  color:var(--success);
+}
+
+.status.inactive{
+  background:rgba(255,64,64,.12);
+  color:#ff7777;
+}
+
+.admin-badge{
+  display:inline-block;
+  background:rgba(255,106,0,.12);
+  color:var(--orange2);
+  border:1px solid rgba(255,106,0,.3);
+  padding:6px 10px;
+  border-radius:999px;
+  font-size:12px;
+  font-weight:bold;
+  margin-top:8px;
+}
+
+.admin-tabs{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  margin-bottom:20px;
+}
+
+.admin-tabs button{
+  background:#202020;
+  border:1px solid var(--border);
+  color:#ddd;
+  padding:10px 14px;
+  border-radius:10px;
+}
+
+.admin-tabs button.active{
+  background:var(--orange);
+  color:white;
+  border-color:var(--orange);
+}
+
+/* Admin button shown only after admin authentication */
+.footer-admin{
+  background:transparent;
+  border:none;
+  color:#777;
+  padding:0;
+  font-size:13px;
+  cursor:pointer;
+}
+
+.footer-admin:hover{
+  color:var(--orange);
+}
+
+/* Always-visible Admin Login link */
+.footer-admin-login{
+  background:transparent;
+  border:none;
+  color:#777;
+  padding:0;
+  font-size:13px;
+  cursor:pointer;
+}
+
+.footer-admin-login:hover{
+  color:var(--orange);
+}
+
+.modal{
+  display:none;
+  position:fixed;
+  inset:0;
+  z-index:2000;
+  background:rgba(0,0,0,.75);
+  align-items:center;
+  justify-content:center;
+  padding:20px;
+}
+
+.modal.show{
+  display:flex;
+}
+
+.modal-box{
+  width:min(450px,100%);
+  background:#151515;
+  border:1px solid var(--border);
+  border-radius:22px;
+  padding:25px;
+}
+
+.modal-header{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-bottom:22px;
+}
+
+.close-btn{
+  background:#222;
+  color:white;
+  border:none;
+  border-radius:50%;
+  width:34px;
+  height:34px;
+}
+
+.auth-tabs{
+  display:flex;
+  gap:5px;
+  background:#0c0c0c;
+  padding:5px;
+  border-radius:10px;
+  margin-bottom:20px;
+}
+
+.auth-tabs button{
+  flex:1;
+  background:transparent;
+  color:#aaa;
+  border:none;
+  padding:10px;
+  border-radius:8px;
+}
+
+.auth-tabs button.active{
+  background:var(--orange);
+  color:white;
+}
+
+.message{
+  display:none;
+  padding:11px;
+  border-radius:10px;
+  margin-bottom:15px;
+  font-size:13px;
+}
+
+.message.show{
+  display:block;
+}
+
+.message.error{
+  background:rgba(255,64,64,.12);
+  color:#ff7777;
+  border:1px solid rgba(255,64,64,.2);
+}
+
+.message.success{
+  background:rgba(46,204,113,.12);
+  color:#64e39a;
+  border:1px solid rgba(46,204,113,.2);
+}
+
+.player{
+  position:fixed;
+  left:0;
+  right:0;
+  bottom:0;
+  z-index:1500;
+  background:rgba(17,17,17,.97);
+  border-top:1px solid var(--border);
+  padding:12px 20px;
+}
+
+.player-inner{
+  max-width:1180px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:1fr auto 1fr;
+  align-items:center;
+  gap:20px;
+}
+
+.now-playing{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  min-width:0;
+}
+
+.now-cover{
+  width:48px;
+  height:48px;
+  border-radius:8px;
+  background:#252525;
+  overflow:hidden;
+  flex-shrink:0;
+}
+
+.now-cover img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+}
+
+.now-title{
+  min-width:0;
+}
+
+.now-title strong,
+.now-title span{
+  display:block;
+  overflow:hidden;
+  white-space:nowrap;
+  text-overflow:ellipsis;
+}
+
+.now-title span{
+  color:var(--muted);
+  font-size:12px;
+}
+
+.player-controls{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  justify-content:center;
+}
+
+.player-play{
+  width:45px;
+  height:45px;
+  border-radius:50%;
+  background:var(--orange);
+  border:none;
+  color:white;
+}
+
+.player-right{
+  display:flex;
+  justify-content:flex-end;
+}
+
+.player-right audio{
+  width:100%;
+  max-width:300px;
+  height:36px;
+}
+
+.empty{
+  padding:40px 20px;
+  text-align:center;
+  color:var(--muted);
+  border:1px dashed #333;
+  border-radius:15px;
+}
+
+.loading{
+  padding:30px;
+  text-align:center;
+  color:var(--muted);
+}
+
+footer{
+  margin-top:60px;
+  padding:35px 0;
+  border-top:1px solid var(--border);
+  color:#777;
+}
+
+.footer-inner{
+  display:flex;
+  justify-content:space-between;
+  gap:20px;
+  flex-wrap:wrap;
+}
+
+.footer-brand{
+  font-weight:800;
+  color:#ddd;
+}
+
+.footer-links{
+  display:flex;
+  gap:18px;
+  font-size:13px;
+  align-items:center;
+  flex-wrap:wrap;
+}
+
+@media(max-width:950px){
+
+  .song-grid,
+  .artist-grid{
+    grid-template-columns:repeat(3,1fr);
+  }
+
+  .player-inner{
+    grid-template-columns:1fr auto;
+  }
+
+  .player-right{
+    display:none;
+  }
+}
+
+@media(max-width:760px){
+
+  .header-inner{
+    position:relative;
+  }
+
+  .menu-btn{
+    display:block;
+  }
+
+  nav{
+    display:none;
+    position:absolute;
+    left:16px;
+    right:16px;
+    top:68px;
+    background:#151515;
+    border:1px solid var(--border);
+    border-radius:15px;
+    padding:8px;
+    flex-direction:column;
+    align-items:stretch;
+  }
+
+  nav.open{
+    display:flex;
+  }
+
+  nav button{
+    text-align:left;
+  }
+
+  .auth-buttons .btn-dark{
+    display:none;
+  }
+
+  .hero-box{
+    padding:45px 25px;
+  }
+
+  .song-grid,
+  .artist-grid{
+    grid-template-columns:repeat(2,1fr);
+  }
+
+  .stats-grid{
+    grid-template-columns:1fr;
+  }
+
+  .form-grid{
+    grid-template-columns:1fr;
+  }
+
+  .field.full{
+    grid-column:auto;
+  }
+}
+
+@media(max-width:480px){
+
+  .container{
+    width:min(100% - 20px,1180px);
+  }
+
+  .logo{
+    font-size:20px;
+  }
+
+  .auth-buttons .btn{
+    padding:9px 11px;
+    font-size:12px;
+  }
+
+  .song-grid,
+  .artist-grid{
+    grid-template-columns:1fr 1fr;
+    gap:10px;
+  }
+
+  .song-card{
+    padding:8px;
+  }
+
+  .hero{
+    padding-top:25px;
+  }
+
+  .hero-box{
+    padding:35px 20px;
+    border-radius:20px;
+  }
+
+  .hero p{
+    font-size:16px;
+  }
+
+  .section-heading h2{
+    font-size:23px;
+  }
+
+  .player{
+    padding:8px 10px;
+  }
+
+  .player-inner{
+    gap:10px;
+  }
+
+  .now-cover{
+    width:42px;
+    height:42px;
+  }
+
+  .ad-space{
+    min-height:100px;
+  }
+
+  .footer-links{
+    gap:12px;
+  }
+}
+</style>
+</head>
+
+<body>
+
+<header>
+
+<div class="header-inner">
+
+<a href="#"
+class="logo"
+onclick="showPage('home');return false;">
+NILE <span>SONIQ</span>
+</a>
+
+<button class="menu-btn"
+onclick="toggleMenu()">☰</button>
+
+<nav id="mainNav">
+
+<button data-page="home"
+class="active"
+onclick="showPage('home')">
+Home
+</button>
+
+<button data-page="artists"
+onclick="showPage('artists')">
+Artists
+</button>
+
+<button data-page="dashboard"
+onclick="showPage('dashboard')">
+Dashboard
+</button>
+
+</nav>
+
+<div class="auth-buttons">
+
+<button id="loginButton"
+class="btn btn-dark"
+onclick="openAuthModal('artist')">
+Artist Login
+</button>
+
+<button id="logoutButton"
+class="btn btn-orange hidden"
+onclick="logout()">
+Logout
+</button>
+
+</div>
+
+</div>
+
+</header>
+
+
+<main>
+
+<section id="homePage"
+class="page active">
+
+<div class="container">
+
+<div class="hero">
+
+<div class="hero-box">
+
+<div class="badge">
+● FREE FOREVER • MTN MOMO READY
+</div>
+
+<h1>
+Uganda's music,
+<span>free to stream.</span>
+</h1>
+
+<p>
+Discover artists from Uganda and beyond.
+Stream music, support artists and help African music reach
+the world.
+</p>
+
+<div class="hero-actions">
+
+<button class="btn btn-orange"
+onclick="document.getElementById('newReleases').scrollIntoView()">
+Start Listening
+</button>
+
+<button class="btn btn-dark"
+onclick="openAuthModal('artist')">
+Upload Your Music
+</button>
+
+</div>
+
+</div>
+
+</div>
+
+<div class="search-box">
+
+<input
+id="searchInput"
+type="search"
+placeholder="Search songs or artists..."
+oninput="searchSongs()">
+
+</div>
+
+<section class="ad-space"
+aria-label="Advertisement">
+
+<div>
+
+<strong>
+ADVERTISEMENT
+</strong>
+
+Space reserved for ads
+
+</div>
+
+</section>
+
+<section id="newReleases"
+class="section">
+
+<div class="section-heading">
+
+<div>
+
+<h2>
+New Releases
+</h2>
+
+<p>
+The latest approved music on NileSoniq.
+</p>
+
+</div>
+
+</div>
+
+<div id="newReleasesContainer"
+class="song-grid">
+
+<div class="loading">
+Loading new releases...
+</div>
+
+</div>
+
+</section>
+
+<section id="topCharts"
+class="section">
+
+<div class="section-heading">
+
+<div>
+
+<h2>
+Top Charts
+</h2>
+
+<p>
+The most-played songs on NileSoniq.
+</p>
+
+</div>
+
+</div>
+
+<div id="topChartsContainer"
+class="song-grid">
+
+<div class="loading">
+Loading top charts...
+</div>
+
+</div>
+
+</section>
+
+<section id="trending"
+class="section">
+
+<div class="section-heading">
+
+<div>
+
+<h2>
+Trending Songs
+</h2>
+
+<p>
+Fresh music from NileSoniq artists.
+</p>
+
+</div>
+
+</div>
+
+<div id="songsContainer"
+class="song-grid">
+
+<div class="loading">
+Loading music...
+</div>
+
+</div>
+
+</section>
+
+</div>
+
+</section>
+
+
+<section id="artistsPage"
+class="page">
+
+<div class="container">
+
+<div class="dashboard-header">
+
+<h1>
+NileSoniq Artists
+</h1>
+
+<p>
+Discover artists and their music.
+</p>
+
+</div>
+
+<div id="artistsContainer"
+class="artist-grid">
+
+<div class="loading">
+Loading artists...
+</div>
+
+</div>
+
+</div>
+
+</section>
+
+
+<section id="dashboardPage"
+class="page">
+
+<div class="container">
+
+<div class="dashboard-header">
+
+<h1>
+Artist Dashboard
+</h1>
+
+<p>
+Manage your profile and music.
+</p>
+
+</div>
+
+<div id="dashboardLoggedOut"
+class="empty">
+
+<h3>
+Artist login required
+</h3>
+
+<p style="margin:8px 0 18px;">
+Login or create an artist account to access your dashboard.
+</p>
+
+<button class="btn btn-orange"
+onclick="openAuthModal('artist')">
+Artist Login
+</button>
+
+</div>
+
+<div id="dashboardContent"
+class="hidden">
+
+<div class="stats-grid">
+
+<div class="stat-card">
+
+<span>
+Total Plays
+</span>
+
+<strong id="totalPlays">
+0
+</strong>
+
+</div>
+
+<div class="stat-card">
+
+<span>
+Estimated Earnings
+</span>
+
+<strong id="totalEarnings">
+UGX 0
+</strong>
+
+</div>
+
+<div class="stat-card">
+
+<span>
+Your Songs
+</span>
+
+<strong id="totalSongs">
+0
+</strong>
+
+</div>
+
+</div>
+
+<div class="dashboard-card">
+
+<h2>
+Artist Profile
+</h2>
+
+<div id="profileMessage"
+class="message"></div>
+
+<div class="form-grid">
+
+<div class="field">
+
+<label>
+Artist Name
+</label>
+
+<input
+id="artistName"
+type="text"
+placeholder="Your artist name">
+
+</div>
+
+<div class="field">
+
+<label>
+Location
+</label>
+
+<input
+id="artistLocation"
+type="text"
+placeholder="e.g. Arua, Uganda">
+
+</div>
+
+<div class="field full">
+
+<label>
+Bio
+</label>
+
+<textarea
+id="artistBio"
+placeholder="Tell fans about yourself..."></textarea>
+
+</div>
+
+<div class="field full">
+
+<label>
+Artist Photo
+</label>
+
+<input
+id="avatarFile"
+type="file"
+accept="image/*">
+
+</div>
+
+</div>
+
+<button class="btn btn-orange"
+onclick="saveArtistProfile()">
+Save Profile
+</button>
+
+</div>
+
+<div class="dashboard-card">
+
+<h2>
+Upload New Song
+</h2>
+
+<div id="uploadMessage"
+class="message"></div>
+
+<div class="form-grid">
+
+<div class="field">
+
+<label>
+Song Title
+</label>
+
+<input
+id="songTitle"
+type="text"
+placeholder="Song title">
+
+</div>
+
+<div class="field">
+
+<label>
+Artist Name
+</label>
+
+<input
+id="songArtist"
+type="text"
+placeholder="Artist name">
+
+</div>
+
+<div class="field">
+
+<label>
+Audio File
+</label>
+
+<input
+id="audioFile"
+type="file"
+accept="audio/*">
+
+</div>
+
+<div class="field">
+
+<label>
+Cover Image
+</label>
+
+<input
+id="coverFile"
+type="file"
+accept="image/*">
+
+</div>
+
+</div>
+
+<button id="uploadButton"
+class="btn btn-orange"
+onclick="uploadSong()">
+Upload Song
+</button>
+
+<p style="color:#777;font-size:12px;margin-top:12px;">
+Uploaded songs are sent for admin approval before appearing publicly.
+</p>
+
+</div>
+
+<div class="dashboard-card">
+
+<h2>
+My Songs
+</h2>
+
+<div class="table-wrap">
+
+<table>
+
+<thead>
+
+<tr>
+<th>Song</th>
+<th>Plays</th>
+<th>Likes</th>
+<th>Status</th>
+</tr>
+
+</thead>
+
+<tbody id="mySongsTable"></tbody>
+
+</table>
+
+</div>
+
+</div>
+
+</div>
+
+</div>
+
+</section>
+
+
+<section id="adminPage"
+class="page">
+
+<div class="container">
+
+<div class="dashboard-header">
+
+<h1>
+Admin Dashboard
+</h1>
+
+<p>
+Manage NileSoniq music, withdrawals and administrators.
+</p>
+
+<div id="adminRoleBadge"
+class="admin-badge hidden">
+ADMIN
+</div>
+
+</div>
+
+<div id="adminDenied"
+class="empty hidden">
+
+<h3>
+Admin access required
+</h3>
+
+<p style="margin-top:8px;">
+You do not have permission to access this section.
+</p>
+
+</div>
+
+<div id="adminContent"
+class="hidden">
+
+<div class="admin-tabs">
+
+<button id="adminTabSongs"
+class="active"
+onclick="showAdminTab('songs')">
+Songs
+</button>
+
+<button id="adminTabWithdrawals"
+onclick="showAdminTab('withdrawals')">
+Withdrawals
+</button>
+
+<button id="adminTabAdmins"
+class="hidden"
+onclick="showAdminTab('admins')">
+Administrators
+</button>
+
+</div>
+
+<div id="adminSongsPanel"
+class="dashboard-card">
+
+<h2>
+Song Submissions
+</h2>
+
+<div id="adminMessage"
+class="message"></div>
+
+<div class="table-wrap">
+
+<table>
+
+<thead>
+
+<tr>
+<th>Song</th>
+<th>Artist</th>
+<th>Plays</th>
+<th>Status</th>
+<th>Action</th>
+</tr>
+
+</thead>
+
+<tbody id="adminSongsTable"></tbody>
+
+</table>
+
+</div>
+
+</div>
+
+<div id="adminWithdrawalsPanel"
+class="dashboard-card hidden">
+
+<h2>
+Withdrawal Requests
+</h2>
+
+<div id="withdrawalAdminMessage"
+class="message"></div>
+
+<div class="table-wrap">
+
+<table>
+
+<thead>
+
+<tr>
+<th>Artist</th>
+<th>Amount</th>
+<th>Phone</th>
+<th>Network</th>
+<th>Status</th>
+<th>Action</th>
+</tr>
+
+</thead>
+
+<tbody id="withdrawalsTable"></tbody>
+
+</table>
+
+</div>
+
+</div>
+
+<div id="adminManagementPanel"
+class="dashboard-card hidden">
+
+<h2>
+Administrator Management
+</h2>
+
+<div id="adminManagementMessage"
+class="message"></div>
+
+<div class="form-grid">
+
+<div class="field">
+
+<label>
+Administrator Email
+</label>
+
+<input
+id="newAdminEmail"
+type="email"
+placeholder="artist@example.com">
+
+</div>
+
+<div class="field">
+
+<label>
+Role
+</label>
+
+<select id="newAdminRole">
+
+<option value="admin">
+Admin
+</option>
+
+<option value="super_admin">
+Super Admin
+</option>
+
+</select>
+
+</div>
+
+</div>
+
+<button class="btn btn-orange"
+onclick="addAdministrator()">
+Add Administrator
+</button>
+
+<div style="margin-top:25px;"
+class="table-wrap">
+
+<table>
+
+<thead>
+
+<tr>
+<th>Email</th>
+<th>Role</th>
+<th>Status</th>
+<th>Action</th>
+</tr>
+
+</thead>
+
+<tbody id="adminsTable"></tbody>
+
+</table>
+
+</div>
+
+</div>
+
+</div>
+
+</div>
+
+</section>
+
+</main>
+
+
+<footer>
+
+<div class="container">
+
+<div class="footer-inner">
+
+<div>
+
+<div class="footer-brand">
+NILE SONIQ
+</div>
+
+<div style="font-size:12px;margin-top:5px;">
+Uganda's music, free to stream.
+</div>
+
+</div>
+
+<div class="footer-links">
+
+<a href="#"
+onclick="showPrivacy();return false;">
+Privacy
+</a>
+
+<a href="#"
+onclick="showTerms();return false;">
+Terms
+</a>
+
+<a href="mailto:info@nilesoniq.com">
+Contact
+</a>
+
+<!-- ALWAYS VISIBLE -->
+<button
+id="adminLoginLink"
+class="footer-admin-login"
+onclick="openAuthModal('admin')">
+Admin Login
+</button>
+
+<!-- ONLY VISIBLE AFTER SUCCESSFUL ADMIN LOGIN -->
+<button
+id="adminFooterLink"
+class="footer-admin hidden"
+onclick="showPage('admin')">
+Admin
+</button>
+
+</div>
+
+</div>
+
+</div>
+
+</footer>
+
+
+<div id="authModal"
+class="modal">
+
+<div class="modal-box">
+
+<div class="modal-header">
+
+<h2 id="authTitle">
+Artist Login
+</h2>
+
+<button class="close-btn"
+onclick="closeAuthModal()">
+×
+</button>
+
+</div>
+
+<div class="auth-tabs">
+
+<button id="loginTab"
+class="active"
+onclick="setAuthMode('login')">
+Login
+</button>
+
+<button id="signupTab"
+onclick="setAuthMode('signup')">
+Create Account
+</button>
+
+</div>
+
+<div id="authMessage"
+class="message"></div>
+
+<div id="signupNameField"
+class="field hidden">
+
+<label>
+Artist Name
+</label>
+
+<input
+id="signupArtistName"
+type="text"
+placeholder="Your artist name">
+
+</div>
+
+<div class="field">
+
+<label>
+Email
+</label>
+
+<input
+id="authEmail"
+type="email"
+placeholder="you@example.com">
+
+</div>
+
+<div class="field">
+
+<label>
+Password
+</label>
+
+<input
+id="authPassword"
+type="password"
+placeholder="Password">
+
+</div>
+
+<button id="authSubmit"
+class="btn btn-orange"
+style="width:100%;"
+onclick="submitAuth()">
+Login
+</button>
+
+</div>
+
+</div>
+
+
+<div class="player">
+
+<div class="player-inner">
+
+<div class="now-playing">
+
+<div id="nowCover"
+class="now-cover"></div>
+
+<div class="now-title">
+
+<strong id="nowTitle">
+Nothing playing
+</strong>
+
+<span id="nowArtist">
+Select a song
+</span>
+
+</div>
+
+</div>
+
+<div class="player-controls">
+
+<button class="player-play"
+onclick="togglePlay()">
+▶
+</button>
+
+</div>
+
+<div class="player-right">
+
+<audio
+id="audioPlayer"
+controls
+preload="none"></audio>
+
+</div>
+
+</div>
+
+</div>
+
+
 <script>
 
 /* =========================================================
-   NILE SONIQ DATABASE
+   SUPABASE
 ========================================================= */
 
-const KEY = "nilesoniq_v1";
+const SUPABASE_URL =
+"https://nxiygxnzlusasgzdknft.supabase.co";
 
-let db = JSON.parse(localStorage.getItem(KEY) || "null") || {
-  settings: {
-    rate: 0.5,
-    minPayout: 10000
-  },
+const SUPABASE_PUBLISHABLE_KEY =
+"sb_publishable_MJYDrg3qcgynvoRTWHQvAA_qt7nRTDw";
 
-  users: [],
-
-  songs: [
-    {
-      id: 1,
-      title: "Eyiyu Kuda",
-      artist: "Ston Boi Ft Kv",
-      plays: 0,
-      created: Date.now(),
-      cover: "",
-      audio: "",
-      reviewStatus: "approved",
-      rejectionReason: ""
-    }
-  ]
-};
-
-
-/* =========================================================
-   UPGRADE OLD DATA
-========================================================= */
-
-if (!db.settings) {
-  db.settings = {
-    rate: 0.5,
-    minPayout: 10000
-  };
-}
-
-if (!Array.isArray(db.users)) {
-  db.users = [];
-}
-
-if (!Array.isArray(db.songs)) {
-  db.songs = [];
-}
-
-db.songs.forEach(song => {
-
-  if (!song.reviewStatus) {
-    song.reviewStatus = "approved";
-  }
-
-  if (typeof song.rejectionReason === "undefined") {
-    song.rejectionReason = "";
-  }
-
-  if (typeof song.plays !== "number") {
-    song.plays = 0;
-  }
-
-});
-
-
-let currentUser = JSON.parse(
-  localStorage.getItem("nilesoniq_user") || "null"
+const sb =
+window.supabase.createClient(
+  SUPABASE_URL,
+  SUPABASE_PUBLISHABLE_KEY
 );
 
 
 /* =========================================================
-   AUDIO PLAYER
+   GLOBAL VARIABLES
 ========================================================= */
 
-const audio = new Audio();
+let currentUser = null;
 
-audio.preload = "auto";
-audio.volume = 0.8;
+let currentArtist = null;
 
-let currentSong = null;
+let currentSongs = [];
+
+let newReleaseSongs = [];
+
+let topChartSongs = [];
+
+let currentAuthMode = "login";
+
+/*
+  NEW:
+  Remembers whether the login window was opened
+  as Artist Login or Admin Login.
+*/
+let currentAuthContext = "artist";
+
+let currentPlayingSong = null;
+
+let currentAdmin = null;
 
 
 /* =========================================================
-   SAVE DATABASE
+   START
 ========================================================= */
 
-function save() {
+document.addEventListener(
+"DOMContentLoaded",
+async () => {
 
-  try {
+  setupAudioEvents();
 
-    localStorage.setItem(
-      KEY,
-      JSON.stringify(db)
-    );
+  await checkUser();
 
-  } catch (error) {
+  await loadSongs();
 
-    console.error("NileSoniq save error:", error);
+  await loadNewReleases();
 
-    toast(
-      "Storage is full. Large audio files cannot be stored permanently in this browser."
-    );
+  await loadTopCharts();
+
+  await loadArtists();
+
+  await showPage("home");
+
+});
+
+
+/* =========================================================
+   AUTH STATE
+========================================================= */
+
+sb.auth.onAuthStateChange(
+async (_event, session) => {
+
+  currentUser =
+    session?.user || null;
+
+  await updateUI();
+
+});
+
+
+async function checkUser(){
+
+  try{
+
+    const {
+      data,
+      error
+    } = await sb.auth.getSession();
+
+    if(error){
+
+      console.error(
+        "Session error:",
+        error
+      );
+
+      return;
+
+    }
+
+    currentUser =
+      data.session?.user || null;
+
+    await updateUI();
+
+  }catch(error){
+
+    console.error(error);
 
   }
 
@@ -110,114 +2052,219 @@ function save() {
 
 
 /* =========================================================
-   BASIC HELPERS
+   ADMIN CHECK
 ========================================================= */
 
-function esc(s) {
+async function isCurrentUserAdmin(){
 
-  return String(s ?? "").replace(
-    /[&<>"']/g,
-    m => ({
-      "&": "&amp;",
-      "<": "&lt;",
-      ">": "&gt;",
-      '"': "&quot;",
-      "'": "&#039;"
-    }[m])
+  if(!currentUser){
+
+    currentAdmin = null;
+
+    return false;
+
+  }
+
+  try{
+
+    const {
+      data,
+      error
+    } = await sb
+      .from("admins")
+      .select(
+        "id,user_id,email,role,active"
+      )
+      .eq(
+        "user_id",
+        currentUser.id
+      )
+      .eq(
+        "active",
+        true
+      )
+      .maybeSingle();
+
+
+    if(error){
+
+      console.error(
+        "Admin database check error:",
+        error
+      );
+
+      currentAdmin = null;
+
+      return false;
+
+    }
+
+
+    currentAdmin =
+      data || null;
+
+    return !!data;
+
+  }catch(error){
+
+    console.error(
+      "Admin check failed:",
+      error
+    );
+
+    currentAdmin = null;
+
+    return false;
+
+  }
+
+}
+
+
+/* =========================================================
+   SUPER ADMIN CHECK
+========================================================= */
+
+function isCurrentUserSuperAdmin(){
+
+  return (
+    currentAdmin &&
+    currentAdmin.role ===
+    "super_admin"
   );
 
 }
 
 
-function money(n) {
-
-  return Number(n || 0).toLocaleString("en-UG");
-
-}
-
-
-function toast(message) {
-
-  const box = document.getElementById("toast");
-
-  if (!box) return;
-
-  box.textContent = message;
-  box.style.display = "block";
-
-  clearTimeout(window._toast);
-
-  window._toast = setTimeout(() => {
-
-    box.style.display = "none";
-
-  }, 3000);
-
-}
-
-
-function initials(name) {
-
-  return esc(
-    (name || "?")
-      .split(/\s+/)
-      .map(x => x[0])
-      .join("")
-      .slice(0, 2)
-      .toUpperCase()
-  );
-
-}
-
-
-function safeFileName(name) {
-
-  return String(name || "NileSoniq Song")
-    .replace(/[\\/:*?"<>|]/g, "-")
-    .replace(/\s+/g, " ")
-    .trim() || "NileSoniq Song";
-
-}
-
-
 /* =========================================================
-   REVIEW STATUS
+   UPDATE UI
 ========================================================= */
 
-function getStatus(song) {
+async function updateUI(){
 
-  if (!song) {
-    return "pending";
+  const loginButton =
+    document.getElementById(
+      "loginButton"
+    );
+
+  const logoutButton =
+    document.getElementById(
+      "logoutButton"
+    );
+
+  const adminFooterLink =
+    document.getElementById(
+      "adminFooterLink"
+    );
+
+  const adminBadge =
+    document.getElementById(
+      "adminRoleBadge"
+    );
+
+  const dashboardLoggedOut =
+    document.getElementById(
+      "dashboardLoggedOut"
+    );
+
+  const dashboardContent =
+    document.getElementById(
+      "dashboardContent"
+    );
+
+
+  if(currentUser){
+
+    loginButton.classList.add(
+      "hidden"
+    );
+
+    logoutButton.classList.remove(
+      "hidden"
+    );
+
+    dashboardLoggedOut.classList.add(
+      "hidden"
+    );
+
+    dashboardContent.classList.remove(
+      "hidden"
+    );
+
+
+    const isAdmin =
+      await isCurrentUserAdmin();
+
+
+    if(isAdmin){
+
+      adminFooterLink.classList.remove(
+        "hidden"
+      );
+
+      adminBadge.classList.remove(
+        "hidden"
+      );
+
+      adminBadge.textContent =
+        currentAdmin?.role ===
+        "super_admin"
+          ? "SUPER ADMIN"
+          : "ADMIN";
+
+    }else{
+
+      adminFooterLink.classList.add(
+        "hidden"
+      );
+
+      adminBadge.classList.add(
+        "hidden"
+      );
+
+    }
+
+
+    await loadArtistProfile();
+
+    await loadMySongs();
+
+
+    if(isAdmin){
+
+      await loadAdminSongs();
+
+    }
+
+  }else{
+
+    loginButton.classList.remove(
+      "hidden"
+    );
+
+    logoutButton.classList.add(
+      "hidden"
+    );
+
+    adminFooterLink.classList.add(
+      "hidden"
+    );
+
+    adminBadge.classList.add(
+      "hidden"
+    );
+
+    dashboardLoggedOut.classList.remove(
+      "hidden"
+    );
+
+    dashboardContent.classList.add(
+      "hidden"
+    );
+
+    currentAdmin = null;
+
   }
-
-  return song.reviewStatus || "approved";
-
-}
-
-
-function statusText(status) {
-
-  if (status === "approved") {
-    return "Approved";
-  }
-
-  if (status === "rejected") {
-    return "Rejected";
-  }
-
-  return "Pending";
-}
-
-
-function statusHtml(song) {
-
-  const status = getStatus(song);
-
-  return `
-    <span class="review-status ${status}">
-      ${statusText(status)}
-    </span>
-  `;
 
 }
 
@@ -226,77 +2273,300 @@ function statusHtml(song) {
    NAVIGATION
 ========================================================= */
 
-function nav() {
+async function showPage(page){
 
-  document
-    .querySelectorAll(".nav button")
-    .forEach(button => {
-
-      button.onclick = () => {
-        showPage(button.dataset.page);
-      };
-
-    });
-
-  updateAuth();
-
-}
+  const pages = [
+    "home",
+    "artists",
+    "dashboard",
+    "admin"
+  ];
 
 
-function showPage(id) {
+  pages.forEach(name => {
 
-  document
-    .querySelectorAll(".page")
-    .forEach(page => {
+    const element =
+      document.getElementById(
+        name + "Page"
+      );
 
-      page.classList.remove("active");
+    if(element){
 
-    });
+      element.classList.toggle(
+        "active",
+        name === page
+      );
 
+    }
 
-  const page = document.getElementById(id);
-
-  if (!page) {
-    return;
-  }
-
-
-  page.classList.add("active");
+  });
 
 
   document
-    .querySelectorAll(".nav button")
+    .querySelectorAll(
+      "nav button[data-page]"
+    )
     .forEach(button => {
 
       button.classList.toggle(
         "active",
-        button.dataset.page === id
+        button.dataset.page === page
       );
 
     });
 
 
-  if (id === "home") {
-    renderHome();
-  }
+  document
+    .getElementById("mainNav")
+    .classList.remove("open");
 
-  if (id === "artists") {
-    renderArtists();
-  }
 
-  if (id === "dashboard") {
-    renderDashboard();
-  }
+  if(page === "artists"){
 
-  if (id === "admin") {
-    renderAdmin();
+    await loadArtists();
+
   }
 
 
-  window.scrollTo({
-    top: 0,
-    behavior: "smooth"
-  });
+  if(page === "dashboard"){
+
+    if(currentUser){
+
+      await loadArtistProfile();
+
+      await loadMySongs();
+
+    }
+
+  }
+
+
+  if(page === "admin"){
+
+    const denied =
+      document.getElementById(
+        "adminDenied"
+      );
+
+    const content =
+      document.getElementById(
+        "adminContent"
+      );
+
+
+    if(!currentUser){
+
+      denied.classList.remove(
+        "hidden"
+      );
+
+      content.classList.add(
+        "hidden"
+      );
+
+      return;
+
+    }
+
+
+    const isAdmin =
+      await isCurrentUserAdmin();
+
+
+    if(isAdmin){
+
+      denied.classList.add(
+        "hidden"
+      );
+
+      content.classList.remove(
+        "hidden"
+      );
+
+      updateAdminTabs();
+
+      await loadAdminSongs();
+
+    }else{
+
+      denied.classList.remove(
+        "hidden"
+      );
+
+      content.classList.add(
+        "hidden"
+      );
+
+    }
+
+  }
+
+}
+
+
+function toggleMenu(){
+
+  document
+    .getElementById("mainNav")
+    .classList.toggle("open");
+
+}
+
+
+/* =========================================================
+   ADMIN TABS
+========================================================= */
+
+function updateAdminTabs(){
+
+  const adminTab =
+    document.getElementById(
+      "adminTabAdmins"
+    );
+
+
+  if(
+    adminTab &&
+    isCurrentUserSuperAdmin()
+  ){
+
+    adminTab.classList.remove(
+      "hidden"
+    );
+
+  }else if(adminTab){
+
+    adminTab.classList.add(
+      "hidden"
+    );
+
+  }
+
+}
+
+
+async function showAdminTab(tab){
+
+  const songsPanel =
+    document.getElementById(
+      "adminSongsPanel"
+    );
+
+  const withdrawalsPanel =
+    document.getElementById(
+      "adminWithdrawalsPanel"
+    );
+
+  const managementPanel =
+    document.getElementById(
+      "adminManagementPanel"
+    );
+
+
+  const songTab =
+    document.getElementById(
+      "adminTabSongs"
+    );
+
+  const withdrawalTab =
+    document.getElementById(
+      "adminTabWithdrawals"
+    );
+
+  const adminTab =
+    document.getElementById(
+      "adminTabAdmins"
+    );
+
+
+  songsPanel.classList.add(
+    "hidden"
+  );
+
+  withdrawalsPanel.classList.add(
+    "hidden"
+  );
+
+  managementPanel.classList.add(
+    "hidden"
+  );
+
+
+  songTab.classList.remove(
+    "active"
+  );
+
+  withdrawalTab.classList.remove(
+    "active"
+  );
+
+  if(adminTab){
+
+    adminTab.classList.remove(
+      "active"
+    );
+
+  }
+
+
+  if(tab === "songs"){
+
+    songsPanel.classList.remove(
+      "hidden"
+    );
+
+    songTab.classList.add(
+      "active"
+    );
+
+    await loadAdminSongs();
+
+  }
+
+
+  if(tab === "withdrawals"){
+
+    withdrawalsPanel.classList.remove(
+      "hidden"
+    );
+
+    withdrawalTab.classList.add(
+      "active"
+    );
+
+    await loadWithdrawals();
+
+  }
+
+
+  if(tab === "admins"){
+
+    if(!isCurrentUserSuperAdmin()){
+
+      alert(
+        "Only the Super Admin can manage administrators."
+      );
+
+      return;
+
+    }
+
+
+    managementPanel.classList.remove(
+      "hidden"
+    );
+
+    if(adminTab){
+
+      adminTab.classList.add(
+        "active"
+      );
+
+    }
+
+    await loadAdministrators();
+
+  }
 
 }
 
@@ -305,60 +2575,39 @@ function showPage(id) {
    AUTH
 ========================================================= */
 
-function updateAuth() {
+/*
+  UPDATED:
+  openAuthModal can now open as either:
 
-  const email = document.getElementById("userEmail");
+  openAuthModal('artist')
+  openAuthModal('admin')
+*/
 
-  if (email) {
-    email.textContent = currentUser?.email || "";
-  }
+function openAuthModal(context="artist"){
 
-
-  const authBtn = document.getElementById("authBtn");
-
-  if (authBtn) {
-
-    authBtn.textContent =
-      currentUser ? "Logout" : "Artist Login";
-
-    authBtn.onclick =
-      currentUser ? logout : openAuth;
-
-  }
-
-
-  const dashNav = document.getElementById("dashNav");
-
-  if (dashNav) {
-
-    dashNav.style.display =
-      currentUser ? "inline-block" : "none";
-
-  }
-
-
-  const adminNav = document.getElementById("adminNav");
-
-  if (adminNav) {
-
-    adminNav.style.display =
-      currentUser?.admin ? "inline-block" : "none";
-
-  }
-
-}
-
-
-function openAuth() {
+  currentAuthContext =
+    context === "admin"
+      ? "admin"
+      : "artist";
 
   document
     .getElementById("authModal")
     .classList.add("show");
 
+  clearMessage(
+    "authMessage"
+  );
+
+  /*
+    Always start on Login when opening
+    the modal.
+  */
+  setAuthMode("login");
+
 }
 
 
-function closeAuth() {
+function closeAuthModal(){
 
   document
     .getElementById("authModal")
@@ -367,842 +2616,626 @@ function closeAuth() {
 }
 
 
-function login() {
+/*
+  UPDATED:
+  Keeps Admin Login title when the
+  admin login button is used.
+*/
+
+function setAuthMode(mode){
+
+  currentAuthMode = mode;
+
+  const loginTab =
+    document.getElementById(
+      "loginTab"
+    );
+
+  const signupTab =
+    document.getElementById(
+      "signupTab"
+    );
+
+  const signupNameField =
+    document.getElementById(
+      "signupNameField"
+    );
+
+  const title =
+    document.getElementById(
+      "authTitle"
+    );
+
+  const submit =
+    document.getElementById(
+      "authSubmit"
+    );
+
+
+  if(mode === "login"){
+
+    loginTab.classList.add(
+      "active"
+    );
+
+    signupTab.classList.remove(
+      "active"
+    );
+
+    signupNameField.classList.add(
+      "hidden"
+    );
+
+
+    title.textContent =
+      currentAuthContext === "admin"
+        ? "Admin Login"
+        : "Artist Login";
+
+
+    submit.textContent =
+      "Login";
+
+  }else{
+
+    /*
+      If someone opens Create Account,
+      it is always an artist account.
+    */
+
+    currentAuthContext = "artist";
+
+    loginTab.classList.remove(
+      "active"
+    );
+
+    signupTab.classList.add(
+      "active"
+    );
+
+    signupNameField.classList.remove(
+      "hidden"
+    );
+
+    title.textContent =
+      "Create Artist Account";
+
+    submit.textContent =
+      "Create Account";
+
+  }
+
+
+  clearMessage(
+    "authMessage"
+  );
+
+}
+
+
+async function submitAuth(){
 
   const email =
     document
-      .getElementById("loginEmail")
+      .getElementById(
+        "authEmail"
+      )
       .value
       .trim();
+
+  const password =
+    document
+      .getElementById(
+        "authPassword"
+      )
+      .value;
+
+  const artistName =
+    document
+      .getElementById(
+        "signupArtistName"
+      )
+      .value
+      .trim();
+
+
+  if(!email || !password){
+
+    showMessage(
+      "authMessage",
+      "Please enter your email and password.",
+      "error"
+    );
+
+    return;
+
+  }
+
+
+  try{
+
+    if(currentAuthMode === "login"){
+
+      const {
+        error
+      } = await sb.auth.signInWithPassword({
+        email,
+        password
+      });
+
+
+      if(error){
+        throw error;
+      }
+
+
+      /*
+        Check whether the account is really
+        an administrator when Admin Login
+        was selected.
+      */
+
+      if(currentAuthContext === "admin"){
+
+        /*
+          Give Supabase a moment to update
+          the authenticated session.
+        */
+
+        await new Promise(
+          resolve =>
+            setTimeout(
+              resolve,
+              300
+            )
+        );
+
+        const {
+          data:adminData,
+          error:adminError
+        } = await sb
+          .from("admins")
+          .select(
+            "id,user_id,email,role,active"
+          )
+          .eq(
+            "user_id",
+            currentUser?.id
+          )
+          .eq(
+            "active",
+            true
+          )
+          .maybeSingle();
+
+
+        if(
+          adminError ||
+          !adminData
+        ){
+
+          await sb.auth.signOut();
+
+          currentUser = null;
+          currentAdmin = null;
+
+          showMessage(
+            "authMessage",
+            "This account is not an active NileSoniq administrator.",
+            "error"
+          );
+
+          return;
+
+        }
+
+
+        currentAdmin =
+          adminData;
+
+
+        showMessage(
+          "authMessage",
+          "Admin login successful.",
+          "success"
+        );
+
+
+        setTimeout(
+          async () => {
+
+            closeAuthModal();
+
+            await updateUI();
+
+            await showPage("admin");
+
+          },
+          700
+        );
+
+
+        return;
+
+      }
+
+
+      showMessage(
+        "authMessage",
+        "Login successful.",
+        "success"
+      );
+
+
+      setTimeout(
+        closeAuthModal,
+        700
+      );
+
+
+    }else{
+
+      if(!artistName){
+
+        showMessage(
+          "authMessage",
+          "Please enter your artist name.",
+          "error"
+        );
+
+        return;
+
+      }
+
+
+      const {
+        data,
+        error
+      } = await sb.auth.signUp({
+        email,
+        password
+      });
+
+
+      if(error){
+        throw error;
+      }
+
+
+      if(data.user){
+
+        const {
+          error:artistError
+        } = await sb
+          .from("artists")
+          .upsert(
+            {
+              user_id:data.user.id,
+              name:artistName
+            },
+            {
+              onConflict:"user_id"
+            }
+          );
+
+
+        if(artistError){
+
+          console.error(
+            "Artist profile error:",
+            artistError
+          );
+
+        }
+
+      }
+
+
+      showMessage(
+        "authMessage",
+        "Account created. Check your email if confirmation is required.",
+        "success"
+      );
+
+    }
+
+  }catch(error){
+
+    console.error(error);
+
+    showMessage(
+      "authMessage",
+      error.message ||
+      "Authentication failed.",
+      "error"
+    );
+
+  }
+
+}
+
+
+async function logout(){
+
+  const {
+    error
+  } = await sb.auth.signOut();
+
+
+  if(error){
+
+    alert(
+      "Logout failed: " +
+      error.message
+    );
+
+    return;
+
+  }
+
+
+  currentUser = null;
+
+  currentArtist = null;
+
+  currentAdmin = null;
+
+  await showPage("home");
+
+}
+
+
+/* =========================================================
+   ARTIST PROFILE
+========================================================= */
+
+async function loadArtistProfile(){
+
+  if(!currentUser){
+    return;
+  }
+
+
+  try{
+
+    const {
+      data,
+      error
+    } = await sb
+      .from("artists")
+      .select("*")
+      .eq(
+        "user_id",
+        currentUser.id
+      )
+      .maybeSingle();
+
+
+    if(error){
+
+      console.error(
+        "Artist load error:",
+        error
+      );
+
+      return;
+
+    }
+
+
+    currentArtist = data;
+
+
+    if(!data){
+
+      document.getElementById(
+        "artistName"
+      ).value = "";
+
+      document.getElementById(
+        "artistLocation"
+      ).value = "";
+
+      document.getElementById(
+        "artistBio"
+      ).value = "";
+
+      return;
+
+    }
+
+
+    document.getElementById(
+      "artistName"
+    ).value =
+      data.name || "";
+
+    document.getElementById(
+      "artistLocation"
+    ).value =
+      data.location || "";
+
+    document.getElementById(
+      "artistBio"
+    ).value =
+      data.bio || "";
+
+
+    const songArtist =
+      document.getElementById(
+        "songArtist"
+      );
+
+
+    if(
+      songArtist &&
+      !songArtist.value
+    ){
+
+      songArtist.value =
+        data.name || "";
+
+    }
+
+  }catch(error){
+
+    console.error(error);
+
+  }
+
+}
+
+
+async function saveArtistProfile(){
+
+  if(!currentUser){
+
+    openAuthModal("artist");
+
+    return;
+
+  }
 
 
   const name =
     document
-      .getElementById("loginArtist")
-      .value
-      .trim() ||
-    "New Artist";
-
-
-  if (!email) {
-
-    toast("Enter your email");
-
-    return;
-
-  }
-
-
-  let user =
-    db.users.find(
-      x => x.email === email
-    );
-
-
-  if (!user) {
-
-    user = {
-
-      id: Date.now(),
-
-      email: email,
-
-      name: name,
-
-      bio: "",
-
-      avatar: "",
-
-      admin: false
-
-    };
-
-    db.users.push(user);
-
-  } else {
-
-    user.name = name || user.name;
-
-  }
-
-
-  currentUser = user;
-
-
-  localStorage.setItem(
-    "nilesoniq_user",
-    JSON.stringify(user)
-  );
-
-
-  save();
-
-  closeAuth();
-
-  updateAuth();
-
-  toast("Welcome " + user.name + "!");
-
-  showPage("dashboard");
-
-}
-
-
-function logout() {
-
-  currentUser = null;
-
-  localStorage.removeItem(
-    "nilesoniq_user"
-  );
-
-  updateAuth();
-
-  showPage("home");
-
-  toast("Logged out");
-
-}
-
-
-function ensureLogin() {
-
-  if (!currentUser) {
-
-    openAuth();
-
-    toast("Artist login required");
-
-    return false;
-
-  }
-
-  return true;
-
-}
-
-
-/* =========================================================
-   COVER
-========================================================= */
-
-function coverStyle(song) {
-
-  if (!song.cover) {
-    return "";
-  }
-
-  return `
-    background-image:url("${song.cover}");
-  `;
-
-}
-
-
-/* =========================================================
-   PUBLIC SONG CARD
-========================================================= */
-
-function songCard(song) {
-
-  if (getStatus(song) !== "approved") {
-    return "";
-  }
-
-
-  return `
-
-    <article class="card">
-
-      <div
-        class="art"
-        style="${coverStyle(song)}">
-
-        ${
-          song.cover
-          ? ""
-          : "<span class='note'>♫</span>"
-        }
-
-        <button
-          class="play-round"
-          onclick="playSong(${song.id})">
-
-          ▶
-
-        </button>
-
-      </div>
-
-
-      <div class="card-body">
-
-        <div class="song-title">
-          ${esc(song.title)}
-        </div>
-
-
-        <div class="sub">
-          ${esc(song.artist)}
-          • ${song.plays || 0} plays
-        </div>
-
-
-        <div class="card-actions">
-
-          <button
-            class="main"
-            onclick="playSong(${song.id})">
-
-            ▶ Play
-
-          </button>
-
-
-          <button
-            class="download-btn"
-            onclick="downloadSong(${song.id})">
-
-            ↓ Download
-
-          </button>
-
-
-          <button
-            onclick="shareSong(${song.id})">
-
-            Share
-
-          </button>
-
-        </div>
-
-      </div>
-
-    </article>
-
-  `;
-
-}
-
-
-/* =========================================================
-   PUBLIC SONG FILTER
-========================================================= */
-
-function filteredSongs() {
-
-  const search =
-    (
-      document.getElementById("search")?.value ||
-      ""
-    )
-    .toLowerCase()
-    .trim();
-
-
-  return db.songs.filter(song => {
-
-    if (getStatus(song) !== "approved") {
-      return false;
-    }
-
-
-    const title =
-      String(song.title || "")
-        .toLowerCase();
-
-
-    const artist =
-      String(song.artist || "")
-        .toLowerCase();
-
-
-    return (
-      !search ||
-      title.includes(search) ||
-      artist.includes(search)
-    );
-
-  });
-
-}
-
-
-/* =========================================================
-   HOME
-========================================================= */
-
-function renderHome() {
-
-  const songs = filteredSongs();
-
-
-  const sorted = [...songs].sort(
-    (a, b) =>
-      (b.plays || 0) -
-      (a.plays || 0)
-  );
-
-
-  const fresh = [...songs].sort(
-    (a, b) =>
-      (b.created || 0) -
-      (a.created || 0)
-  );
-
-
-  document.getElementById(
-    "trendCount"
-  ).textContent =
-    songs.length + " SONGS";
-
-
-  document.getElementById(
-    "trending"
-  ).innerHTML =
-    sorted
-      .slice(0, 8)
-      .map(songCard)
-      .join("") ||
-
-    `
-      <div class="empty">
-        No approved music found.
-      </div>
-    `;
-
-
-  document.getElementById(
-    "newReleases"
-  ).innerHTML =
-    fresh
-      .slice(0, 8)
-      .map(songCard)
-      .join("") ||
-
-    `
-      <div class="empty">
-        No approved new releases yet.
-      </div>
-    `;
-
-
-  document.getElementById(
-    "topCharts"
-  ).innerHTML =
-    sorted
-      .slice(0, 8)
-      .map(songCard)
-      .join("") ||
-
-    `
-      <div class="empty">
-        No approved charts yet.
-      </div>
-    `;
-
-}
-
-
-/* =========================================================
-   ARTISTS
-========================================================= */
-
-function renderArtists() {
-
-  const map = {};
-
-
-  db.songs
-    .filter(
-      song =>
-        getStatus(song) === "approved"
-    )
-    .forEach(song => {
-
-      const name =
-        String(song.artist || "").trim();
-
-      if (!name) {
-        return;
-      }
-
-      map[name] =
-        (map[name] || 0) + 1;
-
-    });
-
-
-  const users =
-    db.users.map(user => ({
-
-      name: user.name,
-
-      avatar: user.avatar
-
-    }));
-
-
-  const names =
-    [
-      ...new Set([
-        ...Object.keys(map),
-        ...users.map(x => x.name)
-      ])
-    ];
-
-
-  document.getElementById(
-    "artistCount"
-  ).textContent =
-    names.length + " ARTISTS";
-
-
-  document.getElementById(
-    "artistList"
-  ).innerHTML =
-
-    names.map(name => {
-
-      const user =
-        users.find(
-          x => x.name === name
-        );
-
-
-      return `
-
-        <div class="card artist-card">
-
-          <div class="avatar">
-
-            ${
-              user?.avatar
-
-              ?
-
-              `
-                <img
-                  src="${user.avatar}"
-                  style="
-                    width:100%;
-                    height:100%;
-                    object-fit:cover;
-                    border-radius:50%
-                  "
-                >
-              `
-
-              :
-
-              initials(name)
-
-            }
-
-          </div>
-
-
-          <div>
-
-            <div class="song-title">
-              ${esc(name)}
-            </div>
-
-            <div class="sub">
-              ${map[name] || 0}
-              approved songs
-            </div>
-
-          </div>
-
-        </div>
-
-      `;
-
-    }).join("") ||
-
-    `
-      <div class="empty">
-        No artists yet.
-      </div>
-    `;
-
-}
-
-
-/* =========================================================
-   DASHBOARD
-========================================================= */
-
-function renderDashboard() {
-
-  if (!ensureLogin()) {
-    return;
-  }
-
-
-  const user =
-    db.users.find(
-      x => x.id === currentUser.id
-    ) ||
-    currentUser;
-
-
-  currentUser = user;
-
-
-  localStorage.setItem(
-    "nilesoniq_user",
-    JSON.stringify(user)
-  );
-
-
-  const songs =
-    db.songs.filter(
-      song =>
-        song.artist === user.name
-    );
-
-
-  const plays =
-    songs.reduce(
-      (total, song) =>
-        total + (song.plays || 0),
-      0
-    );
-
-
-  document.getElementById(
-    "myPlays"
-  ).textContent = plays;
-
-
-  document.getElementById(
-    "myEarnings"
-  ).textContent =
-    money(
-      plays * db.settings.rate
-    );
-
-
-  document.getElementById(
-    "mySongs"
-  ).textContent =
-    songs.length;
-
-
-  document.getElementById(
-    "profileName"
-  ).value =
-    user.name || "";
-
-
-  document.getElementById(
-    "profileBio"
-  ).value =
-    user.bio || "";
-
-
-  document.getElementById(
-    "profilePreview"
-  ).innerHTML =
-    user.avatar
-    ?
-
-    `
-      <img
-        src="${user.avatar}"
-        class="avatar"
-        style="margin:8px 0 14px"
-      >
-    `
-
-    :
-
-    "";
-
-
-  document.getElementById(
-    "mySongList"
-  ).innerHTML =
-
-    songs.map(song => {
-
-      const status =
-        getStatus(song);
-
-
-      return `
-
-        <div
-          class="artist-card"
-          style="
-            margin-bottom:10px;
-            border:1px solid #292929;
-            border-radius:18px;
-          "
-        >
-
-          <div
-            class="avatar"
-            style="
-              width:55px;
-              height:55px;
-            "
-          >
-
-            ${
-              song.cover
-
-              ?
-
-              `
-                <img
-                  src="${song.cover}"
-                  style="
-                    width:100%;
-                    height:100%;
-                    object-fit:cover;
-                    border-radius:50%
-                  "
-                >
-              `
-
-              :
-
-              "♫"
-
-            }
-
-          </div>
-
-
-          <div style="flex:1">
-
-            <b>
-              ${esc(song.title)}
-            </b>
-
-
-            <div class="sub">
-
-              ${song.plays || 0}
-              plays
-
-              • UGX
-
-              ${money(
-                (song.plays || 0) *
-                db.settings.rate
-              )}
-
-            </div>
-
-
-            ${statusHtml(song)}
-
-
-            ${
-              status === "rejected" &&
-              song.rejectionReason
-
-              ?
-
-              `
-                <div class="rejection-reason">
-
-                  <strong>
-                    Reason:
-                  </strong>
-
-                  ${esc(
-                    song.rejectionReason
-                  )}
-
-                </div>
-              `
-
-              :
-
-              ""
-
-            }
-
-          </div>
-
-
-          <button
-            class="ghost-btn"
-            onclick="deleteSong(${song.id})">
-
-            Delete
-
-          </button>
-
-        </div>
-
-      `;
-
-    }).join("") ||
-
-    `
-      <div class="empty">
-        You have not uploaded a song yet.
-      </div>
-    `;
-
-}
-
-
-/* =========================================================
-   PROFILE
-========================================================= */
-
-function previewProfile() {
-
-  const file =
-    document
-      .getElementById("profileImage")
-      .files[0];
-
-
-  if (!file) {
-    return;
-  }
-
-
-  const reader =
-    new FileReader();
-
-
-  reader.onload = () => {
-
-    document.getElementById(
-      "profilePreview"
-    ).innerHTML = `
-
-      <img
-        src="${reader.result}"
-        class="avatar"
-        style="margin:8px 0 14px"
-      >
-
-    `;
-
-  };
-
-
-  reader.readAsDataURL(file);
-
-}
-
-
-function saveProfile() {
-
-  if (!ensureLogin()) {
-    return;
-  }
-
-
-  const user =
-    db.users.find(
-      x => x.id === currentUser.id
-    );
-
-
-  if (!user) {
-    return;
-  }
-
-
-  const oldName =
-    user.name;
-
-
-  const newName =
-    document
-      .getElementById("profileName")
-      .value
-      .trim() ||
-    user.name;
-
-
-  user.name =
-    newName;
-
-
-  user.bio =
-    document
-      .getElementById("profileBio")
+      .getElementById(
+        "artistName"
+      )
       .value
       .trim();
 
+  const location =
+    document
+      .getElementById(
+        "artistLocation"
+      )
+      .value
+      .trim();
 
-  if (oldName !== newName) {
+  const bio =
+    document
+      .getElementById(
+        "artistBio"
+      )
+      .value
+      .trim();
 
-    db.songs.forEach(song => {
+  const avatarFile =
+    document
+      .getElementById(
+        "avatarFile"
+      )
+      .files[0];
 
-      if (song.artist === oldName) {
-        song.artist = newName;
-      }
 
-    });
+  if(!name){
+
+    showMessage(
+      "profileMessage",
+      "Please enter your artist name.",
+      "error"
+    );
+
+    return;
 
   }
 
 
-  const file =
-    document
-      .getElementById("profileImage")
-      .files[0];
+  try{
+
+    let avatarUrl =
+      currentArtist?.avatar_url ||
+      null;
 
 
-  const finish = () => {
+    if(avatarFile){
 
-    currentUser = user;
+      const extension =
+        getFileExtension(
+          avatarFile.name
+        );
+
+      const path =
+        `${currentUser.id}/avatar-${Date.now()}.${extension}`;
 
 
-    localStorage.setItem(
-      "nilesoniq_user",
-      JSON.stringify(user)
+      const {
+        error:uploadError
+      } = await sb.storage
+        .from("avatars")
+        .upload(
+          path,
+          avatarFile,
+          {
+            upsert:true
+          }
+        );
+
+
+      if(uploadError){
+        throw uploadError;
+      }
+
+
+      const {
+        data
+      } = sb.storage
+        .from("avatars")
+        .getPublicUrl(path);
+
+
+      avatarUrl =
+        data.publicUrl;
+
+    }
+
+
+    const {
+      data,
+      error
+    } = await sb
+      .from("artists")
+      .upsert(
+        {
+          user_id:currentUser.id,
+          name,
+          bio,
+          location,
+          avatar_url:avatarUrl
+        },
+        {
+          onConflict:"user_id"
+        }
+      )
+      .select()
+      .single();
+
+
+    if(error){
+      throw error;
+    }
+
+
+    currentArtist = data;
+
+
+    showMessage(
+      "profileMessage",
+      "Profile saved successfully.",
+      "success"
     );
 
+  }catch(error){
 
-    save();
+    console.error(error);
 
-    updateAuth();
-
-    toast("Profile saved");
-
-    renderDashboard();
-
-    renderArtists();
-
-  };
-
-
-  if (file) {
-
-    const reader =
-      new FileReader();
-
-
-    reader.onload = () => {
-
-      user.avatar =
-        reader.result;
-
-      finish();
-
-    };
-
-
-    reader.readAsDataURL(file);
-
-  } else {
-
-    finish();
+    showMessage(
+      "profileMessage",
+      error.message ||
+      "Could not save profile.",
+      "error"
+    );
 
   }
 
@@ -1213,78 +3246,62 @@ function saveProfile() {
    UPLOAD SONG
 ========================================================= */
 
-function showSelectedFile() {
+async function uploadSong(){
 
-  const file =
-    document
-      .getElementById("songFile")
-      .files[0];
+  if(!currentUser){
 
+    openAuthModal("artist");
 
-  document.getElementById(
-    "selectedFile"
-  ).textContent =
-    file
-    ? "Selected: " + file.name
-    : "";
-
-}
-
-
-function uploadSong() {
-
-  if (!ensureLogin()) {
     return;
+
   }
 
 
   const title =
     document
-      .getElementById("songTitle")
+      .getElementById(
+        "songTitle"
+      )
       .value
       .trim();
 
-
-  const artist =
+  let artistName =
     document
-      .getElementById("songArtist")
-      .value
-      .trim() ||
-    currentUser.name;
-
-
-  const file =
-    document
-      .getElementById("songFile")
-      .files[0];
-
-
-  const url =
-    document
-      .getElementById("songUrl")
+      .getElementById(
+        "songArtist"
+      )
       .value
       .trim();
 
-
-  const cover =
+  const audioFile =
     document
-      .getElementById("songCover")
+      .getElementById(
+        "audioFile"
+      )
+      .files[0];
+
+  const coverFile =
+    document
+      .getElementById(
+        "coverFile"
+      )
       .files[0];
 
 
-  if (!title) {
+  if(!artistName){
 
-    toast("Enter a song title");
-
-    return;
+    artistName =
+      currentArtist?.name || "";
 
   }
 
 
-  if (!file && !url) {
+  if(!title){
 
-    toast(
-      "Choose an audio file or paste an audio link"
+    showMessage(
+      "uploadMessage",
+      "Please enter the song title.",
+      "error"
     );
 
     return;
@@ -1292,38 +3309,167 @@ function uploadSong() {
   }
 
 
-  const song = {
+  if(!artistName){
 
-    id: Date.now(),
+    showMessage(
+      "uploadMessage",
+      "Please enter your artist name in your profile first.",
+      "error"
+    );
 
-    title: title,
+    return;
 
-    artist: artist,
-
-    plays: 0,
-
-    created: Date.now(),
-
-    cover: "",
-
-    audio: url || "",
-
-    reviewStatus: "pending",
-
-    rejectionReason: ""
-
-  };
+  }
 
 
-  const finish = () => {
+  if(!audioFile){
 
-    db.songs.unshift(song);
+    showMessage(
+      "uploadMessage",
+      "Please select an audio file.",
+      "error"
+    );
 
-    save();
+    return;
+
+  }
 
 
-    toast(
-      "Song submitted for admin approval"
+  const uploadButton =
+    document.getElementById(
+      "uploadButton"
+    );
+
+
+  uploadButton.disabled = true;
+
+  uploadButton.textContent =
+    "Uploading...";
+
+
+  try{
+
+    const audioPath =
+      `${currentUser.id}/${Date.now()}-${safeFileName(audioFile.name)}`;
+
+
+    const {
+      error:audioUploadError
+    } = await sb.storage
+      .from("audio")
+      .upload(
+        audioPath,
+        audioFile,
+        {
+          cacheControl:"3600",
+          upsert:false,
+          contentType:
+            audioFile.type ||
+            undefined
+        }
+      );
+
+
+    if(audioUploadError){
+      throw audioUploadError;
+    }
+
+
+    const {
+      data:audioPublic
+    } = sb.storage
+      .from("audio")
+      .getPublicUrl(
+        audioPath
+      );
+
+
+    const audioUrl =
+      audioPublic.publicUrl;
+
+
+    let coverUrl = null;
+
+
+    if(coverFile){
+
+      const coverPath =
+        `${currentUser.id}/${Date.now()}-${safeFileName(coverFile.name)}`;
+
+
+      const {
+        error:coverUploadError
+      } = await sb.storage
+        .from("covers")
+        .upload(
+          coverPath,
+          coverFile,
+          {
+            cacheControl:"3600",
+            upsert:false,
+            contentType:
+              coverFile.type ||
+              undefined
+          }
+        );
+
+
+      if(coverUploadError){
+        throw coverUploadError;
+      }
+
+
+      const {
+        data:coverPublic
+      } = sb.storage
+        .from("covers")
+        .getPublicUrl(
+          coverPath
+        );
+
+
+      coverUrl =
+        coverPublic.publicUrl;
+
+    }
+
+
+    const {
+      error:songError
+    } = await sb
+      .from("songs")
+      .insert({
+
+        title:title,
+
+        artist:artistName,
+
+        artist_id:currentUser.id,
+
+        file_url:audioUrl,
+
+        audio_url:audioUrl,
+
+        cover_url:coverUrl,
+
+        plays:0,
+
+        likes:0,
+
+        approved:false
+
+      });
+
+
+    if(songError){
+      throw songError;
+    }
+
+
+    showMessage(
+      "uploadMessage",
+      "Song uploaded successfully. It is waiting for admin approval.",
+      "success"
     );
 
 
@@ -1331,264 +3477,545 @@ function uploadSong() {
       "songTitle"
     ).value = "";
 
+    document.getElementById(
+      "audioFile"
+    ).value = "";
 
     document.getElementById(
-      "songUrl"
+      "coverFile"
     ).value = "";
 
 
+    await loadMySongs();
+
+
+  }catch(error){
+
+    console.error(
+      "Upload error:",
+      error
+    );
+
+    showMessage(
+      "uploadMessage",
+      error.message ||
+      "Song upload failed.",
+      "error"
+    );
+
+  }finally{
+
+    uploadButton.disabled = false;
+
+    uploadButton.textContent =
+      "Upload Song";
+
+  }
+
+}
+
+
+/* =========================================================
+   PUBLIC SONGS
+========================================================= */
+
+async function loadSongs(){
+
+  const container =
     document.getElementById(
-      "songFile"
-    ).value = "";
+      "songsContainer"
+    );
 
 
-    document.getElementById(
-      "songCover"
-    ).value = "";
+  container.innerHTML =
+    `<div class="loading">Loading music...</div>`;
 
 
-    document.getElementById(
-      "selectedFile"
-    ).textContent = "";
+  try{
+
+    const {
+      data,
+      error
+    } = await sb
+      .from("songs")
+      .select("*")
+      .eq(
+        "approved",
+        true
+      )
+      .order(
+        "created_at",
+        {
+          ascending:false
+        }
+      );
 
 
-    renderDashboard();
-
-    renderHome();
-
-  };
-
-
-  const readCover = () => {
-
-    if (!cover) {
-
-      finish();
-
-      return;
-
+    if(error){
+      throw error;
     }
 
 
-    const reader =
-      new FileReader();
+    currentSongs =
+      data || [];
 
 
-    reader.onload = () => {
-
-      song.cover =
-        reader.result;
-
-      finish();
-
-    };
+    renderSongs(
+      currentSongs
+    );
 
 
-    reader.readAsDataURL(cover);
+  }catch(error){
 
-  };
+    console.error(error);
 
+    container.innerHTML = `
+      <div class="empty"
+           style="grid-column:1/-1;">
 
-  if (file) {
+        <h3>
+          Could not load songs
+        </h3>
 
-    const reader =
-      new FileReader();
+        <p style="margin-top:8px;">
+          ${escapeHtml(
+            error.message ||
+            "Unknown error"
+          )}
+        </p>
 
-
-    reader.onload = () => {
-
-      song.audio =
-        reader.result;
-
-      readCover();
-
-    };
-
-
-    reader.onerror = () => {
-
-      toast(
-        "Could not read the audio file"
-      );
-
-    };
-
-
-    reader.readAsDataURL(file);
-
-  } else {
-
-    readCover();
+      </div>
+    `;
 
   }
 
 }
 
 
-/* =========================================================
-   DELETE
-========================================================= */
+async function loadNewReleases(){
 
-function deleteSong(id) {
-
-  if (
-    !confirm(
-      "Delete this song?"
-    )
-  ) {
-    return;
-  }
-
-
-  db.songs =
-    db.songs.filter(
-      song =>
-        song.id !== id
-    );
-
-
-  if (
-    currentSong &&
-    currentSong.id === id
-  ) {
-
-    audio.pause();
-
-    audio.removeAttribute("src");
-
-    audio.load();
-
-    currentSong = null;
-
+  const container =
     document.getElementById(
-      "player"
-    ).style.display = "none";
+      "newReleasesContainer"
+    );
 
+
+  if(!container){
+    return;
   }
 
 
-  save();
+  container.innerHTML =
+    `<div class="loading">
+      Loading new releases...
+    </div>`;
 
-  renderDashboard();
 
-  renderAdmin();
+  try{
 
-  renderHome();
+    const {
+      data,
+      error
+    } = await sb
+      .from("songs")
+      .select("*")
+      .eq(
+        "approved",
+        true
+      )
+      .order(
+        "created_at",
+        {
+          ascending:false
+        }
+      )
+      .limit(8);
 
-  renderArtists();
 
-  toast("Song deleted");
+    if(error){
+      throw error;
+    }
+
+
+    newReleaseSongs =
+      data || [];
+
+
+    renderNewReleases(
+      newReleaseSongs
+    );
+
+
+  }catch(error){
+
+    console.error(
+      "New releases error:",
+      error
+    );
+
+
+    container.innerHTML = `
+      <div class="empty"
+           style="grid-column:1/-1;">
+
+        <h3>
+          Could not load new releases
+        </h3>
+
+        <p style="margin-top:8px;">
+          ${escapeHtml(
+            error.message ||
+            "Unknown error"
+          )}
+        </p>
+
+      </div>
+    `;
+
+  }
+
+}
+
+
+async function loadTopCharts(){
+
+  const container =
+    document.getElementById(
+      "topChartsContainer"
+    );
+
+
+  if(!container){
+    return;
+  }
+
+
+  container.innerHTML =
+    `<div class="loading">
+      Loading top charts...
+    </div>`;
+
+
+  try{
+
+    const {
+      data,
+      error
+    } = await sb
+      .from("songs")
+      .select("*")
+      .eq(
+        "approved",
+        true
+      )
+      .order(
+        "plays",
+        {
+          ascending:false,
+          nullsFirst:false
+        }
+      )
+      .order(
+        "created_at",
+        {
+          ascending:false
+        }
+      )
+      .limit(8);
+
+
+    if(error){
+      throw error;
+    }
+
+
+    topChartSongs =
+      data || [];
+
+
+    renderTopCharts(
+      topChartSongs
+    );
+
+
+  }catch(error){
+
+    console.error(
+      "Top charts error:",
+      error
+    );
+
+
+    container.innerHTML = `
+      <div class="empty"
+           style="grid-column:1/-1;">
+
+        <h3>
+          Could not load top charts
+        </h3>
+
+        <p style="margin-top:8px;">
+          ${escapeHtml(
+            error.message ||
+            "Unknown error"
+          )}
+        </p>
+
+      </div>
+    `;
+
+  }
 
 }
 
 
 /* =========================================================
-   DOWNLOAD
+   SONG CARDS
 ========================================================= */
 
-function downloadSong(id) {
+function renderSongCards(
+  songs,
+  containerId,
+  emptyTitle,
+  emptyText
+){
 
-  const song =
-    db.songs.find(
-      x => x.id === id
+  const container =
+    document.getElementById(
+      containerId
     );
 
 
-  if (!song) {
+  if(!container){
+    return;
+  }
 
-    toast("Song not found");
+
+  if(!songs || songs.length === 0){
+
+    container.innerHTML = `
+      <div class="empty"
+           style="grid-column:1/-1;">
+
+        <h3>
+          ${escapeHtml(emptyTitle)}
+        </h3>
+
+        <p style="margin-top:8px;">
+          ${escapeHtml(emptyText)}
+        </p>
+
+      </div>
+    `;
 
     return;
 
   }
 
 
-  if (getStatus(song) !== "approved") {
+  container.innerHTML =
+    songs.map(song => {
 
-    toast(
-      "This song is not approved"
-    );
-
-    return;
-
-  }
-
-
-  if (!song.audio) {
-
-    toast(
-      "This song has no audio file"
-    );
-
-    return;
-
-  }
+      const cover =
+        song.cover_url
+        ? `
+          <img
+            src="${escapeAttribute(song.cover_url)}"
+            alt=""
+            loading="lazy">
+        `
+        : `
+          <div class="cover-placeholder">
+            ♪
+          </div>
+        `;
 
 
-  const link =
-    document.createElement("a");
+      return `
+        <div class="song-card">
+
+          <div class="cover">
+
+            ${cover}
+
+            <button
+              class="play-circle"
+              onclick="playSong('${song.id}')">
+              ▶
+            </button>
+
+          </div>
+
+          <div class="song-info">
+
+            <div class="song-title">
+              ${escapeHtml(
+                song.title ||
+                "Untitled"
+              )}
+            </div>
+
+            <div class="artist-name">
+              ${escapeHtml(
+                song.artist ||
+                "Unknown Artist"
+              )}
+            </div>
+
+            <div class="song-meta">
+
+              <span>
+                ${formatNumber(
+                  song.plays || 0
+                )} plays
+              </span>
+
+              <span>
+                ${formatNumber(
+                  song.likes || 0
+                )} likes
+              </span>
+
+            </div>
+
+          </div>
+
+        </div>
+      `;
+
+    }).join("");
+
+}
 
 
-  link.href =
-    song.audio;
+function renderSongs(songs){
+
+  renderSongCards(
+    songs,
+    "songsContainer",
+    "No approved songs yet",
+    "New music will appear here after approval."
+  );
+
+}
 
 
-  link.download =
-    safeFileName(
-      song.title + " - " + song.artist
-    ) + ".mp3";
+function renderNewReleases(songs){
+
+  renderSongCards(
+    songs,
+    "newReleasesContainer",
+    "No new releases yet",
+    "New music will appear here after approval."
+  );
+
+}
 
 
-  document.body.appendChild(link);
+function renderTopCharts(songs){
 
-  link.click();
-
-  link.remove();
-
-
-  toast(
-    "Download started"
+  renderSongCards(
+    songs,
+    "topChartsContainer",
+    "No chart data yet",
+    "Songs will appear here as they receive plays."
   );
 
 }
 
 
 /* =========================================================
-   FIXED AUDIO PLAYER
+   SEARCH
 ========================================================= */
 
-function playSong(id) {
+function searchSongs(){
+
+  const input =
+    document
+      .getElementById(
+        "searchInput"
+      )
+      .value
+      .toLowerCase()
+      .trim();
+
+
+  if(!input){
+
+    renderSongs(
+      currentSongs
+    );
+
+    return;
+
+  }
+
+
+  const filtered =
+    currentSongs.filter(song => {
+
+      const title =
+        (song.title || "")
+        .toLowerCase();
+
+      const artist =
+        (song.artist || "")
+        .toLowerCase();
+
+      return (
+        title.includes(input) ||
+        artist.includes(input)
+      );
+
+    });
+
+
+  renderSongs(
+    filtered
+  );
+
+}
+
+
+function findSongById(songId){
+
+  return [
+    ...currentSongs,
+    ...newReleaseSongs,
+    ...topChartSongs
+  ].find(
+    song => song.id === songId
+  );
+
+}
+
+
+/* =========================================================
+   PLAYER
+========================================================= */
+
+async function playSong(songId){
 
   const song =
-    db.songs.find(
-      x => x.id === id
+    findSongById(
+      songId
     );
 
 
-  if (!song) {
-
-    toast("Song not found");
-
+  if(!song){
     return;
-
   }
 
 
-  if (getStatus(song) !== "approved") {
-
-    toast(
-      "This song is not approved yet"
-    );
-
-    return;
-
-  }
+  const url =
+    song.audio_url ||
+    song.file_url;
 
 
-  if (!song.audio) {
+  if(!url){
 
-    toast(
-      "This song has no audio file attached"
+    alert(
+      "This song does not have an audio file."
     );
 
     return;
@@ -1596,415 +4023,534 @@ function playSong(id) {
   }
 
 
-  /*
-    Stop the previous song first.
-  */
-
-  audio.pause();
-
-  audio.currentTime = 0;
+  currentPlayingSong =
+    song;
 
 
-  /*
-    Set the new audio source.
-  */
-
-  audio.src = song.audio;
-
-
-  audio.volume =
-    Number(
-      document.getElementById("volume")?.value || 0.8
+  const player =
+    document.getElementById(
+      "audioPlayer"
     );
 
 
-  currentSong = song;
-
-
-  /*
-    Show player BEFORE starting playback.
-  */
-
-  document.getElementById(
-    "player"
-  ).style.display = "block";
+  player.src =
+    url;
 
 
   document.getElementById(
     "nowTitle"
   ).textContent =
-    song.title;
+    song.title ||
+    "Untitled";
 
 
   document.getElementById(
     "nowArtist"
   ).textContent =
-    song.artist;
+    song.artist ||
+    "Unknown Artist";
 
 
-  document.getElementById(
-    "progress"
-  ).value = 0;
+  const nowCover =
+    document.getElementById(
+      "nowCover"
+    );
 
 
-  document.getElementById(
-    "playPause"
-  ).textContent = "▶";
+  if(song.cover_url){
+
+    nowCover.innerHTML = `
+      <img
+        src="${escapeAttribute(song.cover_url)}"
+        alt="">
+    `;
+
+  }else{
+
+    nowCover.innerHTML =
+      `<div style="
+      height:100%;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      color:#ff6a00;
+      font-size:22px;">
+      ♪
+      </div>`;
+
+  }
 
 
-  /*
-    Load the audio.
-  */
+  try{
 
-  audio.load();
+    await player.play();
 
+  }catch(error){
 
-  /*
-    IMPORTANT:
-    Only count a play after the browser
-    successfully starts the audio.
-  */
+    console.log(
+      "Autoplay prevented:",
+      error
+    );
 
-  audio.play()
-    .then(() => {
-
-      document.getElementById(
-        "playPause"
-      ).textContent = "Ⅱ";
+  }
 
 
-      song.plays =
-        (song.plays || 0) + 1;
+  await recordSongPlay(
+    song.id
+  );
+
+}
 
 
-      save();
+function togglePlay(){
+
+  const player =
+    document.getElementById(
+      "audioPlayer"
+    );
 
 
-      renderHome();
+  if(!player.src){
+    return;
+  }
 
-      if (currentUser) {
-        renderDashboard();
+
+  if(player.paused){
+
+    player.play();
+
+  }else{
+
+    player.pause();
+
+  }
+
+}
+
+
+function setupAudioEvents(){
+
+  const player =
+    document.getElementById(
+      "audioPlayer"
+    );
+
+
+  player.addEventListener(
+    "play",
+    () => {
+
+      document.querySelector(
+        ".player-play"
+      ).textContent =
+        "❚❚";
+
+    }
+  );
+
+
+  player.addEventListener(
+    "pause",
+    () => {
+
+      document.querySelector(
+        ".player-play"
+      ).textContent =
+        "▶";
+
+    }
+  );
+
+}
+
+
+/* =========================================================
+   PLAY COUNT
+========================================================= */
+
+async function recordSongPlay(songId){
+
+  if(!songId){
+    return;
+  }
+
+
+  try{
+
+    const {
+      error
+    } = await sb.rpc(
+      "record_song_play",
+      {
+        song_id:songId
       }
-
-    })
-    .catch(error => {
-
-      console.error(
-        "NileSoniq audio error:",
-        error
-      );
-
-
-      document.getElementById(
-        "playPause"
-      ).textContent = "▶";
-
-
-      toast(
-        "This audio file cannot be played. Check the audio file or link."
-      );
-
-    });
-
-}
-
-
-/* =========================================================
-   PLAY / PAUSE
-========================================================= */
-
-function togglePlay() {
-
-  if (!currentSong) {
-
-    toast(
-      "Choose a song first"
     );
 
-    return;
 
-  }
+    if(!error){
 
-
-  if (
-    getStatus(currentSong) !==
-    "approved"
-  ) {
-
-    toast(
-      "This song is not approved"
-    );
-
-    return;
-
-  }
-
-
-  if (!audio.src) {
-
-    playSong(currentSong.id);
-
-    return;
-
-  }
-
-
-  if (audio.paused) {
-
-    audio.play()
-      .then(() => {
-
-        document.getElementById(
-          "playPause"
-        ).textContent = "Ⅱ";
-
-      })
-      .catch(() => {
-
-        toast(
-          "Unable to play this audio"
-        );
-
-      });
-
-  } else {
-
-    audio.pause();
-
-    document.getElementById(
-      "playPause"
-    ).textContent = "▶";
-
-  }
-
-}
-
-
-/* =========================================================
-   STOP
-========================================================= */
-
-function stopAudio() {
-
-  audio.pause();
-
-  audio.currentTime = 0;
-
-
-  document.getElementById(
-    "playPause"
-  ).textContent = "▶";
-
-
-  document.getElementById(
-    "progress"
-  ).value = 0;
-
-}
-
-
-/* =========================================================
-   RESTART
-========================================================= */
-
-function restart() {
-
-  if (!currentSong) {
-    return;
-  }
-
-
-  audio.currentTime = 0;
-
-
-  audio.play()
-    .then(() => {
-
-      document.getElementById(
-        "playPause"
-      ).textContent = "Ⅱ";
-
-    })
-    .catch(() => {
-
-      toast(
-        "Unable to play this audio"
+      updateLocalPlayCount(
+        songId
       );
 
-    });
-
-}
-
-
-/* =========================================================
-   SEEK
-========================================================= */
-
-function seek(value) {
-
-  if (
-    audio.duration &&
-    isFinite(audio.duration)
-  ) {
-
-    audio.currentTime =
-      (
-        Number(value) / 100
-      ) *
-      audio.duration;
-
-  }
-
-}
-
-
-/* =========================================================
-   AUDIO EVENTS
-========================================================= */
-
-audio.addEventListener(
-  "loadedmetadata",
-  () => {
-
-    const progress =
-      document.getElementById("progress");
-
-    if (progress) {
-      progress.value = 0;
-    }
-
-  }
-);
-
-
-audio.addEventListener(
-  "timeupdate",
-  () => {
-
-    if (
-      audio.duration &&
-      isFinite(audio.duration)
-    ) {
-
-      document.getElementById(
-        "progress"
-      ).value =
-
-        (
-          audio.currentTime /
-          audio.duration
-        ) * 100;
+      return;
 
     }
 
-  }
-);
+  }catch(error){
 
-
-audio.addEventListener(
-  "play",
-  () => {
-
-    document.getElementById(
-      "playPause"
-    ).textContent = "Ⅱ";
+    console.log(
+      "Play RPC error:",
+      error
+    );
 
   }
-);
+
+}
 
 
-audio.addEventListener(
-  "pause",
-  () => {
+function updateSongInList(
+  list,
+  songId
+){
 
-    document.getElementById(
-      "playPause"
-    ).textContent = "▶";
-
-  }
-);
-
-
-audio.addEventListener(
-  "ended",
-  () => {
-
-    document.getElementById(
-      "playPause"
-    ).textContent = "▶";
+  const song =
+    list.find(
+      item => item.id === songId
+    );
 
 
-    document.getElementById(
-      "progress"
-    ).value = 0;
+  if(song){
+
+    song.plays =
+      Number(
+        song.plays || 0
+      ) + 1;
 
   }
-);
+
+}
 
 
-audio.addEventListener(
-  "error",
-  () => {
+function updateLocalPlayCount(
+  songId
+){
+
+  updateSongInList(
+    currentSongs,
+    songId
+  );
+
+  updateSongInList(
+    newReleaseSongs,
+    songId
+  );
+
+  updateSongInList(
+    topChartSongs,
+    songId
+  );
+
+
+  renderSongs(
+    currentSongs
+  );
+
+  renderNewReleases(
+    newReleaseSongs
+  );
+
+  renderTopCharts(
+    topChartSongs
+  );
+
+}
+
+
+/* =========================================================
+   ARTISTS
+========================================================= */
+
+async function loadArtists(){
+
+  const container =
+    document.getElementById(
+      "artistsContainer"
+    );
+
+
+  if(!container){
+    return;
+  }
+
+
+  container.innerHTML =
+    `<div class="loading">
+      Loading artists...
+    </div>`;
+
+
+  try{
+
+    const {
+      data,
+      error
+    } = await sb
+      .from("artists")
+      .select("*")
+      .order(
+        "created_at",
+        {
+          ascending:false
+        }
+      );
+
+
+    if(error){
+      throw error;
+    }
+
+
+    if(!data || data.length === 0){
+
+      container.innerHTML = `
+        <div class="empty"
+             style="grid-column:1/-1;">
+          No artists registered yet.
+        </div>
+      `;
+
+      return;
+
+    }
+
+
+    container.innerHTML =
+      data.map(artist => {
+
+        const avatar =
+          artist.avatar_url
+          ? `
+            <img
+              src="${escapeAttribute(
+                artist.avatar_url
+              )}"
+              alt=""
+              loading="lazy">
+          `
+          : `
+            <div class="artist-avatar-placeholder">
+              ${getInitials(
+                artist.name
+              )}
+            </div>
+          `;
+
+
+        return `
+          <div class="artist-card">
+
+            <div class="artist-avatar">
+              ${avatar}
+            </div>
+
+            <h3>
+              ${escapeHtml(
+                artist.name ||
+                "Unknown Artist"
+              )}
+            </h3>
+
+            <p>
+              ${escapeHtml(
+                artist.location ||
+                "Uganda"
+              )}
+            </p>
+
+          </div>
+        `;
+
+      }).join("");
+
+
+  }catch(error){
+
+    console.error(error);
+
+    container.innerHTML = `
+      <div class="empty"
+           style="grid-column:1/-1;">
+        Could not load artists.
+      </div>
+    `;
+
+  }
+
+}
+
+
+/* =========================================================
+   MY SONGS
+========================================================= */
+
+async function loadMySongs(){
+
+  if(!currentUser){
+    return;
+  }
+
+
+  const tbody =
+    document.getElementById(
+      "mySongsTable"
+    );
+
+
+  if(!tbody){
+    return;
+  }
+
+
+  tbody.innerHTML = `
+    <tr>
+      <td colspan="4">
+
+        <div class="loading">
+          Loading your songs...
+        </div>
+
+      </td>
+    </tr>
+  `;
+
+
+  try{
+
+    const {
+      data,
+      error
+    } = await sb
+      .from("songs")
+      .select("*")
+      .eq(
+        "artist_id",
+        currentUser.id
+      )
+      .order(
+        "created_at",
+        {
+          ascending:false
+        }
+      );
+
+
+    if(error){
+      throw error;
+    }
+
+
+    const songs =
+      data || [];
+
+
+    if(songs.length === 0){
+
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="4">
+
+            <div class="empty">
+              You have not uploaded any songs yet.
+            </div>
+
+          </td>
+        </tr>
+      `;
+
+    }else{
+
+      tbody.innerHTML =
+        songs.map(song => {
+
+          const status =
+            song.approved === true
+            ? "approved"
+            : "pending";
+
+          const text =
+            song.approved === true
+            ? "Approved"
+            : "Pending";
+
+
+          return `
+            <tr>
+
+              <td>
+                ${escapeHtml(
+                  song.title ||
+                  "Untitled"
+                )}
+              </td>
+
+              <td>
+                ${formatNumber(
+                  song.plays || 0
+                )}
+              </td>
+
+              <td>
+                ${formatNumber(
+                  song.likes || 0
+                )}
+              </td>
+
+              <td>
+
+                <span class="status ${status}">
+                  ${text}
+                </span>
+
+              </td>
+
+            </tr>
+          `;
+
+        }).join("");
+
+    }
+
+
+    updateDashboardStats(
+      songs
+    );
+
+
+  }catch(error){
 
     console.error(
-      "Audio element error:",
-      audio.error
-    );
-
-    document.getElementById(
-      "playPause"
-    ).textContent = "▶";
-
-  }
-);
-
-
-/* =========================================================
-   SHARE
-========================================================= */
-
-function shareSong(id) {
-
-  const song =
-    db.songs.find(
-      x => x.id === id
+      "My songs error:",
+      error
     );
 
 
-  if (!song) {
-    return;
-  }
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="4">
 
+          <div class="empty">
 
-  const text =
-    `${song.title} by ${song.artist} — NileSoniq`;
+            ${escapeHtml(
+              error.message ||
+              "Could not load songs."
+            )}
 
+          </div>
 
-  if (navigator.share) {
-
-    navigator.share({
-      title: text,
-      text: text,
-      url: location.href
-    }).catch(() => {});
-
-  } else if (navigator.clipboard) {
-
-    navigator.clipboard
-      .writeText(location.href)
-      .then(() => {
-
-        toast(
-          "NileSoniq link copied"
-        );
-
-      });
-
-  } else {
-
-    toast(
-      "Copy the website link to share"
-    );
+        </td>
+      </tr>
+    `;
 
   }
 
@@ -2012,462 +4558,241 @@ function shareSong(id) {
 
 
 /* =========================================================
-   APPROVE SONG
+   STATS
 ========================================================= */
 
-function approveSong(id) {
-
-  if (!currentUser?.admin) {
-
-    toast(
-      "Admin access required"
-    );
-
-    return;
-
-  }
-
-
-  const song =
-    db.songs.find(
-      x => x.id === id
-    );
-
-
-  if (!song) {
-    return;
-  }
-
-
-  song.reviewStatus =
-    "approved";
-
-
-  song.rejectionReason =
-    "";
-
-
-  save();
-
-
-  toast(
-    "Song approved successfully"
-  );
-
-
-  renderAdmin();
-
-  renderHome();
-
-  renderArtists();
-
-  renderDashboard();
-
-}
-
-
-/* =========================================================
-   REJECT SONG
-========================================================= */
-
-function rejectSong(id) {
-
-  if (!currentUser?.admin) {
-
-    toast(
-      "Admin access required"
-    );
-
-    return;
-
-  }
-
-
-  const song =
-    db.songs.find(
-      x => x.id === id
-    );
-
-
-  if (!song) {
-    return;
-  }
-
-
-  const reason =
-    prompt(
-      "Why are you rejecting this song?"
-    );
-
-
-  if (reason === null) {
-    return;
-  }
-
-
-  const cleanReason =
-    reason.trim();
-
-
-  if (!cleanReason) {
-
-    toast(
-      "Please enter a rejection reason"
-    );
-
-    return;
-
-  }
-
-
-  song.reviewStatus =
-    "rejected";
-
-
-  song.rejectionReason =
-    cleanReason;
-
-
-  save();
-
-
-  toast(
-    "Song rejected"
-  );
-
-
-  renderAdmin();
-
-  renderHome();
-
-  renderArtists();
-
-  renderDashboard();
-
-}
-
-
-/* =========================================================
-   ADMIN DASHBOARD
-========================================================= */
-
-function renderAdmin() {
-
-  if (!currentUser?.admin) {
-    return;
-  }
-
+function updateDashboardStats(
+  songs=[]
+){
 
   const totalPlays =
-    db.songs.reduce(
-      (total, song) =>
-        total + (song.plays || 0),
+    songs.reduce(
+      (sum,song) =>
+        sum +
+        Number(
+          song.plays || 0
+        ),
       0
     );
 
 
-  document.getElementById(
-    "adminSongs"
-  ).textContent =
-    db.songs.length;
+  const totalSongs =
+    songs.length;
+
+
+  const earnings =
+    totalPlays * 0.5;
 
 
   document.getElementById(
-    "adminPlays"
+    "totalPlays"
   ).textContent =
-    totalPlays;
+    formatNumber(
+      totalPlays
+    );
 
 
   document.getElementById(
-    "adminArtists"
+    "totalSongs"
   ).textContent =
-    new Set(
-      db.songs.map(
-        song => song.artist
+    formatNumber(
+      totalSongs
+    );
+
+
+  document.getElementById(
+    "totalEarnings"
+  ).textContent =
+    "UGX " +
+    formatNumber(
+      Math.floor(
+        earnings
       )
-    ).size;
-
-
-  document.getElementById(
-    "rate"
-  ).value =
-    db.settings.rate;
-
-
-  document.getElementById(
-    "minPayout"
-  ).value =
-    db.settings.minPayout;
-
-
-  const rows =
-    db.songs.map(song => {
-
-      const status =
-        getStatus(song);
-
-
-      let actions = "";
-
-
-      if (status === "pending") {
-
-        actions = `
-
-          <button
-            class="orange-btn"
-            style="
-              padding:8px 12px;
-              margin-right:5px;
-            "
-            onclick="approveSong(${song.id})">
-
-            Approve
-
-          </button>
-
-
-          <button
-            class="ghost-btn"
-            style="
-              padding:8px 12px;
-            "
-            onclick="rejectSong(${song.id})">
-
-            Reject
-
-          </button>
-
-        `;
-
-      }
-
-
-      if (status === "approved") {
-
-        actions = `
-
-          <span
-            class="review-status approved">
-
-            Approved
-
-          </span>
-
-
-          <button
-            class="ghost-btn"
-            style="
-              padding:7px 10px;
-              margin-left:5px;
-            "
-            onclick="rejectSong(${song.id})">
-
-            Reject
-
-          </button>
-
-        `;
-
-      }
-
-
-      if (status === "rejected") {
-
-        actions = `
-
-          <span
-            class="review-status rejected">
-
-            Rejected
-
-          </span>
-
-
-          <button
-            class="orange-btn"
-            style="
-              padding:7px 10px;
-              margin-left:5px;
-            "
-            onclick="approveSong(${song.id})">
-
-            Approve Again
-
-          </button>
-
-        `;
-
-      }
-
-
-      return `
-
-        <tr>
-
-          <td>
-
-            <strong>
-              ${esc(song.title)}
-            </strong>
-
-
-            ${
-              status === "rejected" &&
-              song.rejectionReason
-
-              ?
-
-              `
-                <div
-                  class="rejection-reason">
-
-                  <strong>
-                    Reason:
-                  </strong>
-
-                  ${esc(
-                    song.rejectionReason
-                  )}
-
-                </div>
-              `
-
-              :
-
-              ""
-
-            }
-
-          </td>
-
-
-          <td>
-            ${esc(song.artist)}
-          </td>
-
-
-          <td>
-            ${statusHtml(song)}
-          </td>
-
-
-          <td>
-            ${song.plays || 0}
-          </td>
-
-
-          <td>
-
-            UGX
-            ${money(
-              (song.plays || 0) *
-              db.settings.rate
-            )}
-
-          </td>
-
-
-          <td>
-
-            ${actions}
-
-            <br>
-
-            <button
-              class="ghost-btn"
-              style="
-                padding:7px 10px;
-                margin-top:7px;
-              "
-              onclick="deleteSong(${song.id})">
-
-              Delete
-
-            </button>
-
-          </td>
-
-        </tr>
-
-      `;
-
-    }).join("");
-
-
-  document.getElementById(
-    "adminSongList"
-  ).innerHTML = `
-
-    <div class="table-wrap">
-
-      <table class="table">
-
-        <thead>
-
-          <tr>
-
-            <th>Song</th>
-
-            <th>Artist</th>
-
-            <th>Status</th>
-
-            <th>Plays</th>
-
-            <th>Earnings</th>
-
-            <th>Action</th>
-
-          </tr>
-
-        </thead>
-
-
-        <tbody>
-
-          ${
-            rows ||
-
-            `
-              <tr>
-
-                <td
-                  colspan="6"
-                  style="
-                    text-align:center;
-                    color:#777;
-                  ">
-
-                  No songs yet.
-
-                </td>
-
-              </tr>
-            `
-          }
-
-        </tbody>
-
-      </table>
-
-    </div>
-
-  `;
+    );
 
 }
 
 
 /* =========================================================
-   SETTINGS
+   ADMIN SONGS
 ========================================================= */
 
-function saveSettings() {
+async function loadAdminSongs(){
 
-  if (!currentUser?.admin) {
+  if(!currentUser){
+    return;
+  }
 
-    toast(
-      "Admin access required"
+
+  const isAdmin =
+    await isCurrentUserAdmin();
+
+
+  if(!isAdmin){
+    return;
+  }
+
+
+  const tbody =
+    document.getElementById(
+      "adminSongsTable"
+    );
+
+
+  tbody.innerHTML = `
+    <tr>
+      <td colspan="5">
+
+        <div class="loading">
+          Loading submissions...
+        </div>
+
+      </td>
+    </tr>
+  `;
+
+
+  try{
+
+    const {
+      data,
+      error
+    } = await sb
+      .from("songs")
+      .select("*")
+      .order(
+        "created_at",
+        {
+          ascending:false
+        }
+      );
+
+
+    if(error){
+      throw error;
+    }
+
+
+    const pending =
+      (data || []).filter(
+        song =>
+          song.approved !== true
+      );
+
+
+    if(pending.length === 0){
+
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="5">
+
+            <div class="empty">
+              No pending songs.
+            </div>
+
+          </td>
+        </tr>
+      `;
+
+      return;
+
+    }
+
+
+    tbody.innerHTML =
+      pending.map(song => {
+
+        return `
+          <tr>
+
+            <td>
+              ${escapeHtml(
+                song.title ||
+                "Untitled"
+              )}
+            </td>
+
+            <td>
+              ${escapeHtml(
+                song.artist ||
+                "Unknown"
+              )}
+            </td>
+
+            <td>
+              ${formatNumber(
+                song.plays || 0
+              )}
+            </td>
+
+            <td>
+
+              <span class="status pending">
+                Pending
+              </span>
+
+            </td>
+
+            <td>
+
+              <button
+                class="btn btn-success"
+                style="padding:8px 12px;"
+                onclick="approveSong('${song.id}')">
+                Approve
+              </button>
+
+              <button
+                class="btn btn-danger"
+                style="padding:8px 12px;margin-left:5px;"
+                onclick="rejectSong('${song.id}')">
+                Reject
+              </button>
+
+            </td>
+
+          </tr>
+        `;
+
+      }).join("");
+
+
+  }catch(error){
+
+    console.error(
+      "Admin songs error:",
+      error
+    );
+
+
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="5">
+
+          <div class="empty">
+
+            ${escapeHtml(
+              error.message ||
+              "Could not load submissions."
+            )}
+
+          </div>
+
+        </td>
+      </tr>
+    `;
+
+  }
+
+}
+
+
+async function approveSong(songId){
+
+  if(!currentUser){
+
+    alert(
+      "Please login first."
     );
 
     return;
@@ -2475,81 +4800,151 @@ function saveSettings() {
   }
 
 
-  db.settings.rate =
-    Number(
-      document.getElementById("rate").value
-    ) || 0;
+  const isAdmin =
+    await isCurrentUserAdmin();
 
 
-  db.settings.minPayout =
-    Number(
-      document.getElementById("minPayout").value
-    ) || 0;
+  if(!isAdmin){
+
+    alert(
+      "You are not authorized."
+    );
+
+    return;
+
+  }
 
 
-  save();
+  try{
 
-  toast(
-    "Settings saved"
-  );
+    const {
+      error
+    } = await sb
+      .from("songs")
+      .update({
+        approved:true
+      })
+      .eq(
+        "id",
+        songId
+      );
 
-  renderAdmin();
+
+    if(error){
+      throw error;
+    }
+
+
+    showMessage(
+      "adminMessage",
+      "Song approved successfully.",
+      "success"
+    );
+
+
+    await loadAdminSongs();
+
+    await loadSongs();
+
+    await loadNewReleases();
+
+    await loadTopCharts();
+
+
+  }catch(error){
+
+    console.error(error);
+
+    showMessage(
+      "adminMessage",
+      error.message ||
+      "Could not approve song.",
+      "error"
+    );
+
+  }
 
 }
 
 
-/* =========================================================
-   OWNER ADMIN
-========================================================= */
+async function rejectSong(songId){
 
-function makeAdmin() {
+  if(!currentUser){
 
-  const owner =
-    new URLSearchParams(
-      location.search
-    ).get("owner");
+    alert(
+      "Please login first."
+    );
+
+    return;
+
+  }
 
 
-  if (
-    owner === "1" &&
-    currentUser
-  ) {
+  const isAdmin =
+    await isCurrentUserAdmin();
 
-    const user =
-      db.users.find(
-        x =>
-          x.id ===
-          currentUser.id
+
+  if(!isAdmin){
+
+    alert(
+      "You are not authorized."
+    );
+
+    return;
+
+  }
+
+
+  const confirmed =
+    confirm(
+      "Reject this song submission?"
+    );
+
+
+  if(!confirmed){
+    return;
+  }
+
+
+  try{
+
+    const {
+      error
+    } = await sb
+      .from("songs")
+      .update({
+        approved:false
+      })
+      .eq(
+        "id",
+        songId
       );
 
 
-    if (!user) {
-      return;
+    if(error){
+      throw error;
     }
 
 
-    user.admin = true;
-
-
-    currentUser = user;
-
-
-    localStorage.setItem(
-      "nilesoniq_user",
-      JSON.stringify(user)
+    showMessage(
+      "adminMessage",
+      "Song rejected.",
+      "success"
     );
 
 
-    save();
+    await loadAdminSongs();
 
-    updateAuth();
+  }catch(error){
 
-    toast(
-      "Owner/admin mode enabled"
+    console.error(error);
+
+    showMessage(
+      "adminMessage",
+      error.message ||
+      "Could not reject song.",
+      "error"
     );
-
-
-    showPage("admin");
 
   }
 
@@ -2557,35 +4952,913 @@ function makeAdmin() {
 
 
 /* =========================================================
-   MODAL
+   WITHDRAWALS
+========================================================= */
+
+async function loadWithdrawals(){
+
+  if(!currentUser){
+    return;
+  }
+
+
+  const isAdmin =
+    await isCurrentUserAdmin();
+
+
+  if(!isAdmin){
+    return;
+  }
+
+
+  const tbody =
+    document.getElementById(
+      "withdrawalsTable"
+    );
+
+
+  tbody.innerHTML = `
+    <tr>
+      <td colspan="6">
+
+        <div class="loading">
+          Loading withdrawals...
+        </div>
+
+      </td>
+    </tr>
+  `;
+
+
+  try{
+
+    const {
+      data,
+      error
+    } = await sb
+      .from("withdrawals")
+      .select("*")
+      .order(
+        "created_at",
+        {
+          ascending:false
+        }
+      );
+
+
+    if(error){
+      throw error;
+    }
+
+
+    const withdrawals =
+      data || [];
+
+
+    if(withdrawals.length === 0){
+
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="6">
+
+            <div class="empty">
+              No withdrawal requests yet.
+            </div>
+
+          </td>
+        </tr>
+      `;
+
+      return;
+
+    }
+
+
+    tbody.innerHTML =
+      withdrawals.map(item => {
+
+        return `
+          <tr>
+
+            <td>
+              ${escapeHtml(
+                item.artist_id ||
+                "Unknown"
+              )}
+            </td>
+
+            <td>
+              UGX ${formatNumber(
+                item.amount || 0
+              )}
+            </td>
+
+            <td>
+              ${escapeHtml(
+                item.phone_number || ""
+              )}
+            </td>
+
+            <td>
+              ${escapeHtml(
+                item.network || "MTN"
+              )}
+            </td>
+
+            <td>
+
+              <span class="status ${escapeHtml(
+                item.status ||
+                "pending"
+              )}">
+
+                ${escapeHtml(
+                  item.status ||
+                  "pending"
+                )}
+
+              </span>
+
+            </td>
+
+            <td>
+
+              ${
+                item.status === "pending"
+                ? `
+                  <button
+                    class="btn btn-success"
+                    style="padding:7px 10px;"
+                    onclick="approveWithdrawal('${item.id}')">
+                    Approve
+                  </button>
+
+                  <button
+                    class="btn btn-danger"
+                    style="padding:7px 10px;margin-left:4px;"
+                    onclick="rejectWithdrawal('${item.id}')">
+                    Reject
+                  </button>
+                `
+                : ""
+              }
+
+              ${
+                item.status === "approved"
+                ? `
+                  <button
+                    class="btn btn-orange"
+                    style="padding:7px 10px;"
+                    onclick="markWithdrawalPaid('${item.id}')">
+                    Mark Paid
+                  </button>
+                `
+                : ""
+              }
+
+            </td>
+
+          </tr>
+        `;
+
+      }).join("");
+
+
+  }catch(error){
+
+    console.error(
+      "Withdrawals error:",
+      error
+    );
+
+
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="6">
+
+          <div class="empty">
+
+            ${escapeHtml(
+              error.message ||
+              "Could not load withdrawals."
+            )}
+
+          </div>
+
+        </td>
+      </tr>
+    `;
+
+  }
+
+}
+
+
+async function updateWithdrawalStatus(
+  withdrawalId,
+  status
+){
+
+  const isAdmin =
+    await isCurrentUserAdmin();
+
+
+  if(!isAdmin){
+
+    alert(
+      "You are not authorized."
+    );
+
+    return;
+
+  }
+
+
+  try{
+
+    const {
+      error
+    } = await sb
+      .from("withdrawals")
+      .update({
+        status:status,
+        processed_at:
+          status === "paid" ||
+          status === "rejected"
+            ? new Date().toISOString()
+            : null
+      })
+      .eq(
+        "id",
+        withdrawalId
+      );
+
+
+    if(error){
+      throw error;
+    }
+
+
+    showMessage(
+      "withdrawalAdminMessage",
+      "Withdrawal updated successfully.",
+      "success"
+    );
+
+
+    await loadWithdrawals();
+
+  }catch(error){
+
+    console.error(error);
+
+    showMessage(
+      "withdrawalAdminMessage",
+      error.message ||
+      "Could not update withdrawal.",
+      "error"
+    );
+
+  }
+
+}
+
+
+async function approveWithdrawal(id){
+
+  await updateWithdrawalStatus(
+    id,
+    "approved"
+  );
+
+}
+
+
+async function rejectWithdrawal(id){
+
+  if(
+    !confirm(
+      "Reject this withdrawal request?"
+    )
+  ){
+
+    return;
+
+  }
+
+
+  await updateWithdrawalStatus(
+    id,
+    "rejected"
+  );
+
+}
+
+
+async function markWithdrawalPaid(id){
+
+  if(
+    !confirm(
+      "Confirm that this MTN payment has been made manually?"
+    )
+  ){
+
+    return;
+
+  }
+
+
+  await updateWithdrawalStatus(
+    id,
+    "paid"
+  );
+
+}
+
+
+/* =========================================================
+   ADMINISTRATORS
+========================================================= */
+
+async function loadAdministrators(){
+
+  if(!isCurrentUserSuperAdmin()){
+
+    return;
+
+  }
+
+
+  const tbody =
+    document.getElementById(
+      "adminsTable"
+    );
+
+
+  tbody.innerHTML = `
+    <tr>
+      <td colspan="4">
+
+        <div class="loading">
+          Loading administrators...
+        </div>
+
+      </td>
+    </tr>
+  `;
+
+
+  try{
+
+    const {
+      data,
+      error
+    } = await sb
+      .from("admins")
+      .select(
+        "id,user_id,email,role,active"
+      )
+      .order(
+        "created_at",
+        {
+          ascending:true
+        }
+      );
+
+
+    if(error){
+      throw error;
+    }
+
+
+    const admins =
+      data || [];
+
+
+    if(admins.length === 0){
+
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="4">
+
+            <div class="empty">
+              No administrators found.
+            </div>
+
+          </td>
+        </tr>
+      `;
+
+      return;
+
+    }
+
+
+    tbody.innerHTML =
+      admins.map(admin => {
+
+        const isMe =
+          admin.user_id ===
+          currentUser.id;
+
+
+        return `
+          <tr>
+
+            <td>
+
+              ${escapeHtml(
+                admin.email || ""
+              )}
+
+              ${
+                isMe
+                ? `<small style="color:#777;">
+                    (You)
+                   </small>`
+                : ""
+              }
+
+            </td>
+
+            <td>
+
+              <span class="admin-badge">
+                ${escapeHtml(
+                  admin.role ||
+                  "admin"
+                )}
+              </span>
+
+            </td>
+
+            <td>
+
+              <span class="status ${
+                admin.active
+                ? "active"
+                : "inactive"
+              }">
+
+                ${
+                  admin.active
+                  ? "Active"
+                  : "Inactive"
+                }
+
+              </span>
+
+            </td>
+
+            <td>
+
+              ${
+                isMe
+                ? `<span style="color:#777;">
+                    Your account
+                   </span>`
+                : `
+                  <button
+                    class="btn ${
+                      admin.active
+                      ? "btn-danger"
+                      : "btn-success"
+                    }"
+                    style="padding:7px 10px;"
+                    onclick="toggleAdministrator(
+                      '${admin.user_id}',
+                      ${admin.active}
+                    )">
+
+                    ${
+                      admin.active
+                      ? "Deactivate"
+                      : "Activate"
+                    }
+
+                  </button>
+                `
+              }
+
+            </td>
+
+          </tr>
+        `;
+
+      }).join("");
+
+
+  }catch(error){
+
+    console.error(
+      "Admin list error:",
+      error
+    );
+
+
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="4">
+
+          <div class="empty">
+
+            ${escapeHtml(
+              error.message ||
+              "Could not load administrators."
+            )}
+
+          </div>
+
+        </td>
+      </tr>
+    `;
+
+  }
+
+}
+
+
+async function addAdministrator(){
+
+  if(!isCurrentUserSuperAdmin()){
+
+    alert(
+      "Only the Super Admin can add administrators."
+    );
+
+    return;
+
+  }
+
+
+  const email =
+    document
+      .getElementById(
+        "newAdminEmail"
+      )
+      .value
+      .trim();
+
+  const role =
+    document
+      .getElementById(
+        "newAdminRole"
+      )
+      .value;
+
+
+  if(!email){
+
+    showMessage(
+      "adminManagementMessage",
+      "Enter the administrator email.",
+      "error"
+    );
+
+    return;
+
+  }
+
+
+  try{
+
+    const {
+      data,
+      error
+    } = await sb.rpc(
+      "add_admin_by_email",
+      {
+        target_email:email,
+        target_role:role
+      }
+    );
+
+
+    if(error){
+      throw error;
+    }
+
+
+    showMessage(
+      "adminManagementMessage",
+      "Administrator added successfully.",
+      "success"
+    );
+
+
+    document.getElementById(
+      "newAdminEmail"
+    ).value = "";
+
+
+    await loadAdministrators();
+
+  }catch(error){
+
+    console.error(error);
+
+    showMessage(
+      "adminManagementMessage",
+      error.message ||
+      "Could not add administrator.",
+      "error"
+    );
+
+  }
+
+}
+
+
+async function toggleAdministrator(
+  userId,
+  currentStatus
+){
+
+  if(!isCurrentUserSuperAdmin()){
+
+    alert(
+      "Only the Super Admin can change administrator status."
+    );
+
+    return;
+
+  }
+
+
+  const newStatus =
+    !currentStatus;
+
+
+  const action =
+    newStatus
+    ? "activate"
+    : "deactivate";
+
+
+  if(
+    !confirm(
+      `Are you sure you want to ${action} this administrator?`
+    )
+  ){
+
+    return;
+
+  }
+
+
+  try{
+
+    const {
+      error
+    } = await sb
+      .from("admins")
+      .update({
+        active:newStatus
+      })
+      .eq(
+        "user_id",
+        userId
+      );
+
+
+    if(error){
+      throw error;
+    }
+
+
+    showMessage(
+      "adminManagementMessage",
+      `Administrator ${action}d successfully.`,
+      "success"
+    );
+
+
+    await loadAdministrators();
+
+  }catch(error){
+
+    console.error(error);
+
+    showMessage(
+      "adminManagementMessage",
+      error.message ||
+      "Could not update administrator.",
+      "error"
+    );
+
+  }
+
+}
+
+
+/* =========================================================
+   UTILITIES
+========================================================= */
+
+function showMessage(
+  elementId,
+  message,
+  type="success"
+){
+
+  const element =
+    document.getElementById(
+      elementId
+    );
+
+
+  if(!element){
+    return;
+  }
+
+
+  element.textContent =
+    message;
+
+  element.className =
+    "message show " +
+    type;
+
+}
+
+
+function clearMessage(
+  elementId
+){
+
+  const element =
+    document.getElementById(
+      elementId
+    );
+
+
+  if(!element){
+    return;
+  }
+
+
+  element.textContent = "";
+
+  element.className =
+    "message";
+
+}
+
+
+function formatNumber(number){
+
+  return Number(
+    number || 0
+  ).toLocaleString();
+
+}
+
+
+function getFileExtension(
+  filename
+){
+
+  const parts =
+    filename.split(".");
+
+  return (
+    parts.length > 1
+    ? parts.pop()
+    : "file"
+  )
+  .toLowerCase()
+  .replace(
+    /[^a-z0-9]/g,
+    ""
+  );
+
+}
+
+
+function safeFileName(
+  filename
+){
+
+  return filename
+    .toLowerCase()
+    .replace(
+      /[^a-z0-9._-]/g,
+      "-"
+    );
+
+}
+
+
+function getInitials(name){
+
+  if(!name){
+    return "NS";
+  }
+
+
+  const parts =
+    name.trim().split(/\s+/);
+
+
+  if(parts.length === 1){
+
+    return parts[0]
+      .substring(0,2)
+      .toUpperCase();
+
+  }
+
+
+  return (
+    parts[0][0] +
+    parts[1][0]
+  ).toUpperCase();
+
+}
+
+
+function escapeHtml(value){
+
+  return String(
+    value ?? ""
+  )
+  .replace(
+    /&/g,
+    "&amp;"
+  )
+  .replace(
+    /</g,
+    "&lt;"
+  )
+  .replace(
+    />/g,
+    "&gt;"
+  )
+  .replace(
+    /"/g,
+    "&quot;"
+  )
+  .replace(
+    /'/g,
+    "&#039;"
+  );
+
+}
+
+
+function escapeAttribute(value){
+
+  return escapeHtml(value);
+
+}
+
+
+/* =========================================================
+   PRIVACY / TERMS
+========================================================= */
+
+function showPrivacy(){
+
+  alert(
+    "NileSoniq Privacy Policy\n\n" +
+    "NileSoniq uses account information and uploaded " +
+    "music to provide its music platform services."
+  );
+
+}
+
+
+function showTerms(){
+
+  alert(
+    "NileSoniq Terms\n\n" +
+    "Artists must only upload music and artwork they " +
+    "have the right to distribute."
+  );
+
+}
+
+
+/* =========================================================
+   CLOSE AUTH MODAL WHEN CLICKING OUTSIDE
 ========================================================= */
 
 document
   .getElementById("authModal")
   .addEventListener(
     "click",
-    function(event) {
+    function(event){
 
-      if (event.target === this) {
-        closeAuth();
+      if(event.target === this){
+
+        closeAuthModal();
+
       }
 
     }
   );
 
+</script>
 
-/* =========================================================
-   START
-========================================================= */
-
-save();
-
-nav();
-
-renderHome();
-
-renderArtists();
-
-makeAdmin();
-
-  </script>
+</body>
+   </html>
