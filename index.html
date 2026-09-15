@@ -303,30 +303,41 @@ nav button.active{
   margin-bottom:4px;
 }
 
+
+/* =========================================================
+   COMPACT SONG LIST
+========================================================= */
+
 .song-grid{
-  display:grid;
-  grid-template-columns:repeat(4,1fr);
-  gap:18px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
 }
 
 .song-card{
+  width:100%;
+  min-height:82px;
+  display:flex;
+  align-items:center;
+  gap:14px;
   background:var(--card);
   border:1px solid var(--border);
-  border-radius:18px;
-  padding:12px;
+  border-radius:14px;
+  padding:10px;
   overflow:hidden;
-  transition:.25s;
+  transition:.2s;
 }
 
 .song-card:hover{
-  transform:translateY(-4px);
   border-color:#3b3b3b;
+  transform:none;
 }
 
 .cover{
-  width:100%;
-  aspect-ratio:1;
-  border-radius:13px;
+  width:62px;
+  height:62px;
+  min-width:62px;
+  border-radius:10px;
   overflow:hidden;
   background:#222;
   position:relative;
@@ -344,14 +355,14 @@ nav button.active{
   display:flex;
   align-items:center;
   justify-content:center;
-  font-size:50px;
+  font-size:25px;
   color:var(--orange);
   background:linear-gradient(135deg,#242424,#111);
 }
 
 .play-circle{
-  width:48px;
-  height:48px;
+  width:30px;
+  height:30px;
   border-radius:50%;
   background:var(--orange);
   color:white;
@@ -360,13 +371,15 @@ nav button.active{
   align-items:center;
   justify-content:center;
   position:absolute;
-  right:10px;
-  bottom:10px;
-  font-size:18px;
+  right:4px;
+  bottom:4px;
+  font-size:12px;
 }
 
 .song-info{
-  padding:13px 3px 5px;
+  flex:1;
+  min-width:0;
+  padding:0;
 }
 
 .song-title{
@@ -374,30 +387,36 @@ nav button.active{
   white-space:nowrap;
   overflow:hidden;
   text-overflow:ellipsis;
+  font-size:15px;
 }
 
 .artist-name{
   color:var(--muted);
-  font-size:14px;
-  margin-top:3px;
+  font-size:13px;
+  margin-top:2px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
 }
 
 .song-meta{
   display:flex;
-  justify-content:space-between;
+  gap:15px;
   color:#888;
-  font-size:12px;
-  margin-top:10px;
+  font-size:11px;
+  margin-top:4px;
 }
 
 .download-btn{
-  width:100%;
-  margin-top:12px;
-  padding:10px 12px;
+  width:auto;
+  min-width:100px;
+  margin-top:0;
+  padding:8px 11px;
   border:1px solid #333;
-  border-radius:10px;
+  border-radius:9px;
   background:#222;
   color:white;
+  font-size:12px;
   font-weight:700;
   cursor:pointer;
   transition:.2s;
@@ -406,7 +425,7 @@ nav button.active{
 .download-btn:hover{
   background:var(--orange);
   border-color:var(--orange);
-  transform:translateY(-1px);
+  transform:none;
 }
 
 .download-btn:disabled{
@@ -414,6 +433,11 @@ nav button.active{
   cursor:not-allowed;
   transform:none;
 }
+
+
+/* =========================================================
+   ARTISTS
+========================================================= */
 
 .artist-grid{
   display:grid;
@@ -895,9 +919,13 @@ footer{
   flex-wrap:wrap;
 }
 
+
+/* =========================================================
+   TABLET
+========================================================= */
+
 @media(max-width:950px){
 
-  .song-grid,
   .artist-grid{
     grid-template-columns:repeat(3,1fr);
   }
@@ -911,6 +939,11 @@ footer{
   }
 
 }
+
+
+/* =========================================================
+   MOBILE
+========================================================= */
 
 @media(max-width:760px){
 
@@ -952,7 +985,6 @@ footer{
     padding:45px 25px;
   }
 
-  .song-grid,
   .artist-grid{
     grid-template-columns:repeat(2,1fr);
   }
@@ -971,6 +1003,11 @@ footer{
 
 }
 
+
+/* =========================================================
+   SMALL PHONES
+========================================================= */
+
 @media(max-width:480px){
 
   .container{
@@ -986,14 +1023,48 @@ footer{
     font-size:12px;
   }
 
-  .song-grid,
-  .artist-grid{
-    grid-template-columns:1fr 1fr;
-    gap:10px;
+  .song-grid{
+    gap:8px;
   }
 
   .song-card{
+    min-height:70px;
     padding:8px;
+    gap:10px;
+  }
+
+  .cover{
+    width:52px;
+    height:52px;
+    min-width:52px;
+    border-radius:8px;
+  }
+
+  .play-circle{
+    width:27px;
+    height:27px;
+    right:3px;
+    bottom:3px;
+    font-size:11px;
+  }
+
+  .song-title{
+    font-size:14px;
+  }
+
+  .artist-name{
+    font-size:12px;
+  }
+
+  .song-meta{
+    font-size:10px;
+    gap:10px;
+  }
+
+  .download-btn{
+    min-width:auto;
+    padding:7px 8px;
+    font-size:11px;
   }
 
   .hero{
@@ -1032,11 +1103,6 @@ footer{
 
   .footer-links{
     gap:12px;
-  }
-
-  .download-btn{
-    font-size:12px;
-    padding:9px 8px;
   }
 
 }
@@ -1149,7 +1215,7 @@ Upload Your Music
 id="searchInput"
 type="search"
 placeholder="Search songs or artists..."
-oninput="searchSongs">
+oninput="searchSongs()">
 
 </div>
 
@@ -3685,13 +3751,13 @@ function renderSongCards(
 
             </div>
 
-            <button
-              class="download-btn"
-              onclick="downloadSong('${song.id}')">
-              ↓ Download
-            </button>
-
           </div>
+
+          <button
+            class="download-btn"
+            onclick="downloadSong('${song.id}')">
+            ↓ Download
+          </button>
 
         </div>
       `;
@@ -3795,11 +3861,6 @@ async function downloadSong(songId){
 
     link.href =
       blobUrl;
-
-    /*
-      Download filename:
-      Artist Name - Song Title.mp3
-    */
 
     const artistName =
       song.artist ||
@@ -5656,4 +5717,4 @@ document
 </script>
 
 </body>
-  </html>
+</html>
