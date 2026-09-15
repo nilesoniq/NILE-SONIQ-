@@ -12,7 +12,6 @@ content="NileSoniq — Uganda's music platform. Stream music, discover artists a
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <style>
-
 :root{
   --bg:#0a0a0a;
   --bg2:#111;
@@ -42,7 +41,7 @@ body{
   background:var(--bg);
   color:white;
   line-height:1.5;
-  padding-bottom:100px;
+  padding-bottom:105px;
 }
 
 button,input,textarea,select{
@@ -66,6 +65,8 @@ img{
 .hidden{
   display:none!important;
 }
+
+/* HEADER */
 
 header{
   position:sticky;
@@ -189,6 +190,8 @@ nav button.active{
   display:block;
 }
 
+/* HERO */
+
 .hero{
   padding:70px 0 55px;
 }
@@ -239,6 +242,8 @@ nav button.active{
   gap:12px;
 }
 
+/* SECTIONS */
+
 .section{
   padding:35px 0;
 }
@@ -278,16 +283,11 @@ nav button.active{
 }
 
 .ad-space{
-  margin:10px 0 10px;
+  margin:10px 0;
   min-height:120px;
   border:1px dashed #333;
   border-radius:18px;
-  background:
-    linear-gradient(
-      135deg,
-      #101010,
-      #0c0c0c
-    );
+  background:linear-gradient(135deg,#101010,#0c0c0c);
   display:flex;
   align-items:center;
   justify-content:center;
@@ -303,10 +303,7 @@ nav button.active{
   margin-bottom:4px;
 }
 
-
-/* =========================================================
-   COMPACT SONG LIST
-========================================================= */
+/* SONG LIST */
 
 .song-grid{
   display:flex;
@@ -329,8 +326,12 @@ nav button.active{
 }
 
 .song-card:hover{
-  border-color:#3b3b3b;
-  transform:none;
+  border-color:#444;
+}
+
+.song-card.playing{
+  border-color:var(--orange);
+  background:#1c1510;
 }
 
 .cover{
@@ -379,7 +380,6 @@ nav button.active{
 .song-info{
   flex:1;
   min-width:0;
-  padding:0;
 }
 
 .song-title{
@@ -410,7 +410,6 @@ nav button.active{
 .download-btn{
   width:auto;
   min-width:100px;
-  margin-top:0;
   padding:8px 11px;
   border:1px solid #333;
   border-radius:9px;
@@ -425,19 +424,14 @@ nav button.active{
 .download-btn:hover{
   background:var(--orange);
   border-color:var(--orange);
-  transform:none;
 }
 
 .download-btn:disabled{
   opacity:.6;
   cursor:not-allowed;
-  transform:none;
 }
 
-
-/* =========================================================
-   ARTISTS
-========================================================= */
+/* ARTISTS */
 
 .artist-grid{
   display:grid;
@@ -489,10 +483,7 @@ nav button.active{
   font-size:13px;
 }
 
-
-/* =========================================================
-   DASHBOARD BASE
-========================================================= */
+/* DASHBOARD */
 
 .dashboard-header{
   padding:45px 0 25px;
@@ -534,11 +525,7 @@ nav button.active{
 .balance-card{
   border-color:rgba(255,106,0,.35);
   background:
-    radial-gradient(
-      circle at 90% 10%,
-      rgba(255,106,0,.12),
-      transparent 45%
-    ),
+    radial-gradient(circle at 90% 10%,rgba(255,106,0,.12),transparent 45%),
     var(--card);
   margin-bottom:20px;
 }
@@ -712,10 +699,7 @@ td{
   border-color:var(--orange);
 }
 
-
-/* =========================================================
-   SMALLER ARTIST DASHBOARD
-========================================================= */
+/* SMALL DASHBOARDS */
 
 #dashboardPage .container{
   width:min(940px,calc(100% - 32px));
@@ -727,7 +711,6 @@ td{
 
 #dashboardPage .dashboard-header h1{
   font-size:28px;
-  letter-spacing:-.5px;
 }
 
 #dashboardPage .dashboard-header p{
@@ -755,11 +738,6 @@ td{
 
 #dashboardPage .balance-card{
   margin-bottom:14px!important;
-}
-
-#dashboardPage .balance-card p{
-  font-size:10px!important;
-  margin-top:5px!important;
 }
 
 #dashboardPage .dashboard-card{
@@ -822,13 +800,13 @@ td{
   min-width:540px;
 }
 
-#dashboardPage th{
-  font-size:10px;
-}
-
 #dashboardPage th,
 #dashboardPage td{
   padding:9px 8px;
+}
+
+#dashboardPage th{
+  font-size:10px;
 }
 
 #dashboardPage td{
@@ -840,19 +818,7 @@ td{
   font-size:9px;
 }
 
-#dashboardPage .empty{
-  padding:25px 15px;
-}
-
-#dashboardPage .loading{
-  padding:20px;
-  font-size:11px;
-}
-
-
-/* =========================================================
-   SMALLER ADMIN DASHBOARD
-========================================================= */
+/* ADMIN */
 
 #adminPage .container{
   width:min(980px,calc(100% - 32px));
@@ -864,7 +830,6 @@ td{
 
 #adminPage .dashboard-header h1{
   font-size:28px;
-  letter-spacing:-.5px;
 }
 
 #adminPage .dashboard-header p{
@@ -934,60 +899,9 @@ td{
   font-size:9px;
 }
 
-#adminPage .form-grid{
-  gap:9px;
-}
+/* FOOTER */
 
-#adminPage .field{
-  margin-bottom:8px;
-}
-
-#adminPage .field label{
-  font-size:10px;
-  margin-bottom:4px;
-}
-
-#adminPage .field input,
-#adminPage .field textarea,
-#adminPage .field select{
-  padding:8px 9px;
-  border-radius:7px;
-  font-size:11px;
-}
-
-#adminPage .admin-badge{
-  font-size:9px;
-  padding:4px 7px;
-}
-
-#adminPage .empty{
-  padding:25px 15px;
-  font-size:11px;
-}
-
-#adminPage .loading{
-  padding:20px;
-  font-size:11px;
-}
-
-
-/* =========================================================
-   FOOTER
-========================================================= */
-
-.footer-admin{
-  background:transparent;
-  border:none;
-  color:#777;
-  padding:0;
-  font-size:13px;
-  cursor:pointer;
-}
-
-.footer-admin:hover{
-  color:var(--orange);
-}
-
+.footer-admin,
 .footer-admin-login{
   background:transparent;
   border:none;
@@ -997,14 +911,39 @@ td{
   cursor:pointer;
 }
 
+.footer-admin:hover,
 .footer-admin-login:hover{
   color:var(--orange);
 }
 
+footer{
+  margin-top:60px;
+  padding:35px 0;
+  border-top:1px solid var(--border);
+  color:#777;
+}
 
-/* =========================================================
-   MODAL
-========================================================= */
+.footer-inner{
+  display:flex;
+  justify-content:space-between;
+  gap:20px;
+  flex-wrap:wrap;
+}
+
+.footer-brand{
+  font-weight:800;
+  color:#ddd;
+}
+
+.footer-links{
+  display:flex;
+  gap:18px;
+  font-size:13px;
+  align-items:center;
+  flex-wrap:wrap;
+}
+
+/* MODAL */
 
 .modal{
   display:none;
@@ -1092,9 +1031,8 @@ td{
   border:1px solid rgba(46,204,113,.2);
 }
 
-
 /* =========================================================
-   PLAYER
+   MUSIC PLAYER
 ========================================================= */
 
 .player{
@@ -1103,16 +1041,17 @@ td{
   right:0;
   bottom:0;
   z-index:1500;
-  background:rgba(17,17,17,.97);
+  background:rgba(17,17,17,.98);
   border-top:1px solid var(--border);
-  padding:12px 20px;
+  padding:10px 20px;
+  box-shadow:0 -8px 30px rgba(0,0,0,.35);
 }
 
 .player-inner{
   max-width:1180px;
   margin:auto;
   display:grid;
-  grid-template-columns:1fr auto 1fr;
+  grid-template-columns:280px 1fr 180px;
   align-items:center;
   gap:20px;
 }
@@ -1151,37 +1090,93 @@ td{
   text-overflow:ellipsis;
 }
 
+.now-title strong{
+  font-size:14px;
+}
+
 .now-title span{
   color:var(--muted);
   font-size:12px;
 }
 
+.player-center{
+  min-width:0;
+}
+
 .player-controls{
   display:flex;
   align-items:center;
-  gap:12px;
   justify-content:center;
+  gap:18px;
+  margin-bottom:5px;
+}
+
+.player-control{
+  width:30px;
+  height:30px;
+  border:none;
+  background:transparent;
+  color:#ddd;
+  font-size:17px;
+  border-radius:50%;
+}
+
+.player-control:hover{
+  color:var(--orange);
 }
 
 .player-play{
-  width:45px;
-  height:45px;
+  width:40px;
+  height:40px;
   border-radius:50%;
   background:var(--orange);
   border:none;
   color:white;
+  font-size:15px;
 }
 
-.player-right{
+.player-play:hover{
+  background:var(--orange2);
+  transform:scale(1.04);
+}
+
+.progress-row{
   display:flex;
-  justify-content:flex-end;
+  align-items:center;
+  gap:8px;
+  color:#999;
+  font-size:10px;
 }
 
-.player-right audio{
-  width:100%;
-  max-width:300px;
-  height:36px;
+.progress-row span{
+  width:35px;
+  text-align:center;
 }
+
+#progressBar{
+  flex:1;
+  accent-color:var(--orange);
+  cursor:pointer;
+}
+
+.player-volume{
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:8px;
+  color:#aaa;
+}
+
+#volumeBar{
+  width:100px;
+  accent-color:var(--orange);
+}
+
+#audioPlayer{
+  display:none;
+}
+
+/* EMPTY */
 
 .empty{
   padding:40px 20px;
@@ -1197,37 +1192,7 @@ td{
   color:var(--muted);
 }
 
-footer{
-  margin-top:60px;
-  padding:35px 0;
-  border-top:1px solid var(--border);
-  color:#777;
-}
-
-.footer-inner{
-  display:flex;
-  justify-content:space-between;
-  gap:20px;
-  flex-wrap:wrap;
-}
-
-.footer-brand{
-  font-weight:800;
-  color:#ddd;
-}
-
-.footer-links{
-  display:flex;
-  gap:18px;
-  font-size:13px;
-  align-items:center;
-  flex-wrap:wrap;
-}
-
-
-/* =========================================================
-   TABLET
-========================================================= */
+/* TABLET */
 
 @media(max-width:950px){
 
@@ -1236,19 +1201,16 @@ footer{
   }
 
   .player-inner{
-    grid-template-columns:1fr auto;
+    grid-template-columns:230px 1fr;
   }
 
-  .player-right{
+  .player-volume{
     display:none;
   }
 
 }
 
-
-/* =========================================================
-   MOBILE
-========================================================= */
+/* MOBILE */
 
 @media(max-width:760px){
 
@@ -1310,17 +1272,43 @@ footer{
     grid-template-columns:repeat(3,1fr);
   }
 
+  .player{
+    padding:8px 10px;
+  }
+
+  .player-inner{
+    grid-template-columns:1fr;
+    gap:4px;
+  }
+
+  .now-playing{
+    display:none;
+  }
+
+  .player-center{
+    width:100%;
+  }
+
+  .player-controls{
+    margin-bottom:3px;
+  }
+
+  .progress-row{
+    width:100%;
+  }
+
 }
 
-
-/* =========================================================
-   SMALL PHONES
-========================================================= */
+/* SMALL PHONES */
 
 @media(max-width:480px){
 
+  body{
+    padding-bottom:92px;
+  }
+
   .container{
-    width:min(100% - 20px,1180px);
+    width:calc(100% - 20px);
   }
 
   .logo{
@@ -1346,7 +1334,6 @@ footer{
     width:52px;
     height:52px;
     min-width:52px;
-    border-radius:8px;
   }
 
   .play-circle{
@@ -1354,7 +1341,6 @@ footer{
     height:27px;
     right:3px;
     bottom:3px;
-    font-size:11px;
   }
 
   .song-title{
@@ -1373,7 +1359,7 @@ footer{
   .download-btn{
     min-width:auto;
     padding:7px 8px;
-    font-size:11px;
+    font-size:10px;
   }
 
   .hero{
@@ -1393,25 +1379,13 @@ footer{
     font-size:23px;
   }
 
-  .player{
-    padding:8px 10px;
+  .player-control{
+    font-size:15px;
   }
 
-  .player-inner{
-    gap:10px;
-  }
-
-  .now-cover{
-    width:42px;
-    height:42px;
-  }
-
-  .ad-space{
-    min-height:100px;
-  }
-
-  .footer-links{
-    gap:12px;
+  .player-play{
+    width:38px;
+    height:38px;
   }
 
   #dashboardPage .stats-grid{
@@ -1424,14 +1398,12 @@ footer{
   }
 
 }
-
 </style>
 </head>
 
 <body>
 
 <header>
-
 <div class="header-inner">
 
 <a href="#"
@@ -1480,13 +1452,13 @@ Logout
 </div>
 
 </div>
-
 </header>
 
 <main>
 
-<section id="homePage"
-class="page active">
+<!-- HOME -->
+
+<section id="homePage" class="page active">
 
 <div class="container">
 
@@ -1524,7 +1496,6 @@ Upload Your Music
 </div>
 
 </div>
-
 </div>
 
 <div class="search-box">
@@ -1533,35 +1504,26 @@ Upload Your Music
 id="searchInput"
 type="search"
 placeholder="Search songs or artists..."
-oninput="searchSongs">
+oninput="searchSongs()">
 
 </div>
 
-<section class="ad-space"
-aria-label="Advertisement">
+<section class="ad-space">
 
 <div>
-
-<strong>
-ADVERTISEMENT
-</strong>
-
+<strong>ADVERTISEMENT</strong>
 Space reserved for ads
-
 </div>
 
 </section>
 
-<section id="newReleases"
-class="section">
+<section id="newReleases" class="section">
 
 <div class="section-heading">
 
 <div>
 
-<h2>
-New Releases
-</h2>
+<h2>New Releases</h2>
 
 <p>
 The latest approved music on NileSoniq.
@@ -1582,16 +1544,13 @@ Loading new releases...
 
 </section>
 
-<section id="topCharts"
-class="section">
+<section id="topCharts" class="section">
 
 <div class="section-heading">
 
 <div>
 
-<h2>
-Top Charts
-</h2>
+<h2>Top Charts</h2>
 
 <p>
 The most-played songs on NileSoniq.
@@ -1612,16 +1571,13 @@ Loading top charts...
 
 </section>
 
-<section id="trending"
-class="section">
+<section id="trending" class="section">
 
 <div class="section-heading">
 
 <div>
 
-<h2>
-Trending Songs
-</h2>
+<h2>Trending Songs</h2>
 
 <p>
 Fresh music from NileSoniq artists.
@@ -1643,20 +1599,17 @@ Loading music...
 </section>
 
 </div>
-
 </section>
 
+<!-- ARTISTS -->
 
-<section id="artistsPage"
-class="page">
+<section id="artistsPage" class="page">
 
 <div class="container">
 
 <div class="dashboard-header">
 
-<h1>
-NileSoniq Artists
-</h1>
+<h1>NileSoniq Artists</h1>
 
 <p>
 Discover artists and their music.
@@ -1674,20 +1627,17 @@ Loading artists...
 </div>
 
 </div>
-
 </section>
 
+<!-- ARTIST DASHBOARD -->
 
-<section id="dashboardPage"
-class="page">
+<section id="dashboardPage" class="page">
 
 <div class="container">
 
 <div class="dashboard-header">
 
-<h1>
-Artist Dashboard
-</h1>
+<h1>Artist Dashboard</h1>
 
 <p>
 Manage your profile, music and earnings.
@@ -1695,12 +1645,9 @@ Manage your profile, music and earnings.
 
 </div>
 
-<div id="dashboardLoggedOut"
-class="empty">
+<div id="dashboardLoggedOut" class="empty">
 
-<h3>
-Artist login required
-</h3>
+<h3>Artist login required</h3>
 
 <p style="margin:8px 0 18px;">
 Login or create an artist account to access your dashboard.
@@ -1713,56 +1660,30 @@ Artist Login
 
 </div>
 
-<div id="dashboardContent"
-class="hidden">
-
+<div id="dashboardContent" class="hidden">
 
 <div class="stats-grid">
 
 <div class="stat-card">
-
-<span>
-Total Plays
-</span>
-
-<strong id="totalPlays">
-0
-</strong>
-
+<span>Total Plays</span>
+<strong id="totalPlays">0</strong>
 </div>
 
 <div class="stat-card">
-
-<span>
-Estimated Earnings
-</span>
-
-<strong id="totalEarnings">
-UGX 0
-</strong>
-
+<span>Estimated Earnings</span>
+<strong id="totalEarnings">UGX 0</strong>
 </div>
 
 <div class="stat-card">
-
-<span>
-Your Songs
-</span>
-
-<strong id="totalSongs">
-0
-</strong>
-
+<span>Your Songs</span>
+<strong id="totalSongs">0</strong>
 </div>
 
 </div>
-
 
 <div class="stat-card balance-card">
 
-<span>
-Available Balance
-</span>
+<span>Available Balance</span>
 
 <strong id="availableBalance">
 UGX 0
@@ -1774,12 +1695,9 @@ Minimum withdrawal: UGX 10,000
 
 </div>
 
-
 <div class="dashboard-card">
 
-<h2>
-Withdraw Earnings
-</h2>
+<h2>Withdraw Earnings</h2>
 
 <p class="withdrawal-minimum">
 You can request a withdrawal when your available balance
@@ -1793,9 +1711,7 @@ class="message"></div>
 
 <div class="field">
 
-<label>
-Amount to Withdraw
-</label>
+<label>Amount to Withdraw</label>
 
 <input
 id="withdrawAmount"
@@ -1808,9 +1724,7 @@ step="1000">
 
 <div class="field">
 
-<label>
-Payment Method
-</label>
+<label>Payment Method</label>
 
 <select id="paymentMethod">
 
@@ -1836,9 +1750,7 @@ Bank Transfer
 
 <div class="field full">
 
-<label>
-Payment Details
-</label>
+<label>Payment Details</label>
 
 <textarea
 id="paymentDetails"
@@ -1853,52 +1765,29 @@ placeholder="For Mobile Money enter your phone number. For bank transfer enter y
 id="withdrawButton"
 class="btn btn-orange"
 onclick="requestWithdrawal()">
-
 Request Withdrawal
-
 </button>
 
 </div>
 
-
 <div class="dashboard-card">
 
-<h2>
-My Withdrawal Requests
-</h2>
+<h2>My Withdrawal Requests</h2>
 
 <div class="table-wrap">
 
 <table>
 
 <thead>
-
 <tr>
-
 <th>Amount</th>
 <th>Payment Method</th>
 <th>Status</th>
 <th>Date</th>
-
 </tr>
-
 </thead>
 
-<tbody id="myWithdrawalsTable">
-
-<tr>
-
-<td colspan="4">
-
-<div class="loading">
-Loading withdrawals...
-</div>
-
-</td>
-
-</tr>
-
-</tbody>
+<tbody id="myWithdrawalsTable"></tbody>
 
 </table>
 
@@ -1906,12 +1795,9 @@ Loading withdrawals...
 
 </div>
 
-
 <div class="dashboard-card">
 
-<h2>
-Artist Profile
-</h2>
+<h2>Artist Profile</h2>
 
 <div id="profileMessage"
 class="message"></div>
@@ -1920,9 +1806,7 @@ class="message"></div>
 
 <div class="field">
 
-<label>
-Artist Name
-</label>
+<label>Artist Name</label>
 
 <input
 id="artistName"
@@ -1933,9 +1817,7 @@ placeholder="Your artist name">
 
 <div class="field">
 
-<label>
-Location
-</label>
+<label>Location</label>
 
 <input
 id="artistLocation"
@@ -1946,9 +1828,7 @@ placeholder="e.g. Arua, Uganda">
 
 <div class="field full">
 
-<label>
-Bio
-</label>
+<label>Bio</label>
 
 <textarea
 id="artistBio"
@@ -1958,9 +1838,7 @@ placeholder="Tell fans about yourself..."></textarea>
 
 <div class="field full">
 
-<label>
-Artist Photo
-</label>
+<label>Artist Photo</label>
 
 <input
 id="avatarFile"
@@ -1978,12 +1856,9 @@ Save Profile
 
 </div>
 
-
 <div class="dashboard-card">
 
-<h2>
-Upload New Song
-</h2>
+<h2>Upload New Song</h2>
 
 <div id="uploadMessage"
 class="message"></div>
@@ -1992,9 +1867,7 @@ class="message"></div>
 
 <div class="field">
 
-<label>
-Song Title
-</label>
+<label>Song Title</label>
 
 <input
 id="songTitle"
@@ -2005,9 +1878,7 @@ placeholder="Song title">
 
 <div class="field">
 
-<label>
-Artist Name
-</label>
+<label>Artist Name</label>
 
 <input
 id="songArtist"
@@ -2018,9 +1889,7 @@ placeholder="Artist name">
 
 <div class="field">
 
-<label>
-Audio File
-</label>
+<label>Audio File</label>
 
 <input
 id="audioFile"
@@ -2031,9 +1900,7 @@ accept="audio/*">
 
 <div class="field">
 
-<label>
-Cover Image
-</label>
+<label>Cover Image</label>
 
 <input
 id="coverFile"
@@ -2056,12 +1923,9 @@ Uploaded songs are sent for admin approval before appearing publicly.
 
 </div>
 
-
 <div class="dashboard-card">
 
-<h2>
-My Songs
-</h2>
+<h2>My Songs</h2>
 
 <div class="table-wrap">
 
@@ -2070,12 +1934,10 @@ My Songs
 <thead>
 
 <tr>
-
 <th>Song</th>
 <th>Plays</th>
 <th>Likes</th>
 <th>Status</th>
-
 </tr>
 
 </thead>
@@ -2089,22 +1951,18 @@ My Songs
 </div>
 
 </div>
-
 </div>
-
 </section>
 
+<!-- ADMIN -->
 
-<section id="adminPage"
-class="page">
+<section id="adminPage" class="page">
 
 <div class="container">
 
 <div class="dashboard-header">
 
-<h1>
-Admin Dashboard
-</h1>
+<h1>Admin Dashboard</h1>
 
 <p>
 Manage NileSoniq music, withdrawals and administrators.
@@ -2117,12 +1975,9 @@ ADMIN
 
 </div>
 
-<div id="adminDenied"
-class="empty hidden">
+<div id="adminDenied" class="empty hidden">
 
-<h3>
-Admin access required
-</h3>
+<h3>Admin access required</h3>
 
 <p style="margin-top:8px;">
 You do not have permission to access this section.
@@ -2130,8 +1985,7 @@ You do not have permission to access this section.
 
 </div>
 
-<div id="adminContent"
-class="hidden">
+<div id="adminContent" class="hidden">
 
 <div class="admin-tabs">
 
@@ -2154,13 +2008,10 @@ Administrators
 
 </div>
 
-
 <div id="adminSongsPanel"
 class="dashboard-card">
 
-<h2>
-Song Submissions
-</h2>
+<h2>Song Submissions</h2>
 
 <div id="adminMessage"
 class="message"></div>
@@ -2172,13 +2023,11 @@ class="message"></div>
 <thead>
 
 <tr>
-
 <th>Song</th>
 <th>Artist</th>
 <th>Plays</th>
 <th>Status</th>
 <th>Action</th>
-
 </tr>
 
 </thead>
@@ -2191,13 +2040,10 @@ class="message"></div>
 
 </div>
 
-
 <div id="adminWithdrawalsPanel"
 class="dashboard-card hidden">
 
-<h2>
-Withdrawal Requests
-</h2>
+<h2>Withdrawal Requests</h2>
 
 <div id="withdrawalAdminMessage"
 class="message"></div>
@@ -2209,14 +2055,12 @@ class="message"></div>
 <thead>
 
 <tr>
-
 <th>Artist</th>
 <th>Amount</th>
 <th>Payment Method</th>
 <th>Payment Details</th>
 <th>Status</th>
 <th>Action</th>
-
 </tr>
 
 </thead>
@@ -2229,13 +2073,10 @@ class="message"></div>
 
 </div>
 
-
 <div id="adminManagementPanel"
 class="dashboard-card hidden">
 
-<h2>
-Administrator Management
-</h2>
+<h2>Administrator Management</h2>
 
 <div id="adminManagementMessage"
 class="message"></div>
@@ -2244,9 +2085,7 @@ class="message"></div>
 
 <div class="field">
 
-<label>
-Administrator Email
-</label>
+<label>Administrator Email</label>
 
 <input
 id="newAdminEmail"
@@ -2257,15 +2096,11 @@ placeholder="artist@example.com">
 
 <div class="field">
 
-<label>
-Role
-</label>
+<label>Role</label>
 
 <select id="newAdminRole">
 
-<option value="admin">
-Admin
-</option>
+<option value="admin">Admin</option>
 
 <option value="super_admin">
 Super Admin
@@ -2290,12 +2125,10 @@ class="table-wrap">
 <thead>
 
 <tr>
-
 <th>Email</th>
 <th>Role</th>
 <th>Status</th>
 <th>Action</th>
-
 </tr>
 
 </thead>
@@ -2309,13 +2142,12 @@ class="table-wrap">
 </div>
 
 </div>
-
 </div>
-
 </section>
 
 </main>
 
+<!-- FOOTER -->
 
 <footer>
 
@@ -2368,14 +2200,12 @@ Admin
 </div>
 
 </div>
-
 </div>
-
 </footer>
 
+<!-- AUTH MODAL -->
 
-<div id="authModal"
-class="modal">
+<div id="authModal" class="modal">
 
 <div class="modal-box">
 
@@ -2413,9 +2243,7 @@ class="message"></div>
 <div id="signupNameField"
 class="field hidden">
 
-<label>
-Artist Name
-</label>
+<label>Artist Name</label>
 
 <input
 id="signupArtistName"
@@ -2426,9 +2254,7 @@ placeholder="Your artist name">
 
 <div class="field">
 
-<label>
-Email
-</label>
+<label>Email</label>
 
 <input
 id="authEmail"
@@ -2439,9 +2265,7 @@ placeholder="you@example.com">
 
 <div class="field">
 
-<label>
-Password
-</label>
+<label>Password</label>
 
 <input
 id="authPassword"
@@ -2458,9 +2282,9 @@ Login
 </button>
 
 </div>
-
 </div>
 
+<!-- MUSIC PLAYER -->
 
 <div class="player">
 
@@ -2468,8 +2292,19 @@ Login
 
 <div class="now-playing">
 
-<div id="nowCover"
-class="now-cover"></div>
+<div id="nowCover" class="now-cover">
+
+<div style="
+height:100%;
+display:flex;
+align-items:center;
+justify-content:center;
+color:#ff6a00;
+font-size:22px;">
+♪ 
+</div>
+
+</div>
 
 <div class="now-title">
 
@@ -2485,30 +2320,84 @@ Select a song
 
 </div>
 
+<div class="player-center">
+
 <div class="player-controls">
 
-<button class="player-play"
-onclick="togglePlay()">
+<button
+class="player-control"
+onclick="previousSong()"
+title="Previous">
+⏮
+</button>
+
+<button
+id="playerPlayButton"
+class="player-play"
+onclick="togglePlay()"
+title="Play">
 ▶
+</button>
+
+<button
+class="player-control"
+onclick="nextSong()"
+title="Next">
+⏭
 </button>
 
 </div>
 
-<div class="player-right">
+<div class="progress-row">
+
+<span id="currentTime">
+0:00
+</span>
+
+<input
+id="progressBar"
+type="range"
+min="0"
+max="100"
+value="0"
+step="0.1">
+
+<span id="duration">
+0:00
+</span>
+
+</div>
+
+</div>
+
+<div class="player-volume">
+
+<span id="volumeIcon">🔊</span>
+
+<input
+id="volumeBar"
+type="range"
+min="0"
+max="1"
+value="1"
+step="0.01">
+
+</div>
+
+</div>
 
 <audio
 id="audioPlayer"
-controls
-preload="none"></audio>
+preload="metadata">
+</audio>
 
 </div>
-
-</div>
-
-</div>
-
 
 <script>
+
+/* =========================================================
+   SUPABASE
+========================================================= */
 
 const SUPABASE_URL =
 "https://nxiygxnzlusasgzdknft.supabase.co";
@@ -2524,16 +2413,15 @@ window.supabase.createClient(
 
 
 /* =========================================================
-   EARNINGS SETTINGS
+   EARNINGS
 ========================================================= */
 
 const WITHDRAWAL_MINIMUM = 10000;
-
 const EARNINGS_PER_PLAY = 0.5;
 
 
 /* =========================================================
-   GLOBAL VARIABLES
+   GLOBAL STATE
 ========================================================= */
 
 let currentUser = null;
@@ -2541,10 +2429,17 @@ let currentArtist = null;
 let currentSongs = [];
 let newReleaseSongs = [];
 let topChartSongs = [];
+
 let currentAuthMode = "login";
 let currentAuthContext = "artist";
+
 let currentPlayingSong = null;
+let currentPlayingIndex = -1;
+
 let currentAdmin = null;
+
+let countedPlaySongId = null;
+let playCountedForCurrentSong = false;
 
 
 /* =========================================================
@@ -2622,7 +2517,7 @@ async function checkUser(){
 
 
 /* =========================================================
-   ADMIN CHECK
+   ADMIN
 ========================================================= */
 
 async function isCurrentUserAdmin(){
@@ -2668,8 +2563,7 @@ async function isCurrentUserAdmin(){
 
     }
 
-    currentAdmin =
-      data || null;
+    currentAdmin = data || null;
 
     return !!data;
 
@@ -2691,70 +2585,48 @@ async function isCurrentUserAdmin(){
 
 function isCurrentUserSuperAdmin(){
 
-  return (
+  return !!(
     currentAdmin &&
-    currentAdmin.role ===
-    "super_admin"
+    currentAdmin.role === "super_admin"
   );
 
 }
 
 
 /* =========================================================
-   UI UPDATE
+   UI
 ========================================================= */
 
 async function updateUI(){
 
   const loginButton =
-    document.getElementById(
-      "loginButton"
-    );
+    document.getElementById("loginButton");
 
   const logoutButton =
-    document.getElementById(
-      "logoutButton"
-    );
+    document.getElementById("logoutButton");
 
   const adminFooterLink =
-    document.getElementById(
-      "adminFooterLink"
-    );
+    document.getElementById("adminFooterLink");
 
   const adminBadge =
-    document.getElementById(
-      "adminRoleBadge"
-    );
+    document.getElementById("adminRoleBadge");
 
   const dashboardLoggedOut =
-    document.getElementById(
-      "dashboardLoggedOut"
-    );
+    document.getElementById("dashboardLoggedOut");
 
   const dashboardContent =
-    document.getElementById(
-      "dashboardContent"
-    );
+    document.getElementById("dashboardContent");
 
 
   if(currentUser){
 
-    loginButton.classList.add(
-      "hidden"
-    );
+    loginButton.classList.add("hidden");
 
-    logoutButton.classList.remove(
-      "hidden"
-    );
+    logoutButton.classList.remove("hidden");
 
-    dashboardLoggedOut.classList.add(
-      "hidden"
-    );
+    dashboardLoggedOut.classList.add("hidden");
 
-    dashboardContent.classList.remove(
-      "hidden"
-    );
-
+    dashboardContent.classList.remove("hidden");
 
     const isAdmin =
       await isCurrentUserAdmin();
@@ -2762,29 +2634,20 @@ async function updateUI(){
 
     if(isAdmin){
 
-      adminFooterLink.classList.remove(
-        "hidden"
-      );
+      adminFooterLink.classList.remove("hidden");
 
-      adminBadge.classList.remove(
-        "hidden"
-      );
+      adminBadge.classList.remove("hidden");
 
       adminBadge.textContent =
-        currentAdmin?.role ===
-        "super_admin"
-          ? "SUPER ADMIN"
-          : "ADMIN";
+        currentAdmin?.role === "super_admin"
+        ? "SUPER ADMIN"
+        : "ADMIN";
 
     }else{
 
-      adminFooterLink.classList.add(
-        "hidden"
-      );
+      adminFooterLink.classList.add("hidden");
 
-      adminBadge.classList.add(
-        "hidden"
-      );
+      adminBadge.classList.add("hidden");
 
     }
 
@@ -2804,29 +2667,17 @@ async function updateUI(){
 
   }else{
 
-    loginButton.classList.remove(
-      "hidden"
-    );
+    loginButton.classList.remove("hidden");
 
-    logoutButton.classList.add(
-      "hidden"
-    );
+    logoutButton.classList.add("hidden");
 
-    adminFooterLink.classList.add(
-      "hidden"
-    );
+    adminFooterLink.classList.add("hidden");
 
-    adminBadge.classList.add(
-      "hidden"
-    );
+    adminBadge.classList.add("hidden");
 
-    dashboardLoggedOut.classList.remove(
-      "hidden"
-    );
+    dashboardLoggedOut.classList.remove("hidden");
 
-    dashboardContent.classList.add(
-      "hidden"
-    );
+    dashboardContent.classList.add("hidden");
 
     currentAdmin = null;
 
@@ -2836,7 +2687,7 @@ async function updateUI(){
 
 
 /* =========================================================
-   PAGE NAVIGATION
+   NAVIGATION
 ========================================================= */
 
 async function showPage(page){
@@ -2887,6 +2738,12 @@ async function showPage(page){
     .classList.remove("open");
 
 
+  window.scrollTo({
+    top:0,
+    behavior:"smooth"
+  });
+
+
   if(page === "artists"){
 
     await loadArtists();
@@ -2912,25 +2769,17 @@ async function showPage(page){
   if(page === "admin"){
 
     const denied =
-      document.getElementById(
-        "adminDenied"
-      );
+      document.getElementById("adminDenied");
 
     const content =
-      document.getElementById(
-        "adminContent"
-      );
+      document.getElementById("adminContent");
 
 
     if(!currentUser){
 
-      denied.classList.remove(
-        "hidden"
-      );
+      denied.classList.remove("hidden");
 
-      content.classList.add(
-        "hidden"
-      );
+      content.classList.add("hidden");
 
       return;
 
@@ -2943,13 +2792,9 @@ async function showPage(page){
 
     if(isAdmin){
 
-      denied.classList.add(
-        "hidden"
-      );
+      denied.classList.add("hidden");
 
-      content.classList.remove(
-        "hidden"
-      );
+      content.classList.remove("hidden");
 
       updateAdminTabs();
 
@@ -2957,13 +2802,9 @@ async function showPage(page){
 
     }else{
 
-      denied.classList.remove(
-        "hidden"
-      );
+      denied.classList.remove("hidden");
 
-      content.classList.add(
-        "hidden"
-      );
+      content.classList.add("hidden");
 
     }
 
@@ -2987,28 +2828,19 @@ function toggleMenu(){
 
 function updateAdminTabs(){
 
-  const adminTab =
+  const tab =
     document.getElementById(
       "adminTabAdmins"
     );
 
-
-  if(
-    adminTab &&
-    isCurrentUserSuperAdmin()
-  ){
-
-    adminTab.classList.remove(
-      "hidden"
-    );
-
-  }else if(adminTab){
-
-    adminTab.classList.add(
-      "hidden"
-    );
-
+  if(!tab){
+    return;
   }
+
+  tab.classList.toggle(
+    "hidden",
+    !isCurrentUserSuperAdmin()
+  );
 
 }
 
@@ -3046,45 +2878,26 @@ async function showAdminTab(tab){
     );
 
 
-  songsPanel.classList.add(
-    "hidden"
-  );
+  songsPanel.classList.add("hidden");
 
-  withdrawalsPanel.classList.add(
-    "hidden"
-  );
+  withdrawalsPanel.classList.add("hidden");
 
-  managementPanel.classList.add(
-    "hidden"
-  );
+  managementPanel.classList.add("hidden");
 
-  songTab.classList.remove(
-    "active"
-  );
+  songTab.classList.remove("active");
 
-  withdrawalTab.classList.remove(
-    "active"
-  );
-
+  withdrawalTab.classList.remove("active");
 
   if(adminTab){
-
-    adminTab.classList.remove(
-      "active"
-    );
-
+    adminTab.classList.remove("active");
   }
 
 
   if(tab === "songs"){
 
-    songsPanel.classList.remove(
-      "hidden"
-    );
+    songsPanel.classList.remove("hidden");
 
-    songTab.classList.add(
-      "active"
-    );
+    songTab.classList.add("active");
 
     await loadAdminSongs();
 
@@ -3093,13 +2906,9 @@ async function showAdminTab(tab){
 
   if(tab === "withdrawals"){
 
-    withdrawalsPanel.classList.remove(
-      "hidden"
-    );
+    withdrawalsPanel.classList.remove("hidden");
 
-    withdrawalTab.classList.add(
-      "active"
-    );
+    withdrawalTab.classList.add("active");
 
     await loadWithdrawals();
 
@@ -3118,20 +2927,11 @@ async function showAdminTab(tab){
 
     }
 
-
-    managementPanel.classList.remove(
-      "hidden"
-    );
-
+    managementPanel.classList.remove("hidden");
 
     if(adminTab){
-
-      adminTab.classList.add(
-        "active"
-      );
-
+      adminTab.classList.add("active");
     }
-
 
     await loadAdministrators();
 
@@ -3148,19 +2948,14 @@ function openAuthModal(context="artist"){
 
   currentAuthContext =
     context === "admin"
-      ? "admin"
-      : "artist";
-
+    ? "admin"
+    : "artist";
 
   document
     .getElementById("authModal")
     .classList.add("show");
 
-
-  clearMessage(
-    "authMessage"
-  );
-
+  clearMessage("authMessage");
 
   setAuthMode("login");
 
@@ -3180,16 +2975,11 @@ function setAuthMode(mode){
 
   currentAuthMode = mode;
 
-
   const loginTab =
-    document.getElementById(
-      "loginTab"
-    );
+    document.getElementById("loginTab");
 
   const signupTab =
-    document.getElementById(
-      "signupTab"
-    );
+    document.getElementById("signupTab");
 
   const signupNameField =
     document.getElementById(
@@ -3197,53 +2987,36 @@ function setAuthMode(mode){
     );
 
   const title =
-    document.getElementById(
-      "authTitle"
-    );
+    document.getElementById("authTitle");
 
   const submit =
-    document.getElementById(
-      "authSubmit"
-    );
+    document.getElementById("authSubmit");
 
 
   if(mode === "login"){
 
-    loginTab.classList.add(
-      "active"
-    );
+    loginTab.classList.add("active");
 
-    signupTab.classList.remove(
-      "active"
-    );
+    signupTab.classList.remove("active");
 
-    signupNameField.classList.add(
-      "hidden"
-    );
+    signupNameField.classList.add("hidden");
 
     title.textContent =
       currentAuthContext === "admin"
-        ? "Admin Login"
-        : "Artist Login";
+      ? "Admin Login"
+      : "Artist Login";
 
-    submit.textContent =
-      "Login";
+    submit.textContent = "Login";
 
   }else{
 
     currentAuthContext = "artist";
 
-    loginTab.classList.remove(
-      "active"
-    );
+    loginTab.classList.remove("active");
 
-    signupTab.classList.add(
-      "active"
-    );
+    signupTab.classList.add("active");
 
-    signupNameField.classList.remove(
-      "hidden"
-    );
+    signupNameField.classList.remove("hidden");
 
     title.textContent =
       "Create Artist Account";
@@ -3253,10 +3026,7 @@ function setAuthMode(mode){
 
   }
 
-
-  clearMessage(
-    "authMessage"
-  );
+  clearMessage("authMessage");
 
 }
 
@@ -3265,20 +3035,14 @@ async function submitAuth(){
 
   const email =
     document
-      .getElementById(
-        "authEmail"
-      )
+      .getElementById("authEmail")
       .value
       .trim();
 
-
   const password =
-    document
-      .getElementById(
-        "authPassword"
-      )
-      .value;
-
+    document.getElementById(
+      "authPassword"
+    ).value;
 
   const artistName =
     document
@@ -3306,18 +3070,14 @@ async function submitAuth(){
 
     if(currentAuthMode === "login"){
 
-      const {
-        error
-      } = await sb.auth.signInWithPassword({
-        email,
-        password
-      });
-
+      const {error} =
+        await sb.auth.signInWithPassword({
+          email,
+          password
+        });
 
       if(error){
-
         throw error;
-
       }
 
 
@@ -3325,12 +3085,8 @@ async function submitAuth(){
 
         await new Promise(
           resolve =>
-            setTimeout(
-              resolve,
-              300
-            )
+            setTimeout(resolve,300)
         );
-
 
         const {
           data:adminData,
@@ -3351,10 +3107,7 @@ async function submitAuth(){
           .maybeSingle();
 
 
-        if(
-          adminError ||
-          !adminData
-        ){
+        if(adminError || !adminData){
 
           await sb.auth.signOut();
 
@@ -3372,9 +3125,7 @@ async function submitAuth(){
         }
 
 
-        currentAdmin =
-          adminData;
-
+        currentAdmin = adminData;
 
         showMessage(
           "authMessage",
@@ -3407,7 +3158,6 @@ async function submitAuth(){
         "success"
       );
 
-
       setTimeout(
         closeAuthModal,
         700
@@ -3439,9 +3189,7 @@ async function submitAuth(){
 
 
       if(error){
-
         throw error;
-
       }
 
 
@@ -3504,9 +3252,8 @@ async function submitAuth(){
 
 async function logout(){
 
-  const {
-    error
-  } = await sb.auth.signOut();
+  const {error} =
+    await sb.auth.signOut();
 
 
   if(error){
@@ -3524,7 +3271,6 @@ async function logout(){
   currentUser = null;
   currentArtist = null;
   currentAdmin = null;
-
 
   await showPage("home");
 
@@ -3596,12 +3342,10 @@ async function loadArtistProfile(){
     ).value =
       data.name || "";
 
-
     document.getElementById(
       "artistLocation"
     ).value =
       data.location || "";
-
 
     document.getElementById(
       "artistBio"
@@ -3647,36 +3391,25 @@ async function saveArtistProfile(){
 
   const name =
     document
-      .getElementById(
-        "artistName"
-      )
+      .getElementById("artistName")
       .value
       .trim();
-
 
   const location =
     document
-      .getElementById(
-        "artistLocation"
-      )
+      .getElementById("artistLocation")
       .value
       .trim();
-
 
   const bio =
     document
-      .getElementById(
-        "artistBio"
-      )
+      .getElementById("artistBio")
       .value
       .trim();
 
-
   const avatarFile =
     document
-      .getElementById(
-        "avatarFile"
-      )
+      .getElementById("avatarFile")
       .files[0];
 
 
@@ -3696,8 +3429,7 @@ async function saveArtistProfile(){
   try{
 
     let avatarUrl =
-      currentArtist?.avatar_url ||
-      null;
+      currentArtist?.avatar_url || null;
 
 
     if(avatarFile){
@@ -3706,7 +3438,6 @@ async function saveArtistProfile(){
         getFileExtension(
           avatarFile.name
         );
-
 
       const path =
         `${currentUser.id}/avatar-${Date.now()}.${extension}`;
@@ -3726,18 +3457,14 @@ async function saveArtistProfile(){
 
 
       if(uploadError){
-
         throw uploadError;
-
       }
 
 
-      const {
-        data
-      } = sb.storage
-        .from("avatars")
-        .getPublicUrl(path);
-
+      const {data} =
+        sb.storage
+          .from("avatars")
+          .getPublicUrl(path);
 
       avatarUrl =
         data.publicUrl;
@@ -3767,9 +3494,7 @@ async function saveArtistProfile(){
 
 
     if(error){
-
       throw error;
-
     }
 
 
@@ -3815,43 +3540,30 @@ async function uploadSong(){
 
   const title =
     document
-      .getElementById(
-        "songTitle"
-      )
+      .getElementById("songTitle")
       .value
       .trim();
-
 
   let artistName =
     document
-      .getElementById(
-        "songArtist"
-      )
+      .getElementById("songArtist")
       .value
       .trim();
 
-
   const audioFile =
     document
-      .getElementById(
-        "audioFile"
-      )
+      .getElementById("audioFile")
       .files[0];
-
 
   const coverFile =
     document
-      .getElementById(
-        "coverFile"
-      )
+      .getElementById("coverFile")
       .files[0];
 
 
   if(!artistName){
-
     artistName =
       currentArtist?.name || "";
-
   }
 
 
@@ -3899,7 +3611,6 @@ async function uploadSong(){
       "uploadButton"
     );
 
-
   uploadButton.disabled = true;
 
   uploadButton.textContent =
@@ -3923,16 +3634,13 @@ async function uploadSong(){
           cacheControl:"3600",
           upsert:false,
           contentType:
-            audioFile.type ||
-            undefined
+            audioFile.type || undefined
         }
       );
 
 
     if(audioUploadError){
-
       throw audioUploadError;
-
     }
 
 
@@ -3969,16 +3677,13 @@ async function uploadSong(){
             cacheControl:"3600",
             upsert:false,
             contentType:
-              coverFile.type ||
-              undefined
+              coverFile.type || undefined
           }
         );
 
 
       if(coverUploadError){
-
         throw coverUploadError;
-
       }
 
 
@@ -4025,9 +3730,7 @@ async function uploadSong(){
 
 
     if(songError){
-
       throw songError;
-
     }
 
 
@@ -4042,11 +3745,9 @@ async function uploadSong(){
       "songTitle"
     ).value = "";
 
-
     document.getElementById(
       "audioFile"
     ).value = "";
-
 
     document.getElementById(
       "coverFile"
@@ -4061,7 +3762,6 @@ async function uploadSong(){
       "Upload error:",
       error
     );
-
 
     showMessage(
       "uploadMessage",
@@ -4119,15 +3819,11 @@ async function loadSongs(){
 
 
     if(error){
-
       throw error;
-
     }
 
 
-    currentSongs =
-      data || [];
-
+    currentSongs = data || [];
 
     renderSongs(
       currentSongs
@@ -4137,22 +3833,15 @@ async function loadSongs(){
 
     console.error(error);
 
-
     container.innerHTML = `
-      <div class="empty"
-           style="grid-column:1/-1;">
-
-        <h3>
-          Could not load songs
-        </h3>
-
+      <div class="empty">
+        <h3>Could not load songs</h3>
         <p style="margin-top:8px;">
           ${escapeHtml(
             error.message ||
             "Unknown error"
           )}
         </p>
-
       </div>
     `;
 
@@ -4206,15 +3895,12 @@ async function loadNewReleases(){
 
 
     if(error){
-
       throw error;
-
     }
 
 
     newReleaseSongs =
       data || [];
-
 
     renderNewReleases(
       newReleaseSongs
@@ -4227,22 +3913,9 @@ async function loadNewReleases(){
       error
     );
 
-
     container.innerHTML = `
-      <div class="empty"
-           style="grid-column:1/-1;">
-
-        <h3>
-          Could not load new releases
-        </h3>
-
-        <p style="margin-top:8px;">
-          ${escapeHtml(
-            error.message ||
-            "Unknown error"
-          )}
-        </p>
-
+      <div class="empty">
+        <h3>Could not load new releases</h3>
       </div>
     `;
 
@@ -4303,15 +3976,12 @@ async function loadTopCharts(){
 
 
     if(error){
-
       throw error;
-
     }
 
 
     topChartSongs =
       data || [];
-
 
     renderTopCharts(
       topChartSongs
@@ -4324,22 +3994,9 @@ async function loadTopCharts(){
       error
     );
 
-
     container.innerHTML = `
-      <div class="empty"
-           style="grid-column:1/-1;">
-
-        <h3>
-          Could not load top charts
-        </h3>
-
-        <p style="margin-top:8px;">
-          ${escapeHtml(
-            error.message ||
-            "Unknown error"
-          )}
-        </p>
-
+      <div class="empty">
+        <h3>Could not load top charts</h3>
       </div>
     `;
 
@@ -4373,17 +4030,11 @@ function renderSongCards(
   if(!songs || songs.length === 0){
 
     container.innerHTML = `
-      <div class="empty"
-           style="grid-column:1/-1;">
-
-        <h3>
-          ${escapeHtml(emptyTitle)}
-        </h3>
-
+      <div class="empty">
+        <h3>${escapeHtml(emptyTitle)}</h3>
         <p style="margin-top:8px;">
           ${escapeHtml(emptyText)}
         </p>
-
       </div>
     `;
 
@@ -4394,6 +4045,11 @@ function renderSongCards(
 
   container.innerHTML =
     songs.map(song => {
+
+      const isPlaying =
+        currentPlayingSong &&
+        currentPlayingSong.id === song.id;
+
 
       const cover =
         song.cover_url
@@ -4411,7 +4067,7 @@ function renderSongCards(
 
 
       return `
-        <div class="song-card">
+        <div class="song-card ${isPlaying ? "playing" : ""}">
 
           <div class="cover">
 
@@ -4419,8 +4075,8 @@ function renderSongCards(
 
             <button
               class="play-circle"
-              onclick="playSong('${song.id}')">
-              ▶
+              onclick="playSong('${escapeAttribute(song.id)}')">
+              ${isPlaying && !document.getElementById("audioPlayer")?.paused ? "❚❚" : "▶"}
             </button>
 
           </div>
@@ -4461,7 +4117,7 @@ function renderSongCards(
 
           <button
             class="download-btn"
-            onclick="downloadSong('${song.id}')">
+            onclick="downloadSong('${escapeAttribute(song.id)}')">
             ↓ Download
           </button>
 
@@ -4510,6 +4166,677 @@ function renderTopCharts(songs){
 
 
 /* =========================================================
+   FIND SONG
+========================================================= */
+
+function findSongById(songId){
+
+  const all = [
+    ...currentSongs,
+    ...newReleaseSongs,
+    ...topChartSongs
+  ];
+
+  return all.find(
+    song => String(song.id) === String(songId)
+  );
+
+}
+
+
+function getPlayerQueue(){
+
+  if(currentSongs.length){
+    return currentSongs;
+  }
+
+  if(newReleaseSongs.length){
+    return newReleaseSongs;
+  }
+
+  return topChartSongs;
+
+}
+
+
+/* =========================================================
+   MUSIC PLAYER
+========================================================= */
+
+async function playSong(songId){
+
+  const song =
+    findSongById(songId);
+
+
+  if(!song){
+    return;
+  }
+
+
+  const url =
+    song.audio_url ||
+    song.file_url;
+
+
+  if(!url){
+
+    alert(
+      "This song does not have an audio file."
+    );
+
+    return;
+
+  }
+
+
+  const player =
+    document.getElementById(
+      "audioPlayer"
+    );
+
+
+  currentPlayingSong =
+    song;
+
+
+  const queue =
+    getPlayerQueue();
+
+
+  currentPlayingIndex =
+    queue.findIndex(
+      item =>
+        String(item.id) ===
+        String(song.id)
+    );
+
+
+  player.src = url;
+
+  player.currentTime = 0;
+
+
+  updateNowPlayingUI(song);
+
+  updatePlayerButton();
+
+
+  /*
+    A new song is allowed to count once.
+    Pausing and playing the same song again
+    will not create another play.
+  */
+
+  playCountedForCurrentSong = false;
+
+  countedPlaySongId = null;
+
+
+  try{
+
+    await player.play();
+
+  }catch(error){
+
+    console.log(
+      "Playback waiting for user interaction:",
+      error
+    );
+
+  }
+
+}
+
+
+function togglePlay(){
+
+  const player =
+    document.getElementById(
+      "audioPlayer"
+    );
+
+
+  if(!player.src){
+    return;
+  }
+
+
+  if(player.paused){
+
+    player.play().catch(
+      error =>
+        console.log(error)
+    );
+
+  }else{
+
+    player.pause();
+
+  }
+
+}
+
+
+function previousSong(){
+
+  const queue =
+    getPlayerQueue();
+
+
+  if(!queue.length){
+    return;
+  }
+
+
+  if(
+    currentPlayingIndex <= 0
+  ){
+
+    currentPlayingIndex =
+      queue.length - 1;
+
+  }else{
+
+    currentPlayingIndex--;
+
+  }
+
+
+  playSong(
+    queue[currentPlayingIndex].id
+  );
+
+}
+
+
+function nextSong(){
+
+  const queue =
+    getPlayerQueue();
+
+
+  if(!queue.length){
+    return;
+  }
+
+
+  if(
+    currentPlayingIndex < 0
+  ){
+
+    currentPlayingIndex = 0;
+
+  }else if(
+    currentPlayingIndex >=
+    queue.length - 1
+  ){
+
+    currentPlayingIndex = 0;
+
+  }else{
+
+    currentPlayingIndex++;
+
+  }
+
+
+  playSong(
+    queue[currentPlayingIndex].id
+  );
+
+}
+
+
+function updateNowPlayingUI(song){
+
+  document.getElementById(
+    "nowTitle"
+  ).textContent =
+    song.title ||
+    "Untitled";
+
+
+  document.getElementById(
+    "nowArtist"
+  ).textContent =
+    song.artist ||
+    "Unknown Artist";
+
+
+  const nowCover =
+    document.getElementById(
+      "nowCover"
+    );
+
+
+  if(song.cover_url){
+
+    nowCover.innerHTML = `
+      <img
+        src="${escapeAttribute(song.cover_url)}"
+        alt="">
+    `;
+
+  }else{
+
+    nowCover.innerHTML = `
+      <div style="
+        height:100%;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        color:#ff6a00;
+        font-size:22px;">
+        ♪
+      </div>
+    `;
+
+  }
+
+}
+
+
+function updatePlayerButton(){
+
+  const player =
+    document.getElementById(
+      "audioPlayer"
+    );
+
+  const button =
+    document.getElementById(
+      "playerPlayButton"
+    );
+
+
+  if(!button){
+    return;
+  }
+
+
+  button.textContent =
+    player.paused
+    ? "▶"
+    : "❚❚";
+
+}
+
+
+function setupAudioEvents(){
+
+  const player =
+    document.getElementById(
+      "audioPlayer"
+    );
+
+  const progress =
+    document.getElementById(
+      "progressBar"
+    );
+
+  const volume =
+    document.getElementById(
+      "volumeBar"
+    );
+
+
+  player.volume = 1;
+
+
+  player.addEventListener(
+    "loadedmetadata",
+    () => {
+
+      progress.max =
+        Number.isFinite(
+          player.duration
+        )
+        ? player.duration
+        : 0;
+
+      document.getElementById(
+        "duration"
+      ).textContent =
+        formatTime(
+          player.duration
+        );
+
+    }
+  );
+
+
+  player.addEventListener(
+    "timeupdate",
+    () => {
+
+      progress.max =
+        Number.isFinite(
+          player.duration
+        )
+        ? player.duration
+        : 0;
+
+      progress.value =
+        player.currentTime || 0;
+
+
+      document.getElementById(
+        "currentTime"
+      ).textContent =
+        formatTime(
+          player.currentTime
+        );
+
+      document.getElementById(
+        "duration"
+      ).textContent =
+        formatTime(
+          player.duration
+        );
+
+    }
+  );
+
+
+  progress.addEventListener(
+    "input",
+    () => {
+
+      player.currentTime =
+        Number(
+          progress.value
+        );
+
+    }
+  );
+
+
+  volume.addEventListener(
+    "input",
+    () => {
+
+      player.volume =
+        Number(
+          volume.value
+        );
+
+      updateVolumeIcon();
+
+    }
+  );
+
+
+  player.addEventListener(
+    "play",
+    async () => {
+
+      updatePlayerButton();
+
+      if(
+        currentPlayingSong &&
+        !playCountedForCurrentSong
+      ){
+
+        await recordSongPlay(
+          currentPlayingSong.id
+        );
+
+        playCountedForCurrentSong =
+          true;
+
+        countedPlaySongId =
+          currentPlayingSong.id;
+
+      }
+
+      refreshSongDisplays();
+
+    }
+  );
+
+
+  player.addEventListener(
+    "pause",
+    () => {
+
+      updatePlayerButton();
+
+      refreshSongDisplays();
+
+    }
+  );
+
+
+  player.addEventListener(
+    "ended",
+    () => {
+
+      updatePlayerButton();
+
+      nextSong();
+
+    }
+  );
+
+
+  player.addEventListener(
+    "error",
+    () => {
+
+      console.error(
+        "Audio playback error."
+      );
+
+    }
+  );
+
+}
+
+
+function updateVolumeIcon(){
+
+  const volume =
+    Number(
+      document.getElementById(
+        "volumeBar"
+      ).value
+    );
+
+  const icon =
+    document.getElementById(
+      "volumeIcon"
+    );
+
+
+  if(volume === 0){
+
+    icon.textContent = "🔇";
+
+  }else if(volume < .5){
+
+    icon.textContent = "🔉";
+
+  }else{
+
+    icon.textContent = "🔊";
+
+  }
+
+}
+
+
+function formatTime(seconds){
+
+  if(
+    !Number.isFinite(seconds) ||
+    seconds < 0
+  ){
+
+    return "0:00";
+
+  }
+
+
+  const minutes =
+    Math.floor(
+      seconds / 60
+    );
+
+  const secs =
+    Math.floor(
+      seconds % 60
+    );
+
+
+  return (
+    minutes +
+    ":" +
+    String(secs).padStart(2,"0")
+  );
+
+}
+
+
+/* =========================================================
+   PLAY COUNT
+========================================================= */
+
+async function recordSongPlay(songId){
+
+  if(!songId){
+    return;
+  }
+
+
+  /*
+    Prevent accidental duplicate RPC calls.
+  */
+
+  if(
+    countedPlaySongId === songId &&
+    playCountedForCurrentSong
+  ){
+
+    return;
+
+  }
+
+
+  try{
+
+    const {
+      error
+    } = await sb.rpc(
+      "record_song_play",
+      {
+        song_id:songId
+      }
+    );
+
+
+    if(!error){
+
+      updateLocalPlayCount(
+        songId
+      );
+
+    }else{
+
+      console.error(
+        "Play RPC error:",
+        error
+      );
+
+    }
+
+  }catch(error){
+
+    console.error(
+      "Play RPC error:",
+      error
+    );
+
+  }
+
+}
+
+
+function updateSongInList(
+  list,
+  songId
+){
+
+  const song =
+    list.find(
+      item =>
+        String(item.id) ===
+        String(songId)
+    );
+
+
+  if(song){
+
+    song.plays =
+      Number(
+        song.plays || 0
+      ) + 1;
+
+  }
+
+}
+
+
+function updateLocalPlayCount(
+  songId
+){
+
+  updateSongInList(
+    currentSongs,
+    songId
+  );
+
+  updateSongInList(
+    newReleaseSongs,
+    songId
+  );
+
+  updateSongInList(
+    topChartSongs,
+    songId
+  );
+
+
+  refreshSongDisplays();
+
+
+  if(currentUser){
+
+    loadMySongs();
+
+  }
+
+}
+
+
+function refreshSongDisplays(){
+
+  renderSongs(
+    currentSongs
+  );
+
+  renderNewReleases(
+    newReleaseSongs
+  );
+
+  renderTopCharts(
+    topChartSongs
+  );
+
+}
+
+
+/* =========================================================
    DOWNLOAD
 ========================================================= */
 
@@ -4521,9 +4848,7 @@ async function downloadSong(songId){
 
   if(!song){
 
-    alert(
-      "Song not found."
-    );
+    alert("Song not found.");
 
     return;
 
@@ -4566,43 +4891,27 @@ async function downloadSong(songId){
 
 
     const blobUrl =
-      URL.createObjectURL(
-        blob
-      );
+      URL.createObjectURL(blob);
 
 
     const link =
-      document.createElement(
-        "a"
-      );
+      document.createElement("a");
 
 
-    link.href =
-      blobUrl;
-
-
-    const artistName =
-      song.artist ||
-      "NileSoniq Artist";
-
-
-    const songTitle =
-      song.title ||
-      "NileSoniq Song";
+    link.href = blobUrl;
 
 
     link.download =
       `${safeDownloadName(
-        artistName
+        song.artist ||
+        "NileSoniq Artist"
       )} - ${safeDownloadName(
-        songTitle
+        song.title ||
+        "NileSoniq Song"
       )}.mp3`;
 
 
-    document.body.appendChild(
-      link
-    );
-
+    document.body.appendChild(link);
 
     link.click();
 
@@ -4610,11 +4919,8 @@ async function downloadSong(songId){
 
 
     setTimeout(
-      () => {
-        URL.revokeObjectURL(
-          blobUrl
-        );
-      },
+      () =>
+        URL.revokeObjectURL(blobUrl),
       1000
     );
 
@@ -4629,25 +4935,15 @@ async function downloadSong(songId){
     try{
 
       const link =
-        document.createElement(
-          "a"
-        );
+        document.createElement("a");
 
+      link.href = url;
 
-      link.href =
-        url;
+      link.target = "_blank";
 
-      link.target =
-        "_blank";
+      link.rel = "noopener";
 
-      link.rel =
-        "noopener";
-
-
-      document.body.appendChild(
-        link
-      );
-
+      document.body.appendChild(link);
 
       link.click();
 
@@ -4658,7 +4954,6 @@ async function downloadSong(songId){
       console.error(
         fallbackError
       );
-
 
       alert(
         "Download could not start. Please try again."
@@ -4688,7 +4983,8 @@ function safeDownloadName(name){
   .substring(
     0,
     100
-  ) || "NileSoniq-Song";
+  ) ||
+  "NileSoniq-Song";
 
 }
 
@@ -4724,13 +5020,14 @@ function searchSongs(){
     currentSongs.filter(song => {
 
       const title =
-        (song.title || "")
-        .toLowerCase();
-
+        String(
+          song.title || ""
+        ).toLowerCase();
 
       const artist =
-        (song.artist || "")
-        .toLowerCase();
+        String(
+          song.artist || ""
+        ).toLowerCase();
 
 
       return (
@@ -4744,303 +5041,6 @@ function searchSongs(){
   renderSongs(
     filtered
   );
-
-}
-
-
-function findSongById(songId){
-
-  return [
-    ...currentSongs,
-    ...newReleaseSongs,
-    ...topChartSongs
-  ].find(
-    song => song.id === songId
-  );
-
-}
-
-
-/* =========================================================
-   PLAYER
-========================================================= */
-
-async function playSong(songId){
-
-  const song =
-    findSongById(
-      songId
-    );
-
-
-  if(!song){
-    return;
-  }
-
-
-  const url =
-    song.audio_url ||
-    song.file_url;
-
-
-  if(!url){
-
-    alert(
-      "This song does not have an audio file."
-    );
-
-    return;
-
-  }
-
-
-  currentPlayingSong =
-    song;
-
-
-  const player =
-    document.getElementById(
-      "audioPlayer"
-    );
-
-
-  player.src =
-    url;
-
-
-  document.getElementById(
-    "nowTitle"
-  ).textContent =
-    song.title ||
-    "Untitled";
-
-
-  document.getElementById(
-    "nowArtist"
-  ).textContent =
-    song.artist ||
-    "Unknown Artist";
-
-
-  const nowCover =
-    document.getElementById(
-      "nowCover"
-    );
-
-
-  if(song.cover_url){
-
-    nowCover.innerHTML = `
-      <img
-        src="${escapeAttribute(song.cover_url)}"
-        alt="">
-    `;
-
-  }else{
-
-    nowCover.innerHTML =
-      `<div style="
-      height:100%;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      color:#ff6a00;
-      font-size:22px;">
-      ♪
-      </div>`;
-
-  }
-
-
-  try{
-
-    await player.play();
-
-  }catch(error){
-
-    console.log(
-      "Autoplay prevented:",
-      error
-    );
-
-  }
-
-
-  await recordSongPlay(
-    song.id
-  );
-
-}
-
-
-function togglePlay(){
-
-  const player =
-    document.getElementById(
-      "audioPlayer"
-    );
-
-
-  if(!player.src){
-    return;
-  }
-
-
-  if(player.paused){
-
-    player.play();
-
-  }else{
-
-    player.pause();
-
-  }
-
-}
-
-
-function setupAudioEvents(){
-
-  const player =
-    document.getElementById(
-      "audioPlayer"
-    );
-
-
-  player.addEventListener(
-    "play",
-    () => {
-
-      document.querySelector(
-        ".player-play"
-      ).textContent =
-        "❚❚";
-
-    }
-  );
-
-
-  player.addEventListener(
-    "pause",
-    () => {
-
-      document.querySelector(
-        ".player-play"
-      ).textContent =
-        "▶";
-
-    }
-  );
-
-}
-
-
-async function recordSongPlay(songId){
-
-  if(!songId){
-    return;
-  }
-
-
-  try{
-
-    const {
-      error
-    } = await sb.rpc(
-      "record_song_play",
-      {
-        song_id:songId
-      }
-    );
-
-
-    if(!error){
-
-      updateLocalPlayCount(
-        songId
-      );
-
-      return;
-
-    }
-
-  }catch(error){
-
-    console.log(
-      "Play RPC error:",
-      error
-    );
-
-  }
-
-}
-
-
-function updateSongInList(
-  list,
-  songId
-){
-
-  const song =
-    list.find(
-      item => item.id === songId
-    );
-
-
-  if(song){
-
-    song.plays =
-      Number(
-        song.plays || 0
-      ) + 1;
-
-  }
-
-}
-
-
-function updateLocalPlayCount(
-  songId
-){
-
-  updateSongInList(
-    currentSongs,
-    songId
-  );
-
-
-  updateSongInList(
-    newReleaseSongs,
-    songId
-  );
-
-
-  updateSongInList(
-    topChartSongs,
-    songId
-  );
-
-
-  renderSongs(
-    currentSongs
-  );
-
-
-  renderNewReleases(
-    newReleaseSongs
-  );
-
-
-  renderTopCharts(
-    topChartSongs
-  );
-
-
-  if(currentUser){
-
-    loadMySongs();
-
-  }
 
 }
 
@@ -5085,17 +5085,14 @@ async function loadArtists(){
 
 
     if(error){
-
       throw error;
-
     }
 
 
     if(!data || data.length === 0){
 
       container.innerHTML = `
-        <div class="empty"
-             style="grid-column:1/-1;">
+        <div class="empty">
           No artists registered yet.
         </div>
       `;
@@ -5153,15 +5150,12 @@ async function loadArtists(){
 
       }).join("");
 
-
   }catch(error){
 
     console.error(error);
 
-
     container.innerHTML = `
-      <div class="empty"
-           style="grid-column:1/-1;">
+      <div class="empty">
         Could not load artists.
       </div>
     `;
@@ -5196,11 +5190,9 @@ async function loadMySongs(){
   tbody.innerHTML = `
     <tr>
       <td colspan="4">
-
         <div class="loading">
           Loading your songs...
         </div>
-
       </td>
     </tr>
   `;
@@ -5227,9 +5219,7 @@ async function loadMySongs(){
 
 
     if(error){
-
       throw error;
-
     }
 
 
@@ -5237,16 +5227,14 @@ async function loadMySongs(){
       data || [];
 
 
-    if(songs.length === 0){
+    if(!songs.length){
 
       tbody.innerHTML = `
         <tr>
           <td colspan="4">
-
             <div class="empty">
               You have not uploaded any songs yet.
             </div>
-
           </td>
         </tr>
       `;
@@ -5256,16 +5244,8 @@ async function loadMySongs(){
       tbody.innerHTML =
         songs.map(song => {
 
-          const status =
-            song.approved === true
-            ? "approved"
-            : "pending";
-
-
-          const text =
-            song.approved === true
-            ? "Approved"
-            : "Pending";
+          const approved =
+            song.approved === true;
 
 
           return `
@@ -5292,8 +5272,18 @@ async function loadMySongs(){
 
               <td>
 
-                <span class="status ${status}">
-                  ${text}
+                <span class="status ${
+                  approved
+                  ? "approved"
+                  : "pending"
+                }">
+
+                  ${
+                    approved
+                    ? "Approved"
+                    : "Pending"
+                  }
+
                 </span>
 
               </td>
@@ -5310,12 +5300,7 @@ async function loadMySongs(){
       songs
     );
 
-    /* FIX:
-       Always refresh available balance
-       whenever artist songs are loaded.
-    */
     await updateAvailableBalance();
-
 
   }catch(error){
 
@@ -5328,23 +5313,16 @@ async function loadMySongs(){
     tbody.innerHTML = `
       <tr>
         <td colspan="4">
-
           <div class="empty">
-
             ${escapeHtml(
               error.message ||
               "Could not load songs."
             )}
-
           </div>
-
         </td>
       </tr>
     `;
 
-    /* FIX:
-       Still try to refresh balance independently.
-    */
     await updateAvailableBalance();
 
   }
@@ -5383,17 +5361,13 @@ function updateDashboardStats(
   document.getElementById(
     "totalPlays"
   ).textContent =
-    formatNumber(
-      totalPlays
-    );
+    formatNumber(totalPlays);
 
 
   document.getElementById(
     "totalSongs"
   ).textContent =
-    formatNumber(
-      totalSongs
-    );
+    formatNumber(totalSongs);
 
 
   document.getElementById(
@@ -5410,7 +5384,7 @@ function updateDashboardStats(
 
 
 /* =========================================================
-   ARTIST WITHDRAWAL SYSTEM
+   WITHDRAWALS
 ========================================================= */
 
 async function loadMyWithdrawals(){
@@ -5434,11 +5408,9 @@ async function loadMyWithdrawals(){
   tbody.innerHTML = `
     <tr>
       <td colspan="4">
-
         <div class="loading">
           Loading withdrawals...
         </div>
-
       </td>
     </tr>
   `;
@@ -5465,9 +5437,7 @@ async function loadMyWithdrawals(){
 
 
     if(error){
-
       throw error;
-
     }
 
 
@@ -5475,19 +5445,15 @@ async function loadMyWithdrawals(){
       data || [];
 
 
-    if(withdrawals.length === 0){
+    if(!withdrawals.length){
 
       tbody.innerHTML = `
         <tr>
-
           <td colspan="4">
-
             <div class="empty">
               No withdrawal requests yet.
             </div>
-
           </td>
-
         </tr>
       `;
 
@@ -5519,14 +5485,10 @@ async function loadMyWithdrawals(){
 
               <td>
 
-                <span class="status ${escapeHtml(
-                  status
-                )}">
+                <span class="status ${escapeHtml(status)}">
 
                   ${escapeHtml(
-                    formatStatus(
-                      status
-                    )
+                    formatStatus(status)
                   )}
 
                 </span>
@@ -5562,24 +5524,14 @@ async function loadMyWithdrawals(){
 
     tbody.innerHTML = `
       <tr>
-
         <td colspan="4">
-
           <div class="empty">
-
             Could not load withdrawal requests.
-
           </div>
-
         </td>
-
       </tr>
     `;
 
-    /* FIX:
-       Balance is refreshed independently instead
-       of being left stale after a withdrawal error.
-    */
     await updateAvailableBalance();
 
   }
@@ -5588,11 +5540,11 @@ async function loadMyWithdrawals(){
 
 
 /* =========================================================
-   AVAILABLE BALANCE
+   BALANCE
 ========================================================= */
 
 async function updateAvailableBalance(
-  withdrawals = null
+  withdrawals=null
 ){
 
   if(!currentUser){
@@ -5613,9 +5565,7 @@ async function updateAvailableBalance(
       error:songsError
     } = await sb
       .from("songs")
-      .select(
-        "plays"
-      )
+      .select("plays")
       .eq(
         "artist_id",
         currentUser.id
@@ -5623,9 +5573,7 @@ async function updateAvailableBalance(
 
 
     if(songsError){
-
       throw songsError;
-
     }
 
 
@@ -5647,20 +5595,10 @@ async function updateAvailableBalance(
 
     let withdrawalList =
       Array.isArray(withdrawals)
-        ? withdrawals
-        : null;
+      ? withdrawals
+      : null;
 
 
-    /*
-      IMPORTANT FIX:
-
-      If withdrawals were not supplied,
-      fetch them here.
-
-      This prevents the balance from
-      accidentally showing the full earnings
-      when loadMySongs() calls this function.
-    */
     if(withdrawalList === null){
 
       const {
@@ -5680,7 +5618,6 @@ async function updateAvailableBalance(
       if(withdrawalError){
 
         console.warn(
-          "Withdrawal balance query error. Showing earnings without deductions:",
           withdrawalError
         );
 
@@ -5696,17 +5633,6 @@ async function updateAvailableBalance(
     }
 
 
-    /*
-      Only these withdrawals reduce
-      the available balance:
-
-      pending
-      processing
-      paid
-
-      Rejected withdrawals do NOT reduce
-      the available balance.
-    */
     const alreadyRequested =
       withdrawalList
       .filter(item =>
@@ -5748,18 +5674,12 @@ async function updateAvailableBalance(
 
     }
 
-
   }catch(error){
 
     console.error(
       "Available balance error:",
       error
     );
-
-    /*
-      Do not replace the existing displayed
-      balance with UGX 0 when the query fails.
-    */
 
   }
 
@@ -5786,7 +5706,6 @@ async function requestWithdrawal(){
       "withdrawAmount"
     );
 
-
   const paymentMethod =
     document
       .getElementById(
@@ -5795,7 +5714,6 @@ async function requestWithdrawal(){
       .value
       .trim();
 
-
   const paymentDetails =
     document
       .getElementById(
@@ -5803,7 +5721,6 @@ async function requestWithdrawal(){
       )
       .value
       .trim();
-
 
   const amount =
     Number(
@@ -5853,15 +5770,15 @@ async function requestWithdrawal(){
   }
 
 
-  const withdrawButton =
+  const button =
     document.getElementById(
       "withdrawButton"
     );
 
 
-  withdrawButton.disabled = true;
+  button.disabled = true;
 
-  withdrawButton.textContent =
+  button.textContent =
     "Checking balance...";
 
 
@@ -5872,9 +5789,7 @@ async function requestWithdrawal(){
       error:songsError
     } = await sb
       .from("songs")
-      .select(
-        "plays"
-      )
+      .select("plays")
       .eq(
         "artist_id",
         currentUser.id
@@ -5882,9 +5797,7 @@ async function requestWithdrawal(){
 
 
     if(songsError){
-
       throw songsError;
-
     }
 
 
@@ -5919,9 +5832,7 @@ async function requestWithdrawal(){
 
 
     if(withdrawalsError){
-
       throw withdrawalsError;
-
     }
 
 
@@ -5967,23 +5878,7 @@ async function requestWithdrawal(){
     }
 
 
-    if(
-      amount <
-      WITHDRAWAL_MINIMUM
-    ){
-
-      showMessage(
-        "withdrawalMessage",
-        "Minimum withdrawal is UGX 10,000.",
-        "error"
-      );
-
-      return;
-
-    }
-
-
-    withdrawButton.textContent =
+    button.textContent =
       "Submitting...";
 
 
@@ -6012,9 +5907,7 @@ async function requestWithdrawal(){
 
 
     if(insertError){
-
       throw insertError;
-
     }
 
 
@@ -6027,11 +5920,9 @@ async function requestWithdrawal(){
 
     amountInput.value = "";
 
-
     document.getElementById(
       "paymentMethod"
     ).value = "";
-
 
     document.getElementById(
       "paymentDetails"
@@ -6039,7 +5930,6 @@ async function requestWithdrawal(){
 
 
     await loadMyWithdrawals();
-
 
   }catch(error){
 
@@ -6058,9 +5948,9 @@ async function requestWithdrawal(){
 
   }finally{
 
-    withdrawButton.disabled = false;
+    button.disabled = false;
 
-    withdrawButton.textContent =
+    button.textContent =
       "Request Withdrawal";
 
   }
@@ -6079,11 +5969,7 @@ async function loadWithdrawals(){
   }
 
 
-  const isAdmin =
-    await isCurrentUserAdmin();
-
-
-  if(!isAdmin){
+  if(!await isCurrentUserAdmin()){
     return;
   }
 
@@ -6094,19 +5980,12 @@ async function loadWithdrawals(){
     );
 
 
-  if(!tbody){
-    return;
-  }
-
-
   tbody.innerHTML = `
     <tr>
       <td colspan="6">
-
         <div class="loading">
           Loading withdrawals...
         </div>
-
       </td>
     </tr>
   `;
@@ -6129,34 +6008,17 @@ async function loadWithdrawals(){
 
 
     if(error){
-
       throw error;
-
     }
 
 
-    const withdrawals =
-      data || [];
-
-
     const {
-      data:artists,
-      error:artistsError
+      data:artists
     } = await sb
       .from("artists")
       .select(
         "user_id,name"
       );
-
-
-    if(artistsError){
-
-      console.warn(
-        "Artist names could not be loaded:",
-        artistsError
-      );
-
-    }
 
 
     const artistMap = {};
@@ -6174,19 +6036,19 @@ async function loadWithdrawals(){
     });
 
 
-    if(withdrawals.length === 0){
+    const withdrawals =
+      data || [];
+
+
+    if(!withdrawals.length){
 
       tbody.innerHTML = `
         <tr>
-
           <td colspan="6">
-
             <div class="empty">
               No withdrawal requests yet.
             </div>
-
           </td>
-
         </tr>
       `;
 
@@ -6202,7 +6064,6 @@ async function loadWithdrawals(){
           item.status ||
           "pending";
 
-
         const artistName =
           artistMap[
             item.artist_id
@@ -6217,64 +6078,43 @@ async function loadWithdrawals(){
         if(status === "pending"){
 
           actions = `
-
             <button
               class="btn btn-warning"
-              onclick="processWithdrawal('${item.id}')">
-
+              onclick="processWithdrawal('${escapeAttribute(item.id)}')">
               Process
-
             </button>
 
             <button
               class="btn btn-danger"
               style="margin-left:4px;"
-              onclick="rejectWithdrawal('${item.id}')">
-
+              onclick="rejectWithdrawal('${escapeAttribute(item.id)}')">
               Reject
-
             </button>
-
           `;
 
-        }
-
-
-        if(status === "processing"){
+        }else if(status === "processing"){
 
           actions = `
-
             <button
               class="btn btn-success"
-              onclick="markWithdrawalPaid('${item.id}')">
-
+              onclick="markWithdrawalPaid('${escapeAttribute(item.id)}')">
               Mark Paid
-
             </button>
 
             <button
               class="btn btn-danger"
               style="margin-left:4px;"
-              onclick="rejectWithdrawal('${item.id}')">
-
+              onclick="rejectWithdrawal('${escapeAttribute(item.id)}')">
               Reject
-
             </button>
-
           `;
 
-        }
-
-
-        if(
-          status === "paid" ||
-          status === "rejected"
-        ){
+        }else{
 
           actions =
             `<span style="color:#777;">
               Completed
-             </span>`;
+            </span>`;
 
         }
 
@@ -6283,9 +6123,7 @@ async function loadWithdrawals(){
           <tr>
 
             <td>
-              ${escapeHtml(
-                artistName
-              )}
+              ${escapeHtml(artistName)}
             </td>
 
             <td>
@@ -6296,30 +6134,22 @@ async function loadWithdrawals(){
 
             <td>
               ${escapeHtml(
-                item.payment_method ||
-                ""
+                item.payment_method || ""
               )}
             </td>
 
             <td>
               ${escapeHtml(
-                item.payment_details ||
-                ""
+                item.payment_details || ""
               )}
             </td>
 
             <td>
 
-              <span class="status ${escapeHtml(
-                status
-              )}">
-
+              <span class="status ${escapeHtml(status)}">
                 ${escapeHtml(
-                  formatStatus(
-                    status
-                  )
+                  formatStatus(status)
                 )}
-
               </span>
 
             </td>
@@ -6333,7 +6163,6 @@ async function loadWithdrawals(){
 
       }).join("");
 
-
   }catch(error){
 
     console.error(
@@ -6344,20 +6173,14 @@ async function loadWithdrawals(){
 
     tbody.innerHTML = `
       <tr>
-
         <td colspan="6">
-
           <div class="empty">
-
             ${escapeHtml(
               error.message ||
               "Could not load withdrawals."
             )}
-
           </div>
-
         </td>
-
       </tr>
     `;
 
@@ -6367,7 +6190,7 @@ async function loadWithdrawals(){
 
 
 /* =========================================================
-   UPDATE WITHDRAWAL STATUS
+   WITHDRAWAL STATUS
 ========================================================= */
 
 async function updateWithdrawalStatus(
@@ -6375,11 +6198,7 @@ async function updateWithdrawalStatus(
   status
 ){
 
-  const isAdmin =
-    await isCurrentUserAdmin();
-
-
-  if(!isAdmin){
+  if(!await isCurrentUserAdmin()){
 
     alert(
       "You are not authorized."
@@ -6393,7 +6212,7 @@ async function updateWithdrawalStatus(
   try{
 
     const updateData = {
-      status:status
+      status
     };
 
 
@@ -6407,8 +6226,7 @@ async function updateWithdrawalStatus(
 
     }else{
 
-      updateData.processed_at =
-        null;
+      updateData.processed_at = null;
 
     }
 
@@ -6417,9 +6235,7 @@ async function updateWithdrawalStatus(
       error
     } = await sb
       .from("withdrawal_requests")
-      .update(
-        updateData
-      )
+      .update(updateData)
       .eq(
         "id",
         withdrawalId
@@ -6427,9 +6243,7 @@ async function updateWithdrawalStatus(
 
 
     if(error){
-
       throw error;
-
     }
 
 
@@ -6442,11 +6256,9 @@ async function updateWithdrawalStatus(
 
     await loadWithdrawals();
 
-
   }catch(error){
 
     console.error(error);
-
 
     showMessage(
       "withdrawalAdminMessage",
@@ -6460,22 +6272,13 @@ async function updateWithdrawalStatus(
 }
 
 
-/* =========================================================
-   PROCESS WITHDRAWAL
-========================================================= */
-
 async function processWithdrawal(id){
 
-  if(
-    !confirm(
-      "Move this withdrawal request to Processing?"
-    )
-  ){
-
+  if(!confirm(
+    "Move this withdrawal request to Processing?"
+  )){
     return;
-
   }
-
 
   await updateWithdrawalStatus(
     id,
@@ -6485,22 +6288,13 @@ async function processWithdrawal(id){
 }
 
 
-/* =========================================================
-   REJECT WITHDRAWAL
-========================================================= */
-
 async function rejectWithdrawal(id){
 
-  if(
-    !confirm(
-      "Reject this withdrawal request?"
-    )
-  ){
-
+  if(!confirm(
+    "Reject this withdrawal request?"
+  )){
     return;
-
   }
-
 
   await updateWithdrawalStatus(
     id,
@@ -6510,22 +6304,13 @@ async function rejectWithdrawal(id){
 }
 
 
-/* =========================================================
-   MARK WITHDRAWAL PAID
-========================================================= */
-
 async function markWithdrawalPaid(id){
 
-  if(
-    !confirm(
-      "Confirm that this payment has been made manually?"
-    )
-  ){
-
+  if(!confirm(
+    "Confirm that this payment has been made manually?"
+  )){
     return;
-
   }
-
 
   await updateWithdrawalStatus(
     id,
@@ -6546,11 +6331,7 @@ async function loadAdminSongs(){
   }
 
 
-  const isAdmin =
-    await isCurrentUserAdmin();
-
-
-  if(!isAdmin){
+  if(!await isCurrentUserAdmin()){
     return;
   }
 
@@ -6561,19 +6342,12 @@ async function loadAdminSongs(){
     );
 
 
-  if(!tbody){
-    return;
-  }
-
-
   tbody.innerHTML = `
     <tr>
       <td colspan="5">
-
         <div class="loading">
           Loading submissions...
         </div>
-
       </td>
     </tr>
   `;
@@ -6596,9 +6370,7 @@ async function loadAdminSongs(){
 
 
     if(error){
-
       throw error;
-
     }
 
 
@@ -6609,16 +6381,14 @@ async function loadAdminSongs(){
       );
 
 
-    if(pending.length === 0){
+    if(!pending.length){
 
       tbody.innerHTML = `
         <tr>
           <td colspan="5">
-
             <div class="empty">
               No pending songs.
             </div>
-
           </td>
         </tr>
       `;
@@ -6655,30 +6425,24 @@ async function loadAdminSongs(){
             </td>
 
             <td>
-
               <span class="status pending">
                 Pending
               </span>
-
             </td>
 
             <td>
 
               <button
                 class="btn btn-success"
-                onclick="approveSong('${song.id}')">
-
+                onclick="approveSong('${escapeAttribute(song.id)}')">
                 Approve
-
               </button>
 
               <button
                 class="btn btn-danger"
                 style="margin-left:5px;"
-                onclick="rejectSong('${song.id}')">
-
+                onclick="rejectSong('${escapeAttribute(song.id)}')">
                 Reject
-
               </button>
 
             </td>
@@ -6687,7 +6451,6 @@ async function loadAdminSongs(){
         `;
 
       }).join("");
-
 
   }catch(error){
 
@@ -6700,16 +6463,12 @@ async function loadAdminSongs(){
     tbody.innerHTML = `
       <tr>
         <td colspan="5">
-
           <div class="empty">
-
             ${escapeHtml(
               error.message ||
               "Could not load submissions."
             )}
-
           </div>
-
         </td>
       </tr>
     `;
@@ -6736,11 +6495,7 @@ async function approveSong(songId){
   }
 
 
-  const isAdmin =
-    await isCurrentUserAdmin();
-
-
-  if(!isAdmin){
+  if(!await isCurrentUserAdmin()){
 
     alert(
       "You are not authorized."
@@ -6767,9 +6522,7 @@ async function approveSong(songId){
 
 
     if(error){
-
       throw error;
-
     }
 
 
@@ -6788,11 +6541,9 @@ async function approveSong(songId){
 
     await loadTopCharts();
 
-
   }catch(error){
 
     console.error(error);
-
 
     showMessage(
       "adminMessage",
@@ -6823,11 +6574,7 @@ async function rejectSong(songId){
   }
 
 
-  const isAdmin =
-    await isCurrentUserAdmin();
-
-
-  if(!isAdmin){
+  if(!await isCurrentUserAdmin()){
 
     alert(
       "You are not authorized."
@@ -6838,13 +6585,9 @@ async function rejectSong(songId){
   }
 
 
-  const confirmed =
-    confirm(
-      "Reject this song submission?"
-    );
-
-
-  if(!confirmed){
+  if(!confirm(
+    "Reject this song submission?"
+  )){
     return;
   }
 
@@ -6865,9 +6608,7 @@ async function rejectSong(songId){
 
 
     if(error){
-
       throw error;
-
     }
 
 
@@ -6880,11 +6621,9 @@ async function rejectSong(songId){
 
     await loadAdminSongs();
 
-
   }catch(error){
 
     console.error(error);
-
 
     showMessage(
       "adminMessage",
@@ -6905,9 +6644,7 @@ async function rejectSong(songId){
 async function loadAdministrators(){
 
   if(!isCurrentUserSuperAdmin()){
-
     return;
-
   }
 
 
@@ -6917,19 +6654,12 @@ async function loadAdministrators(){
     );
 
 
-  if(!tbody){
-    return;
-  }
-
-
   tbody.innerHTML = `
     <tr>
       <td colspan="4">
-
         <div class="loading">
           Loading administrators...
         </div>
-
       </td>
     </tr>
   `;
@@ -6954,9 +6684,7 @@ async function loadAdministrators(){
 
 
     if(error){
-
       throw error;
-
     }
 
 
@@ -6964,16 +6692,14 @@ async function loadAdministrators(){
       data || [];
 
 
-    if(admins.length === 0){
+    if(!admins.length){
 
       tbody.innerHTML = `
         <tr>
           <td colspan="4">
-
             <div class="empty">
               No administrators found.
             </div>
-
           </td>
         </tr>
       `;
@@ -7054,7 +6780,7 @@ async function loadAdministrators(){
                       : "btn-success"
                     }"
                     onclick="toggleAdministrator(
-                      '${admin.user_id}',
+                      '${escapeAttribute(admin.user_id)}',
                       ${admin.active}
                     )">
 
@@ -7075,7 +6801,6 @@ async function loadAdministrators(){
 
       }).join("");
 
-
   }catch(error){
 
     console.error(
@@ -7087,16 +6812,12 @@ async function loadAdministrators(){
     tbody.innerHTML = `
       <tr>
         <td colspan="4">
-
           <div class="empty">
-
             ${escapeHtml(
               error.message ||
               "Could not load administrators."
             )}
-
           </div>
-
         </td>
       </tr>
     `;
@@ -7168,9 +6889,7 @@ async function addAdministrator(){
 
 
     if(error){
-
       throw error;
-
     }
 
 
@@ -7188,11 +6907,9 @@ async function addAdministrator(){
 
     await loadAdministrators();
 
-
   }catch(error){
 
     console.error(error);
-
 
     showMessage(
       "adminManagementMessage",
@@ -7236,14 +6953,10 @@ async function toggleAdministrator(
     : "deactivate";
 
 
-  if(
-    !confirm(
-      `Are you sure you want to ${action} this administrator?`
-    )
-  ){
-
+  if(!confirm(
+    `Are you sure you want to ${action} this administrator?`
+  )){
     return;
-
   }
 
 
@@ -7263,9 +6976,7 @@ async function toggleAdministrator(
 
 
     if(error){
-
       throw error;
-
     }
 
 
@@ -7278,11 +6989,9 @@ async function toggleAdministrator(
 
     await loadAdministrators();
 
-
   }catch(error){
 
     console.error(error);
-
 
     showMessage(
       "adminManagementMessage",
@@ -7320,7 +7029,6 @@ function showMessage(
   element.textContent =
     message;
 
-
   element.className =
     "message show " +
     type;
@@ -7344,7 +7052,6 @@ function clearMessage(
 
 
   element.textContent = "";
-
 
   element.className =
     "message";
@@ -7394,25 +7101,16 @@ function formatStatus(status){
 
   const labels = {
 
-    pending:
-      "Pending",
-
-    processing:
-      "Processing",
-
-    paid:
-      "Paid",
-
-    rejected:
-      "Rejected"
+    pending:"Pending",
+    processing:"Processing",
+    paid:"Paid",
+    rejected:"Rejected"
 
   };
 
 
-  return labels[
-    status
-  ] ||
-  status;
+  return labels[status] ||
+    status;
 
 }
 
@@ -7544,7 +7242,7 @@ function showTerms(){
 
 
 /* =========================================================
-   CLOSE MODAL WHEN CLICKING OUTSIDE
+   CLOSE MODAL OUTSIDE
 ========================================================= */
 
 document
