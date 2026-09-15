@@ -1,1627 +1,223 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#0d0d0d">
-<title>NILE SONIQ — Uganda's Music</title>
-
-<style>
-:root{
-  --bg:#0d0d0d;
-  --panel:#1b1b1b;
-  --panel2:#222;
-  --orange:#ff6a00;
-  --white:#fff;
-  --muted:#8e8e8e;
-  --line:#292929;
-  --danger:#e53935;
-  --radius:22px;
-  --shadow:0 10px 30px rgba(0,0,0,.28)
-}
-
-*{box-sizing:border-box}
-
-html,body{
-  margin:0;
-  background:var(--bg);
-  color:var(--white);
-  font-family:Arial,Helvetica,sans-serif
-}
-
-body{
-  min-height:100vh;
-  padding-bottom:92px
-}
-
-button,input,textarea{
-  font:inherit
-}
-
-button{
-  cursor:pointer;
-  border:0
-}
-
-.header{
-  position:sticky;
-  top:0;
-  z-index:50;
-  background:rgba(13,13,13,.96);
-  backdrop-filter:blur(12px);
-  border-bottom:1px solid var(--line)
-}
-
-.header-inner{
-  max-width:1100px;
-  margin:auto;
-  padding:20px 28px;
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:16px
-}
-
-.logo{
-  font-size:29px;
-  font-weight:900;
-  line-height:.78;
-  letter-spacing:-1px
-}
-
-.logo span{
-  color:var(--orange)
-}
-
-.header-right{
-  display:flex;
-  align-items:center;
-  gap:14px
-}
-
-.email{
-  color:var(--muted);
-  max-width:190px;
-  overflow:hidden;
-  text-overflow:ellipsis;
-  white-space:nowrap
-}
-
-.orange-btn{
-  background:var(--orange);
-  color:#090909;
-  border-radius:999px;
-  padding:14px 24px;
-  font-weight:900
-}
-
-.ghost-btn{
-  background:#1a1a1a;
-  color:#ddd;
-  border:1px solid #303030;
-  border-radius:999px;
-  padding:13px 20px;
-  font-weight:800
-}
-
-.container{
-  max-width:1100px;
-  margin:auto;
-  padding:22px 28px
-}
-
-.nav{
-  display:flex;
-  gap:12px;
-  flex-wrap:wrap;
-  margin:0 0 26px
-}
-
-.nav button{
-  background:#191919;
-  color:#999;
-  border:1px solid #292929;
-  padding:13px 21px;
-  border-radius:999px;
-  font-weight:900
-}
-
-.nav button.active{
-  background:var(--orange);
-  color:#080808;
-  border-color:var(--orange)
-}
-
-.page{
-  display:none
-}
-
-.page.active{
-  display:block
-}
-
-.hero{
-  background:#191919;
-  border:1px solid #292929;
-  border-radius:28px;
-  padding:42px 34px;
-  margin-bottom:24px;
-  box-shadow:var(--shadow)
-}
-
-.eyebrow{
-  color:var(--orange);
-  font-weight:900;
-  letter-spacing:3px;
-  font-size:14px
-}
-
-.hero h1{
-  font-size:52px;
-  line-height:1.02;
-  margin:18px 0 12px;
-  max-width:760px
-}
-
-.hero h1 span{
-  color:var(--orange)
-}
-
-.hero p{
-  font-size:20px;
-  color:#8f8f8f;
-  margin:0
-}
-
-.search{
-  width:100%;
-  background:#191919;
-  color:#fff;
-  border:1px solid #292929;
-  border-radius:26px;
-  padding:20px 24px;
-  outline:0;
-  margin-bottom:30px
-}
-
-.search:focus{
-  border-color:var(--orange)
-}
-
-.section-head{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  margin:28px 0 15px
-}
-
-.section-head h2{
-  margin:0;
-  font-size:25px
-}
-
-.section-head b{
-  color:var(--orange)
-}
-
-.grid{
-  display:grid;
-  grid-template-columns:repeat(auto-fill,minmax(245px,1fr));
-  gap:18px
-}
-
-.card{
-  background:var(--panel);
-  border:1px solid #292929;
-  border-radius:24px;
-  overflow:hidden;
-  box-shadow:var(--shadow)
-}
-
-.art{
-  height:230px;
-  background:#242424;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  position:relative;
-  background-size:cover;
-  background-position:center
-}
-
-.art .note{
-  font-size:48px
-}
-
-.play-round{
-  position:absolute;
-  right:15px;
-  bottom:15px;
-  width:58px;
-  height:58px;
-  border-radius:50%;
-  background:var(--orange);
-  font-size:23px;
-  color:#080808;
-  font-weight:900
-}
-
-.card-body{
-  padding:16px
-}
-
-.song-title{
-  font-size:20px;
-  font-weight:900;
-  margin-bottom:5px
-}
-
-.sub{
-  color:#8c8c8c
-}
-
-.card-actions{
-  display:flex;
-  gap:8px;
-  margin-top:15px;
-  flex-wrap:wrap
-}
-
-.card-actions button{
-  flex:1;
-  min-width:80px;
-  border-radius:999px;
-  padding:11px;
-  background:#252525;
-  color:#fff;
-  font-weight:800
-}
-
-.card-actions .main{
-  background:var(--orange);
-  color:#080808
-}
-
-/* DOWNLOAD BUTTON */
-
-.download-btn{
-  background:#222 !important;
-  color:#fff !important;
-  border:1px solid #333 !important;
-  text-decoration:none;
-  display:flex;
-  align-items:center;
-  justify-content:center
-}
-
-.download-btn:hover{
-  border-color:var(--orange) !important;
-  color:var(--orange) !important
-}
-
-/* REVIEW STATUS */
-
-.review-status{
-  display:inline-block;
-  margin-top:8px;
-  padding:5px 10px;
-  border-radius:999px;
-  font-size:11px;
-  font-weight:900;
-  text-transform:uppercase
-}
-
-.review-status.pending{
-  background:#3a3000;
-  color:#ffd84d
-}
-
-.review-status.approved{
-  background:#103d20;
-  color:#62e58a
-}
-
-.review-status.rejected{
-  background:#421515;
-  color:#ff7777
-}
-
-.rejection-reason{
-  margin-top:8px;
-  padding:9px 11px;
-  border-radius:10px;
-  background:#281313;
-  color:#ff9999;
-  font-size:12px;
-  line-height:1.4
-}
-
-.artist-card{
-  padding:20px;
-  display:flex;
-  align-items:center;
-  gap:16px
-}
-
-.avatar{
-  width:72px;
-  height:72px;
-  border-radius:50%;
-  background:#292929;
-  object-fit:cover;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  font-size:25px;
-  font-weight:900;
-  color:var(--orange);
-  flex:none
-}
-
-.form{
-  background:#171717;
-  border:1px solid #292929;
-  border-radius:24px;
-  padding:22px;
-  margin-bottom:20px
-}
-
-.form h2{
-  margin-top:0
-}
-
-.field{
-  margin-bottom:14px
-}
-
-.field label{
-  display:block;
-  color:#aaa;
-  font-weight:800;
-  margin:0 0 7px
-}
-
-.field input,
-.field textarea,
-.field select{
-  width:100%;
-  background:#fff;
-  color:#111;
-  border:0;
-  border-radius:14px;
-  padding:17px;
-  outline:0
-}
-
-.field textarea{
-  min-height:110px;
-  resize:vertical
-}
-
-.field input[type=file]{
-  padding:12px
-}
-
-.form-row{
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:14px
-}
-
-.stats{
-  display:grid;
-  grid-template-columns:repeat(3,1fr);
-  gap:15px;
-  margin:18px 0
-}
-
-.stat{
-  background:#191919;
-  border:1px solid #292929;
-  border-radius:22px;
-  padding:22px
-}
-
-.stat small{
-  color:#aaa
-}
-
-.stat strong{
-  display:block;
-  font-size:32px;
-  color:var(--orange);
-  margin-top:5px
-}
-
-.table-wrap{
-  overflow:auto;
-  border:1px solid #292929;
-  border-radius:20px
-}
-
-.table{
-  width:100%;
-  border-collapse:collapse;
-  min-width:800px
-}
-
-.table th,
-.table td{
-  padding:15px;
-  text-align:left;
-  border-bottom:1px solid #292929;
-  vertical-align:top
-}
-
-.table th{
-  color:var(--orange)
-}
-
-.notice{
-  padding:15px 17px;
-  border-radius:15px;
-  background:#22180f;
-  border:1px solid #4c2a13;
-  color:#ffc79f;
-  margin-bottom:18px
-}
-
-.success{
-  background:#112016;
-  border-color:#1d5630;
-  color:#9ee0ad
-}
-
-.empty{
-  padding:35px;
-  text-align:center;
-  color:#777;
-  background:#171717;
-  border:1px dashed #333;
-  border-radius:20px
-}
-
-.player{
-  position:fixed;
-  z-index:100;
-  bottom:0;
-  left:0;
-  right:0;
-  background:#171717;
-  border-top:1px solid #333;
-  box-shadow:0 -10px 35px rgba(0,0,0,.45);
-  padding:12px 20px
-}
-
-.player-inner{
-  max-width:1100px;
-  margin:auto;
-  display:grid;
-  grid-template-columns:1.2fr 2fr 1fr;
-  align-items:center;
-  gap:16px
-}
-
-.now-title{
-  font-weight:900
-}
-
-.now-sub{
-  color:#888;
-  font-size:13px;
-  margin-top:3px
-}
-
-.controls{
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  gap:12px
-}
-
-.controls button{
-  background:#292929;
-  color:#fff;
-  border-radius:50%;
-  width:42px;
-  height:42px
-}
-
-.controls .big{
-  background:var(--orange);
-  color:#080808;
-  width:50px;
-  height:50px
-}
-
-.progress{
-  width:100%;
-  accent-color:var(--orange)
-}
-
-.volume{
-  display:flex;
-  align-items:center;
-  gap:8px
-}
-
-.volume input{
-  width:100%;
-  accent-color:var(--orange)
-}
-
-.modal{
-  position:fixed;
-  inset:0;
-  z-index:200;
-  background:rgba(0,0,0,.75);
-  display:none;
-  align-items:center;
-  justify-content:center;
-  padding:20px
-}
-
-.modal.show{
-  display:flex
-}
-
-.modal-box{
-  width:min(440px,100%);
-  background:#171717;
-  border:1px solid #333;
-  border-radius:25px;
-  padding:25px
-}
-
-.modal-box h2{
-  margin-top:0
-}
-
-.close{
-  float:right;
-  background:none;
-  color:#aaa;
-  font-size:26px
-}
-
-.toast{
-  position:fixed;
-  z-index:300;
-  right:20px;
-  bottom:110px;
-  background:#fff;
-  color:#111;
-  padding:14px 18px;
-  border-radius:14px;
-  font-weight:800;
-  display:none;
-  box-shadow:var(--shadow)
-}
-
-@media(max-width:700px){
-
- .header-inner{
-   padding:18px 20px
- }
-
- .container{
-   padding:18px 20px
- }
-
- .email{
-   display:none
- }
-
- .hero{
-   padding:32px 25px
- }
-
- .hero h1{
-   font-size:39px
- }
-
- .hero p{
-   font-size:17px
- }
-
- .grid{
-   grid-template-columns:1fr 1fr;
-   gap:12px
- }
-
- .art{
-   height:170px
- }
-
- .card-body{
-   padding:12px
- }
-
- .song-title{
-   font-size:16px
- }
-
- .form-row{
-   grid-template-columns:1fr
- }
-
- .stats{
-   grid-template-columns:1fr 1fr
- }
-
- .stat strong{
-   font-size:27px
- }
-
- .player{
-   padding:10px
- }
-
- .player-inner{
-   grid-template-columns:1fr
- }
-
- .volume{
-   display:none
- }
-
- .controls{
-   order:3
- }
-
- .player-inner .progress-wrap{
-   order:2
- }
-}
-
-@media(max-width:430px){
-
- .grid{
-   grid-template-columns:1fr
- }
-
- .art{
-   height:220px
- }
-
- .stats{
-   grid-template-columns:1fr 1fr
- }
-
- .header-inner{
-   gap:8px
- }
-
- .logo{
-   font-size:25px
- }
-
- .card-actions{
-   flex-direction:column
- }
-
- .card-actions button{
-   width:100%
- }
-}
-</style>
-</head>
-
-<body>
-
-<header class="header">
-
-  <div class="header-inner">
-
-    <div class="logo">
-      NILE <span>SONIQ</span>
-    </div>
-
-    <div class="header-right">
-
-      <span
-        id="userEmail"
-        class="email">
-      </span>
-
-      <button
-        id="authBtn"
-        class="orange-btn"
-        onclick="openAuth()">
-        Artist Login
-      </button>
-
-    </div>
-
-  </div>
-
-</header>
-
-
-<main class="container">
-
-  <nav class="nav">
-
-    <button
-      data-page="home"
-      class="active">
-      🏠 Home
-    </button>
-
-    <button
-      data-page="artists">
-      🎤 Artists
-    </button>
-
-    <button
-      data-page="dashboard"
-      id="dashNav"
-      style="display:none">
-      📊 Dashboard
-    </button>
-
-    <button
-      data-page="admin"
-      id="adminNav"
-      style="display:none">
-      🛡️ Admin
-    </button>
-
-  </nav>
-
-
-  <!-- HOME -->
-
-  <section
-    id="home"
-    class="page active">
-
-    <div class="hero">
-
-      <div class="eyebrow">
-        FREE FOREVER • MTN MOMO READY
-      </div>
-
-      <h1>
-        Uganda's music,<br>
-        <span>free to stream</span>
-      </h1>
-
-      <p>
-        Fans pay 0. Artists earn UGX per play.
-      </p>
-
-    </div>
-
-
-    <input
-      id="search"
-      class="search"
-      placeholder="🔍  Search songs, artists..."
-      oninput="renderHome()">
-
-
-    <div class="section-head">
-
-      <h2>
-        🔥 Trending
-        <b id="trendCount">
-          0 SONGS
-        </b>
-      </h2>
-
-      <b>
-        Most played
-      </b>
-
-    </div>
-
-    <div
-      id="trending"
-      class="grid">
-    </div>
-
-
-    <div class="section-head">
-
-      <h2>
-        🆕 New Releases
-      </h2>
-
-      <b>
-        Fresh
-      </b>
-
-    </div>
-
-    <div
-      id="newReleases"
-      class="grid">
-    </div>
-
-
-    <div class="section-head">
-
-      <h2>
-        🏆 Top Charts
-      </h2>
-
-      <b>
-        Most played
-      </b>
-
-    </div>
-
-    <div
-      id="topCharts"
-      class="grid">
-    </div>
-
-  </section>
-
-
-  <!-- ARTISTS -->
-
-  <section
-    id="artists"
-    class="page">
-
-    <div class="section-head">
-
-      <h2>
-        🎤 Artists
-      </h2>
-
-      <b id="artistCount"></b>
-
-    </div>
-
-    <div
-      id="artistList"
-      class="grid">
-    </div>
-
-  </section>
-
-
-  <!-- DASHBOARD -->
-
-  <section
-    id="dashboard"
-    class="page">
-
-    <h1>
-      📊 My Artist Dashboard
-    </h1>
-
-    <p style="color:#888">
-      Manage your profile, upload music and follow your performance.
-    </p>
-
-
-    <div class="stats">
-
-      <div class="stat">
-
-        <small>
-          Plays
-        </small>
-
-        <strong id="myPlays">
-          0
-        </strong>
-
-      </div>
-
-
-      <div class="stat">
-
-        <small>
-          UGX earned
-        </small>
-
-        <strong id="myEarnings">
-          0
-        </strong>
-
-      </div>
-
-
-      <div class="stat">
-
-        <small>
-          Songs
-        </small>
-
-        <strong id="mySongs">
-          0
-        </strong>
-
-      </div>
-
-    </div>
-
-
-    <!-- PROFILE -->
-
-    <div class="form">
-
-      <h2>
-        Artist Profile
-      </h2>
-
-      <div class="field">
-
-        <label>
-          Artist name
-        </label>
-
-        <input
-          id="profileName"
-          placeholder="Kaga Boy">
-
-      </div>
-
-
-      <div class="field">
-
-        <label>
-          Bio
-        </label>
-
-        <textarea
-          id="profileBio"
-          placeholder="Tell fans about yourself...">
-        </textarea>
-
-      </div>
-
-
-      <div class="field">
-
-        <label>
-          Profile picture
-        </label>
-
-        <input
-          id="profileImage"
-          type="file"
-          accept="image/*"
-          onchange="previewProfile()">
-
-      </div>
-
-
-      <div id="profilePreview"></div>
-
-
-      <button
-        class="orange-btn"
-        onclick="saveProfile()">
-
-        Save Profile
-
-      </button>
-
-    </div>
-
-
-    <!-- UPLOAD -->
-
-    <div class="form">
-
-      <h2>
-        Upload Song
-      </h2>
-
-
-      <div class="form-row">
-
-        <div class="field">
-
-          <label>
-            Song title
-          </label>
-
-          <input
-            id="songTitle"
-            placeholder="Kwete">
-
-        </div>
-
-
-        <div class="field">
-
-          <label>
-            Artist
-          </label>
-
-          <input
-            id="songArtist"
-            placeholder="Kaga Boy">
-
-        </div>
-
-      </div>
-
-
-      <div class="form-row">
-
-        <div class="field">
-
-          <label>
-            Song artwork
-          </label>
-
-          <input
-            id="songCover"
-            type="file"
-            accept="image/*">
-
-        </div>
-
-
-        <div class="field">
-
-          <label>
-            MP3 / audio file
-          </label>
-
-          <input
-            id="songFile"
-            type="file"
-            accept="audio/*"
-            onchange="showSelectedFile()">
-
-        </div>
-
-      </div>
-
-
-      <div
-        id="selectedFile"
-        style="color:var(--orange);margin:5px 0 14px">
-      </div>
-
-
-      <div class="field">
-
-        <label>
-          Or paste a public MP3/audio link
-        </label>
-
-        <input
-          id="songUrl"
-          type="url"
-          placeholder="https://example.com/song.mp3">
-
-      </div>
-
-
-      <button
-        class="orange-btn"
-        onclick="uploadSong()">
-
-        Upload
-
-      </button>
-
-
-      <div
-        class="notice"
-        style="margin-top:15px">
-
-        New uploads are automatically marked
-        <strong>Pending</strong> and must be approved
-        by an administrator before they appear publicly.
-
-        <br><br>
-
-        Demo note: a local phone MP3 is previewable
-        in this browser, but GitHub Pages cannot
-        permanently store uploaded audio.
-
-      </div>
-
-    </div>
-
-
-    <!-- MY SONGS -->
-
-    <div class="form">
-
-      <h2>
-        My Songs
-      </h2>
-
-      <div id="mySongList"></div>
-
-    </div>
-
-  </section>
-
-
-  <!-- ADMIN -->
-
-  <section
-    id="admin"
-    class="page">
-
-    <h1>
-      🛡️ Admin Dashboard
-    </h1>
-
-    <p style="color:#888">
-      Platform management for the NileSoniq owner.
-    </p>
-
-
-    <div class="stats">
-
-      <div class="stat">
-
-        <small>
-          Total songs
-        </small>
-
-        <strong id="adminSongs">
-          0
-        </strong>
-
-      </div>
-
-
-      <div class="stat">
-
-        <small>
-          Total plays
-        </small>
-
-        <strong id="adminPlays">
-          0
-        </strong>
-
-      </div>
-
-
-      <div class="stat">
-
-        <small>
-          Artists
-        </small>
-
-        <strong id="adminArtists">
-          0
-        </strong>
-
-      </div>
-
-    </div>
-
-
-    <div class="form">
-
-      <h2>
-        Song Submissions
-      </h2>
-
-      <p style="color:#888">
-        Review new songs before they become public.
-      </p>
-
-      <div id="adminSongList"></div>
-
-    </div>
-
-
-    <div class="form">
-
-      <h2>
-        Platform Settings
-      </h2>
-
-
-      <div class="form-row">
-
-        <div class="field">
-
-          <label>
-            UGX earned per play
-          </label>
-
-          <input
-            id="rate"
-            type="number"
-            min="0"
-            step="0.01">
-
-        </div>
-
-
-        <div class="field">
-
-          <label>
-            Minimum payout (UGX)
-          </label>
-
-          <input
-            id="minPayout"
-            type="number"
-            min="0">
-
-        </div>
-
-      </div>
-
-
-      <button
-        class="orange-btn"
-        onclick="saveSettings()">
-
-        Save Settings
-
-      </button>
-
-    </div>
-
-  </section>
-
-
-  <!-- FOOTER -->
-
-  <footer class="footer">
-
-    NILE <b>SONIQ</b> © 2026
-
-    <br>
-
-    <span>
-      Privacy &nbsp; | &nbsp; Terms &nbsp; | &nbsp; Contact
-    </span>
-
-  </footer>
-
-</main>
-
-
-<!-- PLAYER -->
-
-<div
-  class="player"
-  id="player"
-  style="display:none">
-
-  <div class="player-inner">
-
-    <div>
-
-      <div
-        class="now-title"
-        id="nowTitle">
-        Nothing playing
-      </div>
-
-      <div
-        class="now-sub"
-        id="nowArtist">
-      </div>
-
-    </div>
-
-
-    <div class="progress-wrap">
-
-      <input
-        id="progress"
-        class="progress"
-        type="range"
-        min="0"
-        max="100"
-        value="0"
-        oninput="seek(this.value)">
-
-    </div>
-
-
-    <div class="controls">
-
-      <button onclick="restart()">
-        ↺
-      </button>
-
-      <button
-        class="big"
-        id="playPause"
-        onclick="togglePlay()">
-        ▶
-      </button>
-
-      <button onclick="stopAudio()">
-        ■
-      </button>
-
-    </div>
-
-
-    <div class="volume">
-
-      <span>
-        🔊
-      </span>
-
-      <input
-        id="volume"
-        type="range"
-        min="0"
-        max="1"
-        step=".01"
-        value=".8"
-        oninput="audio.volume=this.value">
-
-    </div>
-
-  </div>
-
-</div>
-
-
-<!-- LOGIN MODAL -->
-
-<div
-  id="authModal"
-  class="modal">
-
-  <div class="modal-box">
-
-    <button
-      class="close"
-      onclick="closeAuth()">
-      ×
-    </button>
-
-    <h2>
-      Artist Login
-    </h2>
-
-    <p style="color:#888">
-      This prototype stores login data only in this browser.
-    </p>
-
-
-    <div class="field">
-
-      <label>
-        Email
-      </label>
-
-      <input
-        id="loginEmail"
-        type="email"
-        placeholder="artist@example.com">
-
-    </div>
-
-
-    <div class="field">
-
-      <label>
-        Artist name
-      </label>
-
-      <input
-        id="loginArtist"
-        placeholder="Kaga Boy">
-
-    </div>
-
-
-    <div class="field">
-
-      <label>
-        Password
-      </label>
-
-      <input
-        id="loginPassword"
-        type="password"
-        placeholder="••••••••">
-
-    </div>
-
-
-    <button
-      class="orange-btn"
-      style="width:100%"
-      onclick="login()">
-
-      Login / Create Demo Artist
-
-    </button>
-
-  </div>
-
-</div>
-
-
-<div
-  id="toast"
-  class="toast">
-</div>
-
-
 <script>
 
 /* =========================================================
-   DATABASE
+   NILE SONIQ DATABASE
 ========================================================= */
 
 const KEY = "nilesoniq_v1";
 
+let db = JSON.parse(localStorage.getItem(KEY) || "null") || {
+  settings: {
+    rate: 0.5,
+    minPayout: 10000
+  },
 
-let db =
-  JSON.parse(
-    localStorage.getItem(KEY) || "null"
-  )
-  ||
-  {
+  users: [],
 
-    settings:{
-      rate:.5,
-      minPayout:10000
-    },
+  songs: [
+    {
+      id: 1,
+      title: "Eyiyu Kuda",
+      artist: "Ston Boi Ft Kv",
+      plays: 0,
+      created: Date.now(),
+      cover: "",
+      audio: "",
+      reviewStatus: "approved",
+      rejectionReason: ""
+    }
+  ]
+};
 
-    users:[],
 
-    songs:[
+/* =========================================================
+   UPGRADE OLD DATA
+========================================================= */
 
-      {
-        id:1,
-        title:"Eyiyu Kuda",
-        artist:"Ston Boi Ft Kv",
-        plays:1,
-        created:Date.now(),
-        cover:"",
-        audio:"",
-        reviewStatus:"approved",
-        rejectionReason:""
-      }
-
-    ]
-
+if (!db.settings) {
+  db.settings = {
+    rate: 0.5,
+    minPayout: 10000
   };
+}
 
+if (!Array.isArray(db.users)) {
+  db.users = [];
+}
 
-/*
-  Upgrade old songs from the previous version.
-
-  Existing songs are considered approved so that
-  your current catalogue does not suddenly disappear.
-*/
+if (!Array.isArray(db.songs)) {
+  db.songs = [];
+}
 
 db.songs.forEach(song => {
 
-  if(!song.reviewStatus){
-
-    song.reviewStatus =
-      "approved";
-
+  if (!song.reviewStatus) {
+    song.reviewStatus = "approved";
   }
 
-  if(
-    typeof song.rejectionReason ===
-    "undefined"
-  ){
+  if (typeof song.rejectionReason === "undefined") {
+    song.rejectionReason = "";
+  }
 
-    song.rejectionReason =
-      "";
-
+  if (typeof song.plays !== "number") {
+    song.plays = 0;
   }
 
 });
 
 
-let currentUser =
-  JSON.parse(
-    localStorage.getItem(
-      "nilesoniq_user"
-    ) || "null"
-  );
-
-
-let audio =
-  new Audio();
-
-
-audio.preload =
-  "metadata";
-
-
-let currentSong =
-  null;
+let currentUser = JSON.parse(
+  localStorage.getItem("nilesoniq_user") || "null"
+);
 
 
 /* =========================================================
-   BASIC FUNCTIONS
+   AUDIO PLAYER
 ========================================================= */
 
-function save(){
+const audio = new Audio();
 
-  localStorage.setItem(
-    KEY,
-    JSON.stringify(db)
-  );
+audio.preload = "auto";
+audio.volume = 0.8;
+
+let currentSong = null;
+
+
+/* =========================================================
+   SAVE DATABASE
+========================================================= */
+
+function save() {
+
+  try {
+
+    localStorage.setItem(
+      KEY,
+      JSON.stringify(db)
+    );
+
+  } catch (error) {
+
+    console.error("NileSoniq save error:", error);
+
+    toast(
+      "Storage is full. Large audio files cannot be stored permanently in this browser."
+    );
+
+  }
 
 }
 
 
-function esc(s){
+/* =========================================================
+   BASIC HELPERS
+========================================================= */
 
-  return String(
-    s ?? ""
-  ).replace(
+function esc(s) {
+
+  return String(s ?? "").replace(
     /[&<>"']/g,
-    m =>
-      ({
-        "&":"&amp;",
-        "<":"&lt;",
-        ">":"&gt;",
-        '"':"&quot;",
-        "'":"&#039;"
-      }[m])
+    m => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#039;"
+    }[m])
   );
 
 }
 
 
-function money(n){
+function money(n) {
 
-  return Number(
-    n || 0
-  ).toLocaleString(
-    "en-UG"
-  );
+  return Number(n || 0).toLocaleString("en-UG");
 
 }
 
 
-function toast(t){
+function toast(message) {
 
-  const x =
-    document.getElementById(
-      "toast"
-    );
+  const box = document.getElementById("toast");
 
-  x.textContent =
-    t;
+  if (!box) return;
 
-  x.style.display =
-    "block";
+  box.textContent = message;
+  box.style.display = "block";
 
-  clearTimeout(
-    window._toast
-  );
+  clearTimeout(window._toast);
 
-  window._toast =
-    setTimeout(
-      () =>
-        x.style.display =
-          "none",
-      2600
-    );
+  window._toast = setTimeout(() => {
+
+    box.style.display = "none";
+
+  }, 3000);
 
 }
 
 
-function initials(name){
+function initials(name) {
 
   return esc(
     (name || "?")
       .split(/\s+/)
       .map(x => x[0])
       .join("")
-      .slice(0,2)
+      .slice(0, 2)
       .toUpperCase()
   );
+
+}
+
+
+function safeFileName(name) {
+
+  return String(name || "NileSoniq Song")
+    .replace(/[\\/:*?"<>|]/g, "-")
+    .replace(/\s+/g, " ")
+    .trim() || "NileSoniq Song";
+
+}
+
+
+/* =========================================================
+   REVIEW STATUS
+========================================================= */
+
+function getStatus(song) {
+
+  if (!song) {
+    return "pending";
+  }
+
+  return song.reviewStatus || "approved";
+
+}
+
+
+function statusText(status) {
+
+  if (status === "approved") {
+    return "Approved";
+  }
+
+  if (status === "rejected") {
+    return "Rejected";
+  }
+
+  return "Pending";
+}
+
+
+function statusHtml(song) {
+
+  const status = getStatus(song);
+
+  return `
+    <span class="review-status ${status}">
+      ${statusText(status)}
+    </span>
+  `;
 
 }
 
@@ -1630,87 +226,76 @@ function initials(name){
    NAVIGATION
 ========================================================= */
 
-function nav(){
+function nav() {
 
   document
     .querySelectorAll(".nav button")
-    .forEach(
-      b => {
+    .forEach(button => {
 
-        b.onclick =
-          () =>
-            showPage(
-              b.dataset.page
-            );
+      button.onclick = () => {
+        showPage(button.dataset.page);
+      };
 
-      }
-    );
+    });
 
   updateAuth();
 
 }
 
 
-function showPage(id){
+function showPage(id) {
 
   document
     .querySelectorAll(".page")
-    .forEach(
-      p =>
-        p.classList.remove(
-          "active"
-        )
-    );
+    .forEach(page => {
+
+      page.classList.remove("active");
+
+    });
 
 
-  const page =
-    document.getElementById(id);
+  const page = document.getElementById(id);
 
-
-  if(!page){
+  if (!page) {
     return;
   }
 
 
-  page.classList.add(
-    "active"
-  );
+  page.classList.add("active");
 
 
   document
     .querySelectorAll(".nav button")
-    .forEach(
-      b =>
-        b.classList.toggle(
-          "active",
-          b.dataset.page === id
-        )
-    );
+    .forEach(button => {
+
+      button.classList.toggle(
+        "active",
+        button.dataset.page === id
+      );
+
+    });
 
 
-  if(id === "home"){
+  if (id === "home") {
     renderHome();
   }
 
-
-  if(id === "artists"){
+  if (id === "artists") {
     renderArtists();
   }
 
-
-  if(id === "dashboard"){
+  if (id === "dashboard") {
     renderDashboard();
   }
 
-
-  if(id === "admin"){
+  if (id === "admin") {
     renderAdmin();
   }
 
 
   window.scrollTo({
-    top:0,
-    behavior:"smooth"
+    top: 0,
+    behavior: "smooth"
   });
 
 }
@@ -1720,153 +305,133 @@ function showPage(id){
    AUTH
 ========================================================= */
 
-function updateAuth(){
+function updateAuth() {
 
-  document.getElementById(
-    "userEmail"
-  ).textContent =
-    currentUser?.email || "";
+  const email = document.getElementById("userEmail");
 
-
-  const authBtn =
-    document.getElementById(
-      "authBtn"
-    );
+  if (email) {
+    email.textContent = currentUser?.email || "";
+  }
 
 
-  authBtn.textContent =
-    currentUser
-    ? "Logout"
-    : "Artist Login";
+  const authBtn = document.getElementById("authBtn");
+
+  if (authBtn) {
+
+    authBtn.textContent =
+      currentUser ? "Logout" : "Artist Login";
+
+    authBtn.onclick =
+      currentUser ? logout : openAuth;
+
+  }
 
 
-  authBtn.onclick =
-    currentUser
-    ? logout
-    : openAuth;
+  const dashNav = document.getElementById("dashNav");
+
+  if (dashNav) {
+
+    dashNav.style.display =
+      currentUser ? "inline-block" : "none";
+
+  }
 
 
-  document.getElementById(
-    "dashNav"
-  ).style.display =
-    currentUser
-    ? "inline-block"
-    : "none";
+  const adminNav = document.getElementById("adminNav");
 
+  if (adminNav) {
 
-  document.getElementById(
-    "adminNav"
-  ).style.display =
-    currentUser?.admin
-    ? "inline-block"
-    : "none";
+    adminNav.style.display =
+      currentUser?.admin ? "inline-block" : "none";
+
+  }
 
 }
 
 
-function openAuth(){
+function openAuth() {
 
   document
-    .getElementById(
-      "authModal"
-    )
-    .classList.add(
-      "show"
-    );
+    .getElementById("authModal")
+    .classList.add("show");
 
 }
 
 
-function closeAuth(){
+function closeAuth() {
 
   document
-    .getElementById(
-      "authModal"
-    )
-    .classList.remove(
-      "show"
-    );
+    .getElementById("authModal")
+    .classList.remove("show");
 
 }
 
 
-function login(){
+function login() {
 
   const email =
     document
-      .getElementById(
-        "loginEmail"
-      )
+      .getElementById("loginEmail")
       .value
       .trim();
 
 
   const name =
     document
-      .getElementById(
-        "loginArtist"
-      )
+      .getElementById("loginArtist")
       .value
-      .trim()
-      ||
-      "New Artist";
+      .trim() ||
+    "New Artist";
 
 
-  if(!email){
+  if (!email) {
 
-    toast(
-      "Enter your email"
-    );
+    toast("Enter your email");
 
     return;
 
   }
 
 
-  let u =
+  let user =
     db.users.find(
-      x =>
-        x.email === email
+      x => x.email === email
     );
 
 
-  if(!u){
+  if (!user) {
 
-    u = {
+    user = {
 
-      id:Date.now(),
+      id: Date.now(),
 
-      email:email,
+      email: email,
 
-      name:name,
+      name: name,
 
-      bio:"",
+      bio: "",
 
-      avatar:"",
+      avatar: "",
 
-      admin:false
+      admin: false
 
     };
 
+    db.users.push(user);
 
-    db.users.push(u);
+  } else {
 
-  }
-  else if(name){
-
-    u.name =
-      name;
+    user.name = name || user.name;
 
   }
 
 
-  currentUser =
-    u;
+  currentUser = user;
 
 
   localStorage.setItem(
     "nilesoniq_user",
-    JSON.stringify(u)
+    JSON.stringify(user)
   );
 
 
@@ -1876,52 +441,37 @@ function login(){
 
   updateAuth();
 
-  toast(
-    "Welcome " +
-    u.name +
-    "!"
-  );
+  toast("Welcome " + user.name + "!");
 
-  showPage(
-    "dashboard"
-  );
+  showPage("dashboard");
 
 }
 
 
-function logout(){
+function logout() {
 
-  currentUser =
-    null;
-
+  currentUser = null;
 
   localStorage.removeItem(
     "nilesoniq_user"
   );
 
-
   updateAuth();
 
-  showPage(
-    "home"
-  );
+  showPage("home");
 
-  toast(
-    "Logged out"
-  );
+  toast("Logged out");
 
 }
 
 
-function ensureLogin(){
+function ensureLogin() {
 
-  if(!currentUser){
+  if (!currentUser) {
 
     openAuth();
 
-    toast(
-      "Artist login required"
-    );
+    toast("Artist login required");
 
     return false;
 
@@ -1933,30 +483,31 @@ function ensureLogin(){
 
 
 /* =========================================================
-   SONG CARDS
+   COVER
 ========================================================= */
 
-function coverStyle(s){
+function coverStyle(song) {
 
-  return s.cover
-    ? `background-image:url("${s.cover}")`
-    : "";
+  if (!song.cover) {
+    return "";
+  }
+
+  return `
+    background-image:url("${song.cover}");
+  `;
 
 }
 
 
-/*
-  PUBLIC SONG CARD
+/* =========================================================
+   PUBLIC SONG CARD
+========================================================= */
 
-  Only approved songs reach this function from
-  filteredSongs(), but the check is kept here too.
-*/
+function songCard(song) {
 
-function songCard(s){
-
-  const approved =
-    s.reviewStatus ===
-    "approved";
+  if (getStatus(song) !== "approved") {
+    return "";
+  }
 
 
   return `
@@ -1965,18 +516,17 @@ function songCard(s){
 
       <div
         class="art"
-        style="${coverStyle(s)}">
+        style="${coverStyle(song)}">
 
         ${
-          s.cover
+          song.cover
           ? ""
           : "<span class='note'>♫</span>"
         }
 
-
         <button
           class="play-round"
-          onclick="playSong(${s.id})">
+          onclick="playSong(${song.id})">
 
           ▶
 
@@ -1988,17 +538,13 @@ function songCard(s){
       <div class="card-body">
 
         <div class="song-title">
-
-          ${esc(s.title)}
-
+          ${esc(song.title)}
         </div>
 
 
         <div class="sub">
-
-          ${esc(s.artist)}
-          • ${s.plays || 0} plays
-
+          ${esc(song.artist)}
+          • ${song.plays || 0} plays
         </div>
 
 
@@ -2006,39 +552,24 @@ function songCard(s){
 
           <button
             class="main"
-            onclick="playSong(${s.id})">
+            onclick="playSong(${song.id})">
 
             ▶ Play
 
           </button>
 
 
-          ${
-            approved
+          <button
+            class="download-btn"
+            onclick="downloadSong(${song.id})">
 
-            ?
+            ↓ Download
 
-            `
-
-              <button
-                class="download-btn"
-                onclick="downloadSong(${s.id})">
-
-                ↓ Download
-
-              </button>
-
-            `
-
-            :
-
-            ""
-
-          }
+          </button>
 
 
           <button
-            onclick="shareSong(${s.id})">
+            onclick="shareSong(${song.id})">
 
             Share
 
@@ -2059,64 +590,41 @@ function songCard(s){
    PUBLIC SONG FILTER
 ========================================================= */
 
-function filteredSongs(){
+function filteredSongs() {
 
-  const q =
+  const search =
     (
-      document.getElementById(
-        "search"
-      )?.value
-      ||
+      document.getElementById("search")?.value ||
       ""
     )
     .toLowerCase()
     .trim();
 
 
-  return db.songs.filter(
-    s => {
+  return db.songs.filter(song => {
 
-      /*
-        IMPORTANT:
-        Only approved songs are public.
-      */
-
-      if(
-        s.reviewStatus !==
-        "approved"
-      ){
-
-        return false;
-
-      }
-
-
-      const title =
-        (
-          s.title ||
-          ""
-        ).toLowerCase();
-
-
-      const artist =
-        (
-          s.artist ||
-          ""
-        ).toLowerCase();
-
-
-      return (
-
-        !q ||
-
-        title.includes(q) ||
-
-        artist.includes(q)
-
-      );
-
+    if (getStatus(song) !== "approved") {
+      return false;
     }
-  );
+
+
+    const title =
+      String(song.title || "")
+        .toLowerCase();
+
+
+    const artist =
+      String(song.artist || "")
+        .toLowerCase();
+
+
+    return (
+      !search ||
+      title.includes(search) ||
+      artist.includes(search)
+    );
+
+  });
 
 }
 
@@ -2125,45 +633,38 @@ function filteredSongs(){
    HOME
 ========================================================= */
 
-function renderHome(){
+function renderHome() {
 
-  const all =
-    filteredSongs();
-
-
-  const sorted =
-    [...all].sort(
-      (a,b) =>
-        (b.plays || 0) -
-        (a.plays || 0)
-    );
+  const songs = filteredSongs();
 
 
-  const fresh =
-    [...all].sort(
-      (a,b) =>
-        b.created -
-        a.created
-    );
+  const sorted = [...songs].sort(
+    (a, b) =>
+      (b.plays || 0) -
+      (a.plays || 0)
+  );
+
+
+  const fresh = [...songs].sort(
+    (a, b) =>
+      (b.created || 0) -
+      (a.created || 0)
+  );
 
 
   document.getElementById(
     "trendCount"
   ).textContent =
-    all.length +
-    " SONGS";
+    songs.length + " SONGS";
 
 
   document.getElementById(
     "trending"
   ).innerHTML =
-
     sorted
-      .slice(0,8)
+      .slice(0, 8)
       .map(songCard)
-      .join("")
-
-    ||
+      .join("") ||
 
     `
       <div class="empty">
@@ -2175,13 +676,10 @@ function renderHome(){
   document.getElementById(
     "newReleases"
   ).innerHTML =
-
     fresh
-      .slice(0,8)
+      .slice(0, 8)
       .map(songCard)
-      .join("")
-
-    ||
+      .join("") ||
 
     `
       <div class="empty">
@@ -2193,13 +691,10 @@ function renderHome(){
   document.getElementById(
     "topCharts"
   ).innerHTML =
-
     sorted
-      .slice(0,8)
+      .slice(0, 8)
       .map(songCard)
-      .join("")
-
-    ||
+      .join("") ||
 
     `
       <div class="empty">
@@ -2214,152 +709,118 @@ function renderHome(){
    ARTISTS
 ========================================================= */
 
-function renderArtists(){
+function renderArtists() {
 
   const map = {};
 
 
-  /*
-    Only approved songs count publicly
-    toward artist song numbers.
-  */
-
   db.songs
     .filter(
-      s =>
-        s.reviewStatus ===
-        "approved"
+      song =>
+        getStatus(song) === "approved"
     )
-    .forEach(
-      s => {
+    .forEach(song => {
 
-        const k =
-          s.artist.trim();
+      const name =
+        String(song.artist || "").trim();
 
-
-        if(k){
-
-          map[k] =
-            (map[k] || 0) + 1;
-
-        }
-
+      if (!name) {
+        return;
       }
-    );
+
+      map[name] =
+        (map[name] || 0) + 1;
+
+    });
 
 
   const users =
-    db.users.map(
-      u => ({
+    db.users.map(user => ({
 
-        name:u.name,
+      name: user.name,
 
-        avatar:u.avatar,
+      avatar: user.avatar
 
-        count:
-          db.songs.filter(
-            s =>
-              s.artist ===
-              u.name &&
-              s.reviewStatus ===
-              "approved"
-          ).length
-
-      })
-    );
+    }));
 
 
   const names =
     [
-      ...new Set(
-        [
-          ...Object.keys(map),
-          ...users.map(
-            u => u.name
-          )
-        ]
-      )
+      ...new Set([
+        ...Object.keys(map),
+        ...users.map(x => x.name)
+      ])
     ];
 
 
   document.getElementById(
     "artistCount"
   ).textContent =
-    names.length +
-    " ARTISTS";
+    names.length + " ARTISTS";
 
 
   document.getElementById(
     "artistList"
   ).innerHTML =
 
-    names.map(
-      n => {
+    names.map(name => {
 
-        const u =
-          users.find(
-            x =>
-              x.name === n
-          );
+      const user =
+        users.find(
+          x => x.name === name
+        );
 
 
-        return `
+      return `
 
-          <div class="card artist-card">
+        <div class="card artist-card">
 
-            <div class="avatar">
+          <div class="avatar">
 
-              ${
-                u?.avatar
+            ${
+              user?.avatar
 
-                ?
+              ?
 
-                `
-                  <img
-                    src="${u.avatar}"
-                    style="
-                      width:100%;
-                      height:100%;
-                      object-fit:cover;
-                      border-radius:50%
-                    ">
-                `
+              `
+                <img
+                  src="${user.avatar}"
+                  style="
+                    width:100%;
+                    height:100%;
+                    object-fit:cover;
+                    border-radius:50%
+                  "
+                >
+              `
 
-                :
+              :
 
-                initials(n)
+              initials(name)
 
-              }
+            }
 
+          </div>
+
+
+          <div>
+
+            <div class="song-title">
+              ${esc(name)}
             </div>
 
-
-            <div>
-
-              <div class="song-title">
-
-                ${esc(n)}
-
-              </div>
-
-
-              <div class="sub">
-
-                ${map[n] || 0}
-                approved songs
-
-              </div>
-
+            <div class="sub">
+              ${map[name] || 0}
+              approved songs
             </div>
 
           </div>
 
-        `;
+        </div>
 
-      }
-    ).join("")
+      `;
 
-    ||
+    }).join("") ||
 
     `
       <div class="empty">
@@ -2371,101 +832,90 @@ function renderArtists(){
 
 
 /* =========================================================
-   ARTIST DASHBOARD
+   DASHBOARD
 ========================================================= */
 
-function renderDashboard(){
+function renderDashboard() {
 
-  if(!ensureLogin()){
+  if (!ensureLogin()) {
     return;
   }
 
 
-  const u =
+  const user =
     db.users.find(
-      x =>
-        x.id ===
-        currentUser.id
-    )
-    ||
+      x => x.id === currentUser.id
+    ) ||
     currentUser;
 
 
-  currentUser =
-    u;
+  currentUser = user;
 
 
   localStorage.setItem(
     "nilesoniq_user",
-    JSON.stringify(u)
+    JSON.stringify(user)
   );
 
 
-  const mine =
+  const songs =
     db.songs.filter(
-      s =>
-        s.artist ===
-        u.name
+      song =>
+        song.artist === user.name
     );
 
 
   const plays =
-    mine.reduce(
-      (a,s) =>
-        a +
-        (s.plays || 0),
+    songs.reduce(
+      (total, song) =>
+        total + (song.plays || 0),
       0
     );
 
 
   document.getElementById(
     "myPlays"
-  ).textContent =
-    plays;
+  ).textContent = plays;
 
 
   document.getElementById(
     "myEarnings"
   ).textContent =
     money(
-      plays *
-      db.settings.rate
+      plays * db.settings.rate
     );
 
 
   document.getElementById(
     "mySongs"
   ).textContent =
-    mine.length;
+    songs.length;
 
 
   document.getElementById(
     "profileName"
   ).value =
-    u.name ||
-    "";
+    user.name || "";
 
 
   document.getElementById(
     "profileBio"
   ).value =
-    u.bio ||
-    "";
+    user.bio || "";
 
 
   document.getElementById(
     "profilePreview"
   ).innerHTML =
-
-    u.avatar
-
+    user.avatar
     ?
 
     `
       <img
-        src="${u.avatar}"
+        src="${user.avatar}"
         class="avatar"
-        style="margin:8px 0 14px">
+        style="margin:8px 0 14px"
+      >
     `
 
     :
@@ -2477,142 +927,124 @@ function renderDashboard(){
     "mySongList"
   ).innerHTML =
 
-    mine.map(
-      s => {
+    songs.map(song => {
 
-        const status =
-          s.reviewStatus ||
-          "pending";
+      const status =
+        getStatus(song);
 
 
-        let statusHtml = `
+      return `
 
-          <span
-            class="review-status ${status}">
+        <div
+          class="artist-card"
+          style="
+            margin-bottom:10px;
+            border:1px solid #292929;
+            border-radius:18px;
+          "
+        >
 
-            ${esc(status)}
+          <div
+            class="avatar"
+            style="
+              width:55px;
+              height:55px;
+            "
+          >
 
-          </span>
+            ${
+              song.cover
 
-        `;
+              ?
+
+              `
+                <img
+                  src="${song.cover}"
+                  style="
+                    width:100%;
+                    height:100%;
+                    object-fit:cover;
+                    border-radius:50%
+                  "
+                >
+              `
+
+              :
+
+              "♫"
+
+            }
+
+          </div>
 
 
-        if(
-          status ===
-          "rejected"
-          &&
-          s.rejectionReason
-        ){
+          <div style="flex:1">
 
-          statusHtml += `
+            <b>
+              ${esc(song.title)}
+            </b>
 
-            <div
-              class="rejection-reason">
 
-              <strong>
-                Reason:
-              </strong>
+            <div class="sub">
 
-              ${esc(
-                s.rejectionReason
+              ${song.plays || 0}
+              plays
+
+              • UGX
+
+              ${money(
+                (song.plays || 0) *
+                db.settings.rate
               )}
 
             </div>
 
-          `;
 
-        }
-
-
-        return `
-
-          <div
-            class="artist-card"
-            style="
-              margin-bottom:10px;
-              border:1px solid #292929;
-              border-radius:18px;
-            ">
+            ${statusHtml(song)}
 
 
-            <div
-              class="avatar"
-              style="
-                width:55px;
-                height:55px;
-              ">
+            ${
+              status === "rejected" &&
+              song.rejectionReason
 
-              ${
-                s.cover
+              ?
 
-                ?
+              `
+                <div class="rejection-reason">
 
-                `
-                  <img
-                    src="${s.cover}"
-                    style="
-                      width:100%;
-                      height:100%;
-                      object-fit:cover;
-                      border-radius:50%
-                    ">
-                `
+                  <strong>
+                    Reason:
+                  </strong>
 
-                :
+                  ${esc(
+                    song.rejectionReason
+                  )}
 
-                "♫"
+                </div>
+              `
 
-              }
+              :
 
-            </div>
+              ""
 
-
-            <div
-              style="flex:1">
-
-              <b>
-                ${esc(s.title)}
-              </b>
-
-
-              <div class="sub">
-
-                ${s.plays || 0}
-                plays
-
-                • UGX
-
-                ${money(
-                  (s.plays || 0)
-                  *
-                  db.settings.rate
-                )}
-
-              </div>
-
-
-              ${statusHtml}
-
-            </div>
-
-
-            <button
-              class="ghost-btn"
-              onclick="deleteSong(${s.id})">
-
-              Delete
-
-            </button>
-
+            }
 
           </div>
 
-        `;
 
-      }
-    ).join("")
+          <button
+            class="ghost-btn"
+            onclick="deleteSong(${song.id})">
 
-    ||
+            Delete
+
+          </button>
+
+        </div>
+
+      `;
+
+    }).join("") ||
 
     `
       <div class="empty">
@@ -2627,173 +1059,148 @@ function renderDashboard(){
    PROFILE
 ========================================================= */
 
-function previewProfile(){
+function previewProfile() {
 
-  const f =
-    document.getElementById(
-      "profileImage"
-    ).files[0];
+  const file =
+    document
+      .getElementById("profileImage")
+      .files[0];
 
 
-  if(!f){
+  if (!file) {
     return;
   }
 
 
-  const r =
+  const reader =
     new FileReader();
 
 
-  r.onload =
-    () => {
+  reader.onload = () => {
 
-      document.getElementById(
-        "profilePreview"
-      ).innerHTML = `
+    document.getElementById(
+      "profilePreview"
+    ).innerHTML = `
 
-        <img
-          src="${r.result}"
-          class="avatar"
-          style="margin:8px 0 14px">
+      <img
+        src="${reader.result}"
+        class="avatar"
+        style="margin:8px 0 14px"
+      >
 
-      `;
+    `;
 
-    };
+  };
 
 
-  r.readAsDataURL(f);
+  reader.readAsDataURL(file);
 
 }
 
 
-function saveProfile(){
+function saveProfile() {
 
-  if(!ensureLogin()){
+  if (!ensureLogin()) {
     return;
   }
 
 
-  const u =
+  const user =
     db.users.find(
-      x =>
-        x.id ===
-        currentUser.id
+      x => x.id === currentUser.id
     );
 
 
-  if(!u){
+  if (!user) {
     return;
   }
 
 
   const oldName =
-    u.name;
+    user.name;
 
 
-  u.name =
+  const newName =
     document
-      .getElementById(
-        "profileName"
-      )
+      .getElementById("profileName")
       .value
-      .trim()
-      ||
-      u.name;
+      .trim() ||
+    user.name;
 
 
-  u.bio =
+  user.name =
+    newName;
+
+
+  user.bio =
     document
-      .getElementById(
-        "profileBio"
-      )
+      .getElementById("profileBio")
       .value
       .trim();
 
 
-  /*
-    If the artist changes their name,
-    update their songs too.
-  */
+  if (oldName !== newName) {
 
-  if(
-    oldName !==
-    u.name
-  ){
+    db.songs.forEach(song => {
 
-    db.songs.forEach(
-      s => {
-
-        if(
-          s.artist ===
-          oldName
-        ){
-
-          s.artist =
-            u.name;
-
-        }
-
+      if (song.artist === oldName) {
+        song.artist = newName;
       }
-    );
+
+    });
 
   }
 
 
-  const f =
-    document.getElementById(
-      "profileImage"
-    ).files[0];
+  const file =
+    document
+      .getElementById("profileImage")
+      .files[0];
 
 
-  const finish =
-    () => {
+  const finish = () => {
 
-      currentUser =
-        u;
+    currentUser = user;
 
 
-      localStorage.setItem(
-        "nilesoniq_user",
-        JSON.stringify(u)
-      );
+    localStorage.setItem(
+      "nilesoniq_user",
+      JSON.stringify(user)
+    );
 
 
-      save();
+    save();
 
-      updateAuth();
+    updateAuth();
 
-      toast(
-        "Profile saved"
-      );
+    toast("Profile saved");
 
-      renderDashboard();
+    renderDashboard();
 
-      renderArtists();
+    renderArtists();
+
+  };
+
+
+  if (file) {
+
+    const reader =
+      new FileReader();
+
+
+    reader.onload = () => {
+
+      user.avatar =
+        reader.result;
+
+      finish();
 
     };
 
 
-  if(f){
+    reader.readAsDataURL(file);
 
-    const r =
-      new FileReader();
-
-
-    r.onload =
-      () => {
-
-        u.avatar =
-          r.result;
-
-        finish();
-
-      };
-
-
-    r.readAsDataURL(f);
-
-  }
-  else{
+  } else {
 
     finish();
 
@@ -2803,87 +1210,78 @@ function saveProfile(){
 
 
 /* =========================================================
-   UPLOAD
+   UPLOAD SONG
 ========================================================= */
 
-function showSelectedFile(){
+function showSelectedFile() {
 
-  const f =
-    document.getElementById(
-      "songFile"
-    ).files[0];
+  const file =
+    document
+      .getElementById("songFile")
+      .files[0];
 
 
   document.getElementById(
     "selectedFile"
   ).textContent =
-    f
-    ? "Selected: " + f.name
+    file
+    ? "Selected: " + file.name
     : "";
 
 }
 
 
-function uploadSong(){
+function uploadSong() {
 
-  if(!ensureLogin()){
+  if (!ensureLogin()) {
     return;
   }
 
 
   const title =
     document
-      .getElementById(
-        "songTitle"
-      )
+      .getElementById("songTitle")
       .value
       .trim();
 
 
   const artist =
     document
-      .getElementById(
-        "songArtist"
-      )
+      .getElementById("songArtist")
       .value
-      .trim()
-      ||
-      currentUser.name;
+      .trim() ||
+    currentUser.name;
 
 
   const file =
-    document.getElementById(
-      "songFile"
-    ).files[0];
+    document
+      .getElementById("songFile")
+      .files[0];
 
 
   const url =
     document
-      .getElementById(
-        "songUrl"
-      )
+      .getElementById("songUrl")
       .value
       .trim();
 
 
   const cover =
-    document.getElementById(
-      "songCover"
-    ).files[0];
+    document
+      .getElementById("songCover")
+      .files[0];
 
 
-  if(!title){
+  if (!title) {
 
-    toast(
-      "Enter a song title"
-    );
+    toast("Enter a song title");
 
     return;
 
   }
 
 
-  if(!file && !url){
+  if (!file && !url) {
 
     toast(
       "Choose an audio file or paste an audio link"
@@ -2896,136 +1294,129 @@ function uploadSong(){
 
   const song = {
 
-    id:Date.now(),
+    id: Date.now(),
 
-    title:title,
+    title: title,
 
-    artist:artist,
+    artist: artist,
 
-    plays:0,
+    plays: 0,
 
-    created:Date.now(),
+    created: Date.now(),
 
-    cover:"",
+    cover: "",
 
-    audio:url || "",
+    audio: url || "",
 
-    /*
-      EVERY NEW UPLOAD STARTS PENDING.
-    */
+    reviewStatus: "pending",
 
-    reviewStatus:"pending",
-
-    rejectionReason:""
+    rejectionReason: ""
 
   };
 
 
-  const finish =
-    () => {
+  const finish = () => {
 
-      db.songs.unshift(
-        song
-      );
+    db.songs.unshift(song);
 
-
-      save();
+    save();
 
 
-      toast(
-        "Song submitted for admin approval"
-      );
+    toast(
+      "Song submitted for admin approval"
+    );
 
 
-      document.getElementById(
-        "songTitle"
-      ).value = "";
+    document.getElementById(
+      "songTitle"
+    ).value = "";
 
 
-      document.getElementById(
-        "songUrl"
-      ).value = "";
+    document.getElementById(
+      "songUrl"
+    ).value = "";
 
 
-      document.getElementById(
-        "songFile"
-      ).value = "";
+    document.getElementById(
+      "songFile"
+    ).value = "";
 
 
-      document.getElementById(
-        "songCover"
-      ).value = "";
+    document.getElementById(
+      "songCover"
+    ).value = "";
 
 
-      document.getElementById(
-        "selectedFile"
-      ).textContent = "";
+    document.getElementById(
+      "selectedFile"
+    ).textContent = "";
 
 
-      renderDashboard();
+    renderDashboard();
 
-      renderHome();
+    renderHome();
 
-    };
-
-
-  const readCover =
-    () => {
-
-      if(!cover){
-
-        finish();
-
-        return;
-
-      }
+  };
 
 
-      const r =
-        new FileReader();
+  const readCover = () => {
+
+    if (!cover) {
+
+      finish();
+
+      return;
+
+    }
 
 
-      r.onload =
-        () => {
-
-          song.cover =
-            r.result;
-
-          finish();
-
-        };
-
-
-      r.readAsDataURL(
-        cover
-      );
-
-    };
-
-
-  if(file){
-
-    const r =
+    const reader =
       new FileReader();
 
 
-    r.onload =
-      () => {
+    reader.onload = () => {
 
-        song.audio =
-          r.result;
+      song.cover =
+        reader.result;
 
-        readCover();
+      finish();
 
-      };
+    };
 
 
-    r.readAsDataURL(
-      file
-    );
+    reader.readAsDataURL(cover);
 
-  }
-  else{
+  };
+
+
+  if (file) {
+
+    const reader =
+      new FileReader();
+
+
+    reader.onload = () => {
+
+      song.audio =
+        reader.result;
+
+      readCover();
+
+    };
+
+
+    reader.onerror = () => {
+
+      toast(
+        "Could not read the audio file"
+      );
+
+    };
+
+
+    reader.readAsDataURL(file);
+
+  } else {
 
     readCover();
 
@@ -3035,27 +1426,45 @@ function uploadSong(){
 
 
 /* =========================================================
-   DELETE SONG
+   DELETE
 ========================================================= */
 
-function deleteSong(id){
+function deleteSong(id) {
 
-  if(
+  if (
     !confirm(
       "Delete this song?"
     )
-  ){
-
+  ) {
     return;
-
   }
 
 
   db.songs =
     db.songs.filter(
-      s =>
-        s.id !== id
+      song =>
+        song.id !== id
     );
+
+
+  if (
+    currentSong &&
+    currentSong.id === id
+  ) {
+
+    audio.pause();
+
+    audio.removeAttribute("src");
+
+    audio.load();
+
+    currentSong = null;
+
+    document.getElementById(
+      "player"
+    ).style.display = "none";
+
+  }
 
 
   save();
@@ -3068,9 +1477,7 @@ function deleteSong(id){
 
   renderArtists();
 
-  toast(
-    "Song deleted"
-  );
+  toast("Song deleted");
 
 }
 
@@ -3079,19 +1486,27 @@ function deleteSong(id){
    DOWNLOAD
 ========================================================= */
 
-function downloadSong(id){
+function downloadSong(id) {
 
   const song =
     db.songs.find(
-      s =>
-        s.id === id
+      x => x.id === id
     );
 
 
-  if(!song){
+  if (!song) {
+
+    toast("Song not found");
+
+    return;
+
+  }
+
+
+  if (getStatus(song) !== "approved") {
 
     toast(
-      "Song not found"
+      "This song is not approved"
     );
 
     return;
@@ -3099,28 +1514,10 @@ function downloadSong(id){
   }
 
 
-  /*
-    Only approved songs can be downloaded.
-  */
-
-  if(
-    song.reviewStatus !==
-    "approved"
-  ){
+  if (!song.audio) {
 
     toast(
-      "This song is not approved for download"
-    );
-
-    return;
-
-  }
-
-
-  if(!song.audio){
-
-    toast(
-      "No downloadable audio available"
+      "This song has no audio file"
     );
 
     return;
@@ -3129,9 +1526,7 @@ function downloadSong(id){
 
 
   const link =
-    document.createElement(
-      "a"
-    );
+    document.createElement("a");
 
 
   link.href =
@@ -3139,33 +1534,14 @@ function downloadSong(id){
 
 
   link.download =
-    (
-      song.title ||
-      "NileSoniq Song"
-    )
-    .replace(
-      /[\\/:*?"<>|]/g,
-      ""
-    )
-    +
-    ".mp3";
+    safeFileName(
+      song.title + " - " + song.artist
+    ) + ".mp3";
 
 
-  link.target =
-    "_blank";
-
-
-  link.rel =
-    "noopener";
-
-
-  document.body.appendChild(
-    link
-  );
-
+  document.body.appendChild(link);
 
   link.click();
-
 
   link.remove();
 
@@ -3178,31 +1554,27 @@ function downloadSong(id){
 
 
 /* =========================================================
-   PLAYER
+   FIXED AUDIO PLAYER
 ========================================================= */
 
-function playSong(id){
+function playSong(id) {
 
-  const s =
+  const song =
     db.songs.find(
-      x =>
-        x.id === id
+      x => x.id === id
     );
 
 
-  if(!s){
+  if (!song) {
+
+    toast("Song not found");
+
     return;
+
   }
 
 
-  /*
-    Do not play pending or rejected songs.
-  */
-
-  if(
-    s.reviewStatus !==
-    "approved"
-  ){
+  if (getStatus(song) !== "approved") {
 
     toast(
       "This song is not approved yet"
@@ -3213,10 +1585,10 @@ function playSong(id){
   }
 
 
-  if(!s.audio){
+  if (!song.audio) {
 
     toast(
-      "This song has no playable audio source yet"
+      "This song has no audio file attached"
     );
 
     return;
@@ -3224,158 +1596,261 @@ function playSong(id){
   }
 
 
-  currentSong =
-    s;
+  /*
+    Stop the previous song first.
+  */
+
+  audio.pause();
+
+  audio.currentTime = 0;
 
 
-  audio.src =
-    s.audio;
+  /*
+    Set the new audio source.
+  */
+
+  audio.src = song.audio;
 
 
   audio.volume =
     Number(
-      document.getElementById(
-        "volume"
-      ).value
+      document.getElementById("volume")?.value || 0.8
     );
 
 
-  audio.play()
-    .catch(
-      () =>
-        toast(
-          "Tap play again to start audio"
-        )
-    );
+  currentSong = song;
 
 
   /*
-    Play count increases only when
-    an approved song is played.
+    Show player BEFORE starting playback.
   */
-
-  s.plays =
-    (s.plays || 0) + 1;
-
-
-  save();
-
 
   document.getElementById(
     "player"
-  ).style.display =
-    "block";
+  ).style.display = "block";
 
 
   document.getElementById(
     "nowTitle"
   ).textContent =
-    s.title;
+    song.title;
 
 
   document.getElementById(
     "nowArtist"
   ).textContent =
-    s.artist;
+    song.artist;
+
+
+  document.getElementById(
+    "progress"
+  ).value = 0;
 
 
   document.getElementById(
     "playPause"
-  ).textContent =
-    "Ⅱ";
+  ).textContent = "▶";
 
 
-  renderHome();
+  /*
+    Load the audio.
+  */
+
+  audio.load();
 
 
-  if(currentUser){
+  /*
+    IMPORTANT:
+    Only count a play after the browser
+    successfully starts the audio.
+  */
 
-    renderDashboard();
+  audio.play()
+    .then(() => {
 
-  }
+      document.getElementById(
+        "playPause"
+      ).textContent = "Ⅱ";
+
+
+      song.plays =
+        (song.plays || 0) + 1;
+
+
+      save();
+
+
+      renderHome();
+
+      if (currentUser) {
+        renderDashboard();
+      }
+
+    })
+    .catch(error => {
+
+      console.error(
+        "NileSoniq audio error:",
+        error
+      );
+
+
+      document.getElementById(
+        "playPause"
+      ).textContent = "▶";
+
+
+      toast(
+        "This audio file cannot be played. Check the audio file or link."
+      );
+
+    });
 
 }
 
 
-function togglePlay(){
+/* =========================================================
+   PLAY / PAUSE
+========================================================= */
 
-  if(!currentSong){
+function togglePlay() {
+
+  if (!currentSong) {
+
+    toast(
+      "Choose a song first"
+    );
+
     return;
+
+  }
+
+
+  if (
+    getStatus(currentSong) !==
+    "approved"
+  ) {
+
+    toast(
+      "This song is not approved"
+    );
+
+    return;
+
   }
 
 
-  if(audio.paused){
+  if (!audio.src) {
 
-    audio.play();
+    playSong(currentSong.id);
 
-    document.getElementById(
-      "playPause"
-    ).textContent =
-      "Ⅱ";
+    return;
 
   }
-  else{
+
+
+  if (audio.paused) {
+
+    audio.play()
+      .then(() => {
+
+        document.getElementById(
+          "playPause"
+        ).textContent = "Ⅱ";
+
+      })
+      .catch(() => {
+
+        toast(
+          "Unable to play this audio"
+        );
+
+      });
+
+  } else {
 
     audio.pause();
 
     document.getElementById(
       "playPause"
-    ).textContent =
-      "▶";
+    ).textContent = "▶";
 
   }
 
 }
 
 
-function stopAudio(){
+/* =========================================================
+   STOP
+========================================================= */
+
+function stopAudio() {
 
   audio.pause();
 
-  audio.currentTime =
-    0;
+  audio.currentTime = 0;
 
 
   document.getElementById(
     "playPause"
-  ).textContent =
-    "▶";
+  ).textContent = "▶";
+
+
+  document.getElementById(
+    "progress"
+  ).value = 0;
 
 }
 
 
-function restart(){
+/* =========================================================
+   RESTART
+========================================================= */
 
-  if(!currentSong){
+function restart() {
+
+  if (!currentSong) {
     return;
   }
 
 
-  audio.currentTime =
-    0;
+  audio.currentTime = 0;
 
 
-  audio.play();
+  audio.play()
+    .then(() => {
 
+      document.getElementById(
+        "playPause"
+      ).textContent = "Ⅱ";
 
-  document.getElementById(
-    "playPause"
-  ).textContent =
-    "Ⅱ";
+    })
+    .catch(() => {
+
+      toast(
+        "Unable to play this audio"
+      );
+
+    });
 
 }
 
 
-function seek(v){
+/* =========================================================
+   SEEK
+========================================================= */
 
-  if(audio.duration){
+function seek(value) {
+
+  if (
+    audio.duration &&
+    isFinite(audio.duration)
+  ) {
 
     audio.currentTime =
       (
-        Number(v) /
-        100
-      )
-      *
+        Number(value) / 100
+      ) *
       audio.duration;
 
   }
@@ -3383,11 +1858,33 @@ function seek(v){
 }
 
 
+/* =========================================================
+   AUDIO EVENTS
+========================================================= */
+
+audio.addEventListener(
+  "loadedmetadata",
+  () => {
+
+    const progress =
+      document.getElementById("progress");
+
+    if (progress) {
+      progress.value = 0;
+    }
+
+  }
+);
+
+
 audio.addEventListener(
   "timeupdate",
   () => {
 
-    if(audio.duration){
+    if (
+      audio.duration &&
+      isFinite(audio.duration)
+    ) {
 
       document.getElementById(
         "progress"
@@ -3396,11 +1893,33 @@ audio.addEventListener(
         (
           audio.currentTime /
           audio.duration
-        )
-        *
-        100;
+        ) * 100;
 
     }
+
+  }
+);
+
+
+audio.addEventListener(
+  "play",
+  () => {
+
+    document.getElementById(
+      "playPause"
+    ).textContent = "Ⅱ";
+
+  }
+);
+
+
+audio.addEventListener(
+  "pause",
+  () => {
+
+    document.getElementById(
+      "playPause"
+    ).textContent = "▶";
 
   }
 );
@@ -3412,8 +1931,29 @@ audio.addEventListener(
 
     document.getElementById(
       "playPause"
-    ).textContent =
-      "▶";
+    ).textContent = "▶";
+
+
+    document.getElementById(
+      "progress"
+    ).value = 0;
+
+  }
+);
+
+
+audio.addEventListener(
+  "error",
+  () => {
+
+    console.error(
+      "Audio element error:",
+      audio.error
+    );
+
+    document.getElementById(
+      "playPause"
+    ).textContent = "▶";
 
   }
 );
@@ -3423,54 +1963,48 @@ audio.addEventListener(
    SHARE
 ========================================================= */
 
-function shareSong(id){
+function shareSong(id) {
 
-  const s =
+  const song =
     db.songs.find(
-      x =>
-        x.id === id
+      x => x.id === id
     );
 
 
-  if(!s){
+  if (!song) {
     return;
   }
 
 
   const text =
-    `${s.title} by ${s.artist} — NileSoniq`;
+    `${song.title} by ${song.artist} — NileSoniq`;
 
 
-  if(
-    navigator.share
-  ){
+  if (navigator.share) {
 
-    navigator
-      .share({
-        title:text,
-        text:text,
-        url:location.href
-      })
-      .catch(
-        () => {}
-      );
+    navigator.share({
+      title: text,
+      text: text,
+      url: location.href
+    }).catch(() => {});
 
-  }
-  else if(
+  } else if (navigator.clipboard) {
+
     navigator.clipboard
-  ){
+      .writeText(location.href)
+      .then(() => {
 
-    navigator
-      .clipboard
-      .writeText(
-        location.href
-      )
-      .then(
-        () =>
-          toast(
-            "NileSoniq link copied"
-          )
-      );
+        toast(
+          "NileSoniq link copied"
+        );
+
+      });
+
+  } else {
+
+    toast(
+      "Copy the website link to share"
+    );
 
   }
 
@@ -3478,14 +2012,12 @@ function shareSong(id){
 
 
 /* =========================================================
-   ADMIN APPROVE
+   APPROVE SONG
 ========================================================= */
 
-function approveSong(id){
+function approveSong(id) {
 
-  if(
-    !currentUser?.admin
-  ){
+  if (!currentUser?.admin) {
 
     toast(
       "Admin access required"
@@ -3498,12 +2030,11 @@ function approveSong(id){
 
   const song =
     db.songs.find(
-      s =>
-        s.id === id
+      x => x.id === id
     );
 
 
-  if(!song){
+  if (!song) {
     return;
   }
 
@@ -3530,25 +2061,18 @@ function approveSong(id){
 
   renderArtists();
 
-
-  if(currentUser){
-
-    renderDashboard();
-
-  }
+  renderDashboard();
 
 }
 
 
 /* =========================================================
-   ADMIN REJECT
+   REJECT SONG
 ========================================================= */
 
-function rejectSong(id){
+function rejectSong(id) {
 
-  if(
-    !currentUser?.admin
-  ){
+  if (!currentUser?.admin) {
 
     toast(
       "Admin access required"
@@ -3561,12 +2085,11 @@ function rejectSong(id){
 
   const song =
     db.songs.find(
-      s =>
-        s.id === id
+      x => x.id === id
     );
 
 
-  if(!song){
+  if (!song) {
     return;
   }
 
@@ -3577,14 +2100,16 @@ function rejectSong(id){
     );
 
 
-  if(reason === null){
-
+  if (reason === null) {
     return;
-
   }
 
 
-  if(!reason.trim()){
+  const cleanReason =
+    reason.trim();
+
+
+  if (!cleanReason) {
 
     toast(
       "Please enter a rejection reason"
@@ -3600,7 +2125,7 @@ function rejectSong(id){
 
 
   song.rejectionReason =
-    reason.trim();
+    cleanReason;
 
 
   save();
@@ -3617,12 +2142,7 @@ function rejectSong(id){
 
   renderArtists();
 
-
-  if(currentUser){
-
-    renderDashboard();
-
-  }
+  renderDashboard();
 
 }
 
@@ -3631,22 +2151,17 @@ function rejectSong(id){
    ADMIN DASHBOARD
 ========================================================= */
 
-function renderAdmin(){
+function renderAdmin() {
 
-  if(
-    !currentUser?.admin
-  ){
-
+  if (!currentUser?.admin) {
     return;
-
   }
 
 
-  const plays =
+  const totalPlays =
     db.songs.reduce(
-      (a,s) =>
-        a +
-        (s.plays || 0),
+      (total, song) =>
+        total + (song.plays || 0),
       0
     );
 
@@ -3660,7 +2175,7 @@ function renderAdmin(){
   document.getElementById(
     "adminPlays"
   ).textContent =
-    plays;
+    totalPlays;
 
 
   document.getElementById(
@@ -3668,8 +2183,7 @@ function renderAdmin(){
   ).textContent =
     new Set(
       db.songs.map(
-        s =>
-          s.artist
+        song => song.artist
       )
     ).size;
 
@@ -3687,222 +2201,198 @@ function renderAdmin(){
 
 
   const rows =
-    db.songs.map(
-      s => {
+    db.songs.map(song => {
 
-        const status =
-          s.reviewStatus ||
-          "pending";
+      const status =
+        getStatus(song);
 
 
-        let action =
-          "";
+      let actions = "";
 
 
-        if(
-          status ===
-          "pending"
-        ){
+      if (status === "pending") {
 
-          action = `
+        actions = `
 
-            <button
-              class="orange-btn"
-              style="
-                padding:8px 12px;
-                margin-right:5px;
-              "
-              onclick="approveSong(${s.id})">
+          <button
+            class="orange-btn"
+            style="
+              padding:8px 12px;
+              margin-right:5px;
+            "
+            onclick="approveSong(${song.id})">
 
-              Approve
+            Approve
 
-            </button>
+          </button>
 
 
-            <button
-              class="ghost-btn"
-              style="
-                padding:8px 12px;
-              "
-              onclick="rejectSong(${s.id})">
+          <button
+            class="ghost-btn"
+            style="
+              padding:8px 12px;
+            "
+            onclick="rejectSong(${song.id})">
 
-              Reject
+            Reject
 
-            </button>
-
-          `;
-
-        }
-
-
-        if(
-          status ===
-          "approved"
-        ){
-
-          action = `
-
-            <span
-              class="review-status approved">
-
-              Approved
-
-            </span>
-
-
-            <button
-              class="ghost-btn"
-              style="
-                padding:7px 10px;
-                margin-left:5px;
-              "
-              onclick="rejectSong(${s.id})">
-
-              Reject
-
-            </button>
-
-          `;
-
-        }
-
-
-        if(
-          status ===
-          "rejected"
-        ){
-
-          action = `
-
-            <span
-              class="review-status rejected">
-
-              Rejected
-
-            </span>
-
-
-            <button
-              class="orange-btn"
-              style="
-                padding:7px 10px;
-                margin-left:5px;
-              "
-              onclick="approveSong(${s.id})">
-
-              Approve Again
-
-            </button>
-
-          `;
-
-        }
-
-
-        return `
-
-          <tr>
-
-            <td>
-
-              <strong>
-                ${esc(s.title)}
-              </strong>
-
-
-              ${
-                status ===
-                "rejected"
-                &&
-                s.rejectionReason
-
-                ?
-
-                `
-                  <div
-                    class="rejection-reason">
-
-                    <strong>
-                      Reason:
-                    </strong>
-
-                    ${esc(
-                      s.rejectionReason
-                    )}
-
-                  </div>
-                `
-
-                :
-
-                ""
-              }
-
-            </td>
-
-
-            <td>
-              ${esc(s.artist)}
-            </td>
-
-
-            <td>
-
-              <span
-                class="review-status ${status}">
-
-                ${esc(status)}
-
-              </span>
-
-            </td>
-
-
-            <td>
-              ${s.plays || 0}
-            </td>
-
-
-            <td>
-
-              UGX
-
-              ${money(
-                (s.plays || 0)
-                *
-                db.settings.rate
-              )}
-
-            </td>
-
-
-            <td>
-
-              ${action}
-
-              <br>
-
-
-              <button
-                class="ghost-btn"
-                style="
-                  padding:7px 10px;
-                  margin-top:7px;
-                "
-                onclick="deleteSong(${s.id})">
-
-                Delete
-
-              </button>
-
-            </td>
-
-          </tr>
+          </button>
 
         `;
 
       }
-    ).join("");
+
+
+      if (status === "approved") {
+
+        actions = `
+
+          <span
+            class="review-status approved">
+
+            Approved
+
+          </span>
+
+
+          <button
+            class="ghost-btn"
+            style="
+              padding:7px 10px;
+              margin-left:5px;
+            "
+            onclick="rejectSong(${song.id})">
+
+            Reject
+
+          </button>
+
+        `;
+
+      }
+
+
+      if (status === "rejected") {
+
+        actions = `
+
+          <span
+            class="review-status rejected">
+
+            Rejected
+
+          </span>
+
+
+          <button
+            class="orange-btn"
+            style="
+              padding:7px 10px;
+              margin-left:5px;
+            "
+            onclick="approveSong(${song.id})">
+
+            Approve Again
+
+          </button>
+
+        `;
+
+      }
+
+
+      return `
+
+        <tr>
+
+          <td>
+
+            <strong>
+              ${esc(song.title)}
+            </strong>
+
+
+            ${
+              status === "rejected" &&
+              song.rejectionReason
+
+              ?
+
+              `
+                <div
+                  class="rejection-reason">
+
+                  <strong>
+                    Reason:
+                  </strong>
+
+                  ${esc(
+                    song.rejectionReason
+                  )}
+
+                </div>
+              `
+
+              :
+
+              ""
+
+            }
+
+          </td>
+
+
+          <td>
+            ${esc(song.artist)}
+          </td>
+
+
+          <td>
+            ${statusHtml(song)}
+          </td>
+
+
+          <td>
+            ${song.plays || 0}
+          </td>
+
+
+          <td>
+
+            UGX
+            ${money(
+              (song.plays || 0) *
+              db.settings.rate
+            )}
+
+          </td>
+
+
+          <td>
+
+            ${actions}
+
+            <br>
+
+            <button
+              class="ghost-btn"
+              style="
+                padding:7px 10px;
+                margin-top:7px;
+              "
+              onclick="deleteSong(${song.id})">
+
+              Delete
+
+            </button>
+
+          </td>
+
+        </tr>
+
+      `;
+
+    }).join("");
 
 
   document.getElementById(
@@ -3917,29 +2407,17 @@ function renderAdmin(){
 
           <tr>
 
-            <th>
-              Song
-            </th>
+            <th>Song</th>
 
-            <th>
-              Artist
-            </th>
+            <th>Artist</th>
 
-            <th>
-              Status
-            </th>
+            <th>Status</th>
 
-            <th>
-              Plays
-            </th>
+            <th>Plays</th>
 
-            <th>
-              Earnings
-            </th>
+            <th>Earnings</th>
 
-            <th>
-              Action
-            </th>
+            <th>Action</th>
 
           </tr>
 
@@ -3949,9 +2427,7 @@ function renderAdmin(){
         <tbody>
 
           ${
-            rows
-
-            ||
+            rows ||
 
             `
               <tr>
@@ -3983,14 +2459,12 @@ function renderAdmin(){
 
 
 /* =========================================================
-   ADMIN SETTINGS
+   SETTINGS
 ========================================================= */
 
-function saveSettings(){
+function saveSettings() {
 
-  if(
-    !currentUser?.admin
-  ){
+  if (!currentUser?.admin) {
 
     toast(
       "Admin access required"
@@ -4003,29 +2477,21 @@ function saveSettings(){
 
   db.settings.rate =
     Number(
-      document.getElementById(
-        "rate"
-      ).value
-    )
-    || 0;
+      document.getElementById("rate").value
+    ) || 0;
 
 
   db.settings.minPayout =
     Number(
-      document.getElementById(
-        "minPayout"
-      ).value
-    )
-    || 0;
+      document.getElementById("minPayout").value
+    ) || 0;
 
 
   save();
 
-
   toast(
     "Settings saved"
   );
-
 
   renderAdmin();
 
@@ -4033,37 +2499,23 @@ function saveSettings(){
 
 
 /* =========================================================
-   FIRST OWNER ADMIN SETUP
+   OWNER ADMIN
 ========================================================= */
 
-/*
-  For the first owner setup only:
+function makeAdmin() {
 
-  1. Open your website with:
-
-     ?owner=1
-
-  Example:
-
-     https://YOUR-GITHUB-USERNAME.github.io/YOUR-REPO/?owner=1
-
-  2. Login/create the owner account.
-  3. The current logged-in account becomes admin.
-
-  After that, remove ?owner=1 from the URL.
-*/
-
-function makeAdmin(){
-
-  if(
+  const owner =
     new URLSearchParams(
       location.search
-    ).get("owner") === "1"
-    &&
-    currentUser
-  ){
+    ).get("owner");
 
-    const u =
+
+  if (
+    owner === "1" &&
+    currentUser
+  ) {
+
+    const user =
       db.users.find(
         x =>
           x.id ===
@@ -4071,22 +2523,20 @@ function makeAdmin(){
       );
 
 
-    if(!u){
+    if (!user) {
       return;
     }
 
 
-    u.admin =
-      true;
+    user.admin = true;
 
 
-    currentUser =
-      u;
+    currentUser = user;
 
 
     localStorage.setItem(
       "nilesoniq_user",
-      JSON.stringify(u)
+      JSON.stringify(user)
     );
 
 
@@ -4094,15 +2544,12 @@ function makeAdmin(){
 
     updateAuth();
 
-
     toast(
       "Owner/admin mode enabled"
     );
 
 
-    showPage(
-      "admin"
-    );
+    showPage("admin");
 
   }
 
@@ -4110,24 +2557,17 @@ function makeAdmin(){
 
 
 /* =========================================================
-   CLOSE MODAL WHEN CLICKING OUTSIDE
+   MODAL
 ========================================================= */
 
 document
-  .getElementById(
-    "authModal"
-  )
+  .getElementById("authModal")
   .addEventListener(
     "click",
-    function(event){
+    function(event) {
 
-      if(
-        event.target ===
-        this
-      ){
-
+      if (event.target === this) {
         closeAuth();
-
       }
 
     }
@@ -4135,7 +2575,7 @@ document
 
 
 /* =========================================================
-   START NILESONIQ
+   START
 ========================================================= */
 
 save();
@@ -4148,7 +2588,4 @@ renderArtists();
 
 makeAdmin();
 
-</script>
-
-</body>
-  </html>
+  </script>
