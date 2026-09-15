@@ -1407,6 +1407,44 @@ footer{
   }
 
 }
+
+/* NILESONIQ PUBLIC ARTIST PROFILE */
+.artist-card{cursor:pointer;transition:transform .2s ease,border-color .2s ease,box-shadow .2s ease}
+.artist-card:hover{transform:translateY(-4px);border-color:var(--orange);box-shadow:0 12px 30px rgba(0,0,0,.25)}
+#artistProfileModal{position:fixed;inset:0;z-index:9999;display:none;align-items:center;justify-content:center;padding:20px}
+#artistProfileModal.show{display:flex}
+.artist-profile-overlay{position:absolute;inset:0;background:rgba(0,0,0,.82);backdrop-filter:blur(8px)}
+.artist-profile-box{position:relative;z-index:2;width:min(900px,100%);max-height:90vh;overflow-y:auto;background:linear-gradient(145deg,#191919,#0e0e0e);border:1px solid var(--border);border-radius:24px;padding:30px;box-shadow:0 30px 90px rgba(0,0,0,.55)}
+.artist-profile-close{position:absolute;top:15px;right:15px;width:42px;height:42px;border:none;border-radius:50%;background:#292929;color:white;font-size:28px;line-height:1;cursor:pointer;z-index:5}
+.artist-profile-close:hover{background:var(--orange)}
+.artist-profile-header{display:flex;align-items:center;gap:22px;padding-right:50px;padding-bottom:25px;border-bottom:1px solid var(--border)}
+.artist-profile-photo{width:135px;height:135px;flex:none;border-radius:50%;overflow:hidden;background:#222;border:3px solid var(--orange);display:flex;align-items:center;justify-content:center}
+.artist-profile-photo img{width:100%;height:100%;object-fit:cover}
+.artist-profile-initials{color:var(--orange);font-size:42px;font-weight:900}
+.artist-profile-main h2{font-size:34px;margin-bottom:6px}
+.artist-profile-location{color:var(--muted)}
+.artist-profile-section{padding-top:25px}
+.artist-profile-section h3{font-size:21px;margin-bottom:12px}
+.artist-profile-bio{color:#bbb;line-height:1.75;white-space:pre-wrap}
+.artist-profile-songs{display:flex;flex-direction:column}
+.artist-profile-song{display:flex;align-items:center;gap:13px;padding:13px 0;border-top:1px solid var(--border)}
+.artist-profile-song-cover{width:62px;height:62px;flex:none;border-radius:10px;overflow:hidden;background:#222;display:flex;align-items:center;justify-content:center}
+.artist-profile-song-cover img{width:100%;height:100%;object-fit:cover}
+.artist-song-placeholder{color:var(--orange);font-size:25px}
+.artist-profile-song-info{flex:1;min-width:0}
+.artist-profile-song-info strong{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.artist-profile-song-info small{display:block;color:#888;font-size:11px;margin-top:4px}
+.artist-profile-song-actions{display:flex;gap:7px;flex-wrap:wrap}
+.artist-profile-song-actions .btn{padding:8px 11px;font-size:11px}
+@media(max-width:650px){
+  .artist-profile-box{padding:20px 15px;border-radius:18px}
+  .artist-profile-header{align-items:flex-start;gap:15px}
+  .artist-profile-photo{width:90px;height:90px}
+  .artist-profile-main h2{font-size:25px}
+  .artist-profile-song{flex-wrap:wrap}
+  .artist-profile-song-actions{width:100%;margin-left:75px}
+}
+
 </style>
 </head>
 
@@ -1933,7 +1971,7 @@ placeholder="Artist name">
 <input
 id="audioFile"
 type="file"
-accept="audio/*">
+accept=".mp3,audio/mpeg">
 
 </div>
 
@@ -5227,132 +5265,446 @@ function refreshSongDisplays(){
 
 
 /* =========================================================
+   PUBLIC ARTIST PROFILE
+========================================================= */
+
+async function openArtistProfile(artistId){
+
+  let modal =
+    document.getElementById("artistProfileModal");
+
+  if(!modal){
+
+    modal = document.createElement("div");
+    modal.id = "artistProfileModal";
+
+    modal.innerHTML = `
+      <div
+        class="artist-profile-overlay"
+        onclick="closeArtistProfile()"
+      ></div>
+
+      <div class="artist-profile-box">
+
+        <button
+          class="artist-profile-close"
+          onclick="closeArtistProfile()"
+          aria-label="Close artist profile"
+        >×</button>
+
+        <div id="artistProfileContent">
+          <div class="loading">
+            Loading artist profile...
+          </div>
+        </div>
+
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+  }
+
+  modal.classList.add("show");
+  document.body.style.overflow = "hidden";
+
+  const content =
+    document.getElementById("artistProfileContent");
+
+  content.innerHTML =
+    `<div class="loading">Loading artist profile...</div>`;
+
+  try{
+
+    const {
+      data:artist,
+      error:artistError
+    } = await sb
+      .from("artists")
+      .select("*")
+      .eq("id",artistId)
+      .maybeSingle();
+
+    if(artistError){
+      throw artistError;
+    }
+
+    if(!artist){
+
+      content.innerHTML = `
+        <div class="empty">
+          Artist profile not found.
+        </div>
+      `;
+
+      return;
+    }
+
+    let artistSongs = [];
+
+    const {
+      data:songsById,
+      error:songsByIdError
+    } = await sb
+      .from("songs")
+      .select("*")
+      .eq("artist_id",artist.id)
+      .eq("approved",true)
+      .order("created_at",{ascending:false});
+
+    if(!songsByIdError && songsById){
+      artistSongs = songsById;
+    }
+
+    if(artistSongs.length === 0 && artist.user_id){
+
+      const {data:songsByUser} = await sb
+        .from("songs")
+        .select("*")
+        .eq("artist_id",artist.user_id)
+        .eq("approved",true)
+        .order("created_at",{ascending:false});
+
+      if(songsByUser){
+        artistSongs = songsByUser;
+      }
+    }
+
+    if(artistSongs.length === 0 && artist.name){
+
+      const {data:songsByName} = await sb
+        .from("songs")
+        .select("*")
+        .eq("artist",artist.name)
+        .eq("approved",true)
+        .order("created_at",{ascending:false});
+
+      if(songsByName){
+        artistSongs = songsByName;
+      }
+    }
+
+    const photo =
+      artist.avatar_url
+      ? `
+        <img
+          src="${escapeAttribute(artist.avatar_url)}"
+          alt="${escapeAttribute(artist.name || "Artist")}"
+        >
+      `
+      : `
+        <div class="artist-profile-initials">
+          ${getInitials(artist.name)}
+        </div>
+      `;
+
+    content.innerHTML = `
+
+      <div class="artist-profile-header">
+
+        <div class="artist-profile-photo">
+          ${photo}
+        </div>
+
+        <div class="artist-profile-main">
+
+          <h2>
+            ${escapeHtml(artist.name || "Unknown Artist")}
+          </h2>
+
+          <p class="artist-profile-location">
+            📍 ${escapeHtml(artist.location || "Uganda")}
+          </p>
+
+        </div>
+
+      </div>
+
+      <div class="artist-profile-section">
+
+        <h3>Biography</h3>
+
+        <p class="artist-profile-bio">
+          ${escapeHtml(
+            artist.bio ||
+            "This artist has not added a biography yet."
+          )}
+        </p>
+
+      </div>
+
+      <div class="artist-profile-section">
+
+        <h3>
+          Songs by ${escapeHtml(artist.name || "this artist")}
+        </h3>
+
+        <div class="artist-profile-songs">
+
+          ${
+            artistSongs.length
+            ? artistSongs.map(song => {
+
+                const cover =
+                  song.cover_url
+                  ? `
+                    <img
+                      src="${escapeAttribute(song.cover_url)}"
+                      alt=""
+                    >
+                  `
+                  : `
+                    <div class="artist-song-placeholder">
+                      ♪
+                    </div>
+                  `;
+
+                return `
+
+                  <div class="artist-profile-song">
+
+                    <div class="artist-profile-song-cover">
+                      ${cover}
+                    </div>
+
+                    <div class="artist-profile-song-info">
+
+                      <strong>
+                        ${escapeHtml(song.title || "Untitled")}
+                      </strong>
+
+                      <small>
+                        ${formatNumber(song.plays || 0)}
+                        plays •
+                        ${formatNumber(song.likes || 0)}
+                        likes
+                      </small>
+
+                    </div>
+
+                    <div class="artist-profile-song-actions">
+
+                      <button
+                        class="btn btn-orange"
+                        onclick="playArtistProfileSong('${escapeAttribute(song.id)}')"
+                      >
+                        ▶ Play
+                      </button>
+
+                      <button
+                        class="btn btn-dark"
+                        onclick="downloadArtistProfileSong('${escapeAttribute(song.id)}')"
+                      >
+                        ↓ MP3
+                      </button>
+
+                    </div>
+
+                  </div>
+                `;
+
+              }).join("")
+            : `
+              <div class="empty">
+                This artist has no approved songs yet.
+              </div>
+            `
+          }
+
+        </div>
+
+      </div>
+    `;
+
+    window.artistProfileSongs =
+      artistSongs;
+
+  }catch(error){
+
+    console.error("Artist profile error:",error);
+
+    content.innerHTML = `
+      <div class="empty">
+
+        <h3>Could not load artist profile</h3>
+
+        <p style="margin-top:8px;">
+          ${escapeHtml(
+            error.message ||
+            "Please try again."
+          )}
+        </p>
+
+      </div>
+    `;
+  }
+}
+
+
+function closeArtistProfile(){
+
+  const modal =
+    document.getElementById("artistProfileModal");
+
+  if(modal){
+    modal.classList.remove("show");
+  }
+
+  document.body.style.overflow = "";
+}
+
+
+async function playArtistProfileSong(songId){
+
+  const song =
+    (window.artistProfileSongs || [])
+    .find(
+      item =>
+        String(item.id) ===
+        String(songId)
+    );
+
+  if(!song){
+    alert("Song not found.");
+    return;
+  }
+
+  if(
+    !currentSongs.some(
+      item =>
+        String(item.id) ===
+        String(song.id)
+    )
+  ){
+
+    currentSongs = [
+      song,
+      ...currentSongs
+    ];
+  }
+
+  await playSong(song.id);
+}
+
+
+async function downloadArtistProfileSong(songId){
+
+  const song =
+    (window.artistProfileSongs || [])
+    .find(
+      item =>
+        String(item.id) ===
+        String(songId)
+    );
+
+  if(!song){
+    alert("Song not found.");
+    return;
+  }
+
+  await downloadSongObject(song);
+}
+
+
+document.addEventListener(
+  "keydown",
+  function(event){
+
+    if(event.key === "Escape"){
+
+      const modal =
+        document.getElementById("artistProfileModal");
+
+      if(
+        modal &&
+        modal.classList.contains("show")
+      ){
+        closeArtistProfile();
+      }
+    }
+
+  }
+);
+
+
+/* =========================================================
    DOWNLOAD
 ========================================================= */
 
 async function downloadSong(songId){
 
-  const song =
-    findSongById(songId);
-
+  const song = findSongById(songId);
 
   if(!song){
-
     alert("Song not found.");
-
     return;
-
   }
 
+  await downloadSongObject(song);
+}
 
-  const url =
-    song.audio_url ||
-    song.file_url;
 
+async function downloadSongObject(song){
+
+  const url = song.audio_url || song.file_url;
 
   if(!url){
-
-    alert(
-      "This song does not have an audio file."
-    );
-
+    alert("This song does not have an audio file.");
     return;
-
   }
-
 
   try{
 
-    const response =
-      await fetch(url);
-
+    const response = await fetch(url,{
+      method:"GET",
+      cache:"no-store"
+    });
 
     if(!response.ok){
-
-      throw new Error(
-        "Could not download the song."
-      );
-
+      throw new Error("Could not download the song.");
     }
 
+    const blob = await response.blob();
+    const blobUrl = URL.createObjectURL(blob);
 
-    const blob =
-      await response.blob();
-
-
-    const blobUrl =
-      URL.createObjectURL(blob);
-
-
-    const link =
-      document.createElement("a");
-
+    const link = document.createElement("a");
 
     link.href = blobUrl;
-
-
     link.download =
-      `${safeDownloadName(
-        song.artist ||
-        "NileSoniq Artist"
-      )} - ${safeDownloadName(
-        song.title ||
-        "NileSoniq Song"
-      )}.mp3`;
-
+      `${safeDownloadName(song.artist || "NileSoniq Artist")}-${safeDownloadName(song.title || "NileSoniq Song")}.mp3`;
+    link.style.display = "none";
 
     document.body.appendChild(link);
-
     link.click();
-
     link.remove();
 
-
     setTimeout(
-      () =>
-        URL.revokeObjectURL(blobUrl),
-      1000
+      () => URL.revokeObjectURL(blobUrl),
+      5000
     );
 
   }catch(error){
 
-    console.error(
-      "Download error:",
-      error
-    );
-
+    console.error("MP3 download error:",error);
 
     try{
 
-      const link =
-        document.createElement("a");
-
+      const link = document.createElement("a");
       link.href = url;
-
       link.target = "_blank";
-
       link.rel = "noopener";
+      link.download =
+        `${safeDownloadName(song.artist || "NileSoniq Artist")}-${safeDownloadName(song.title || "NileSoniq Song")}.mp3`;
 
       document.body.appendChild(link);
-
       link.click();
-
       link.remove();
 
     }catch(fallbackError){
 
-      console.error(
-        fallbackError
-      );
-
-      alert(
-        "Download could not start. Please try again."
-      );
-
+      console.error(fallbackError);
+      alert("Download could not start. Please try again.");
     }
-
   }
-
 }
 
 
@@ -5386,42 +5738,25 @@ function safeDownloadName(name){
 async function loadArtists(){
 
   const container =
-    document.getElementById(
-      "artistsContainer"
-    );
-
+    document.getElementById("artistsContainer");
 
   if(!container){
     return;
   }
 
-
   container.innerHTML =
-    `<div class="loading">
-      Loading artists...
-    </div>`;
-
+    `<div class="loading">Loading artists...</div>`;
 
   try{
 
-    const {
-      data,
-      error
-    } = await sb
+    const {data,error} = await sb
       .from("artists")
       .select("*")
-      .order(
-        "created_at",
-        {
-          ascending:false
-        }
-      );
-
+      .order("created_at",{ascending:false});
 
     if(error){
       throw error;
     }
-
 
     if(!data || data.length === 0){
 
@@ -5432,9 +5767,7 @@ async function loadArtists(){
       `;
 
       return;
-
     }
-
 
     container.innerHTML =
       data.map(artist => {
@@ -5443,41 +5776,40 @@ async function loadArtists(){
           artist.avatar_url
           ? `
             <img
-              src="${escapeAttribute(
-                artist.avatar_url
-              )}"
-              alt=""
+              src="${escapeAttribute(artist.avatar_url)}"
+              alt="${escapeAttribute(artist.name || "Artist")}"
               loading="lazy">
           `
           : `
             <div class="artist-avatar-placeholder">
-              ${getInitials(
-                artist.name
-              )}
+              ${getInitials(artist.name)}
             </div>
           `;
 
-
         return `
-          <div class="artist-card">
+          <div
+            class="artist-card"
+            role="button"
+            tabindex="0"
+            onclick="openArtistProfile('${escapeAttribute(artist.id)}')"
+            onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openArtistProfile('${escapeAttribute(artist.id)}');}"
+          >
 
             <div class="artist-avatar">
               ${avatar}
             </div>
 
             <h3>
-              ${escapeHtml(
-                artist.name ||
-                "Unknown Artist"
-              )}
+              ${escapeHtml(artist.name || "Unknown Artist")}
             </h3>
 
             <p>
-              ${escapeHtml(
-                artist.location ||
-                "Uganda"
-              )}
+              ${escapeHtml(artist.location || "Uganda")}
             </p>
+
+            <div style="margin-top:10px;color:var(--orange);font-size:12px;font-weight:700;">
+              View Profile →
+            </div>
 
           </div>
         `;
@@ -5493,9 +5825,7 @@ async function loadArtists(){
         Could not load artists.
       </div>
     `;
-
   }
-
 }
 
 
