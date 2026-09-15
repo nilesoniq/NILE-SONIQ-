@@ -1241,7 +1241,7 @@ Upload Your Music
 id="searchInput"
 type="search"
 placeholder="Search songs or artists..."
-oninput="searchSongs">
+oninput="searchSongs()">
 
 </div>
 
@@ -2270,9 +2270,19 @@ window.supabase.createClient(
   SUPABASE_PUBLISHABLE_KEY
 );
 
+
+/* =========================================================
+   EARNINGS SETTINGS
+========================================================= */
+
 const WITHDRAWAL_MINIMUM = 10000;
 
 const EARNINGS_PER_PLAY = 0.5;
+
+
+/* =========================================================
+   GLOBAL VARIABLES
+========================================================= */
 
 let currentUser = null;
 let currentArtist = null;
@@ -2474,6 +2484,7 @@ async function updateUI(){
       "dashboardContent"
     );
 
+
   if(currentUser){
 
     loginButton.classList.add(
@@ -2492,8 +2503,10 @@ async function updateUI(){
       "hidden"
     );
 
+
     const isAdmin =
       await isCurrentUserAdmin();
+
 
     if(isAdmin){
 
@@ -2523,11 +2536,13 @@ async function updateUI(){
 
     }
 
+
     await loadArtistProfile();
 
     await loadMySongs();
 
     await loadMyWithdrawals();
+
 
     if(isAdmin){
 
@@ -2581,6 +2596,7 @@ async function showPage(page){
     "admin"
   ];
 
+
   pages.forEach(name => {
 
     const element =
@@ -2599,6 +2615,7 @@ async function showPage(page){
 
   });
 
+
   document
     .querySelectorAll(
       "nav button[data-page]"
@@ -2611,6 +2628,7 @@ async function showPage(page){
       );
 
     });
+
 
   document
     .getElementById("mainNav")
@@ -2651,6 +2669,7 @@ async function showPage(page){
         "adminContent"
       );
 
+
     if(!currentUser){
 
       denied.classList.remove(
@@ -2665,8 +2684,10 @@ async function showPage(page){
 
     }
 
+
     const isAdmin =
       await isCurrentUserAdmin();
+
 
     if(isAdmin){
 
@@ -2718,6 +2739,7 @@ function updateAdminTabs(){
     document.getElementById(
       "adminTabAdmins"
     );
+
 
   if(
     adminTab &&
@@ -2844,9 +2866,11 @@ async function showAdminTab(tab){
 
     }
 
+
     managementPanel.classList.remove(
       "hidden"
     );
+
 
     if(adminTab){
 
@@ -2855,6 +2879,7 @@ async function showAdminTab(tab){
       );
 
     }
+
 
     await loadAdministrators();
 
@@ -2874,13 +2899,16 @@ function openAuthModal(context="artist"){
       ? "admin"
       : "artist";
 
+
   document
     .getElementById("authModal")
     .classList.add("show");
 
+
   clearMessage(
     "authMessage"
   );
+
 
   setAuthMode("login");
 
@@ -2899,6 +2927,7 @@ function closeAuthModal(){
 function setAuthMode(mode){
 
   currentAuthMode = mode;
+
 
   const loginTab =
     document.getElementById(
@@ -2972,6 +3001,7 @@ function setAuthMode(mode){
 
   }
 
+
   clearMessage(
     "authMessage"
   );
@@ -2989,12 +3019,14 @@ async function submitAuth(){
       .value
       .trim();
 
+
   const password =
     document
       .getElementById(
         "authPassword"
       )
       .value;
+
 
   const artistName =
     document
@@ -3028,6 +3060,7 @@ async function submitAuth(){
         email,
         password
       });
+
 
       if(error){
 
@@ -3223,6 +3256,7 @@ async function logout(){
     error
   } = await sb.auth.signOut();
 
+
   if(error){
 
     alert(
@@ -3234,9 +3268,11 @@ async function logout(){
 
   }
 
+
   currentUser = null;
   currentArtist = null;
   currentAdmin = null;
+
 
   await showPage("home");
 
@@ -3252,6 +3288,7 @@ async function loadArtistProfile(){
   if(!currentUser){
     return;
   }
+
 
   try{
 
@@ -3307,10 +3344,12 @@ async function loadArtistProfile(){
     ).value =
       data.name || "";
 
+
     document.getElementById(
       "artistLocation"
     ).value =
       data.location || "";
+
 
     document.getElementById(
       "artistBio"
@@ -3362,6 +3401,7 @@ async function saveArtistProfile(){
       .value
       .trim();
 
+
   const location =
     document
       .getElementById(
@@ -3370,6 +3410,7 @@ async function saveArtistProfile(){
       .value
       .trim();
 
+
   const bio =
     document
       .getElementById(
@@ -3377,6 +3418,7 @@ async function saveArtistProfile(){
       )
       .value
       .trim();
+
 
   const avatarFile =
     document
@@ -3412,6 +3454,7 @@ async function saveArtistProfile(){
         getFileExtension(
           avatarFile.name
         );
+
 
       const path =
         `${currentUser.id}/avatar-${Date.now()}.${extension}`;
@@ -3747,9 +3790,11 @@ async function uploadSong(){
       "songTitle"
     ).value = "";
 
+
     document.getElementById(
       "audioFile"
     ).value = "";
+
 
     document.getElementById(
       "coverFile"
@@ -4430,6 +4475,7 @@ function searchSongs(){
         (song.title || "")
         .toLowerCase();
 
+
       const artist =
         (song.artist || "")
         .toLowerCase();
@@ -4710,10 +4756,12 @@ function updateLocalPlayCount(
     songId
   );
 
+
   updateSongInList(
     newReleaseSongs,
     songId
   );
+
 
   updateSongInList(
     topChartSongs,
@@ -4725,9 +4773,11 @@ function updateLocalPlayCount(
     currentSongs
   );
 
+
   renderNewReleases(
     newReleaseSongs
   );
+
 
   renderTopCharts(
     topChartSongs
@@ -5093,17 +5143,6 @@ function updateDashboardStats(
       )
     );
 
-
-  /*
-   * Refresh available balance after
-   * calculating current earnings.
-   */
-  if(currentUser){
-
-    loadMyWithdrawals();
-
-  }
-
 }
 
 
@@ -5332,9 +5371,11 @@ async function updateAvailableBalance(
 
 
     /*
-     * Paid, processing and pending
-     * withdrawals are not available
-     * for another withdrawal.
+     * Pending, processing and paid
+     * withdrawals are reserved.
+     *
+     * Rejected withdrawals are NOT
+     * deducted from available balance.
      */
     const alreadyRequested =
       (withdrawals || [])
@@ -5441,7 +5482,14 @@ async function requestWithdrawal(){
     );
 
 
-  if(!amount || amount < WITHDRAWAL_MINIMUM){
+  /* ---------------------------------------------------------
+     CHECK MINIMUM
+  --------------------------------------------------------- */
+
+  if(
+    !amount ||
+    amount < WITHDRAWAL_MINIMUM
+  ){
 
     showMessage(
       "withdrawalMessage",
@@ -5454,9 +5502,11 @@ async function requestWithdrawal(){
   }
 
 
-  if(
-    !paymentMethod
-  ){
+  /* ---------------------------------------------------------
+     CHECK PAYMENT METHOD
+  --------------------------------------------------------- */
+
+  if(!paymentMethod){
 
     showMessage(
       "withdrawalMessage",
@@ -5469,9 +5519,11 @@ async function requestWithdrawal(){
   }
 
 
-  if(
-    !paymentDetails
-  ){
+  /* ---------------------------------------------------------
+     CHECK PAYMENT DETAILS
+  --------------------------------------------------------- */
+
+  if(!paymentDetails){
 
     showMessage(
       "withdrawalMessage",
@@ -5498,9 +5550,10 @@ async function requestWithdrawal(){
 
   try{
 
-    /*
-     * Get the artist's songs.
-     */
+    /* -------------------------------------------------------
+       GET ARTIST SONGS
+    ------------------------------------------------------- */
+
     const {
       data:songs,
       error:songsError
@@ -5522,6 +5575,10 @@ async function requestWithdrawal(){
     }
 
 
+    /* -------------------------------------------------------
+       CALCULATE TOTAL EARNINGS
+    ------------------------------------------------------- */
+
     const totalPlays =
       (songs || []).reduce(
         (sum,song) =>
@@ -5538,9 +5595,10 @@ async function requestWithdrawal(){
       EARNINGS_PER_PLAY;
 
 
-    /*
-     * Get existing withdrawals.
-     */
+    /* -------------------------------------------------------
+       GET PREVIOUS WITHDRAWALS
+    ------------------------------------------------------- */
+
     const {
       data:withdrawals,
       error:withdrawalsError
@@ -5561,6 +5619,10 @@ async function requestWithdrawal(){
 
     }
 
+
+    /* -------------------------------------------------------
+       CALCULATE RESERVED MONEY
+    ------------------------------------------------------- */
 
     const alreadyRequested =
       (withdrawals || [])
@@ -5583,6 +5645,10 @@ async function requestWithdrawal(){
       );
 
 
+    /* -------------------------------------------------------
+       AVAILABLE BALANCE
+    ------------------------------------------------------- */
+
     const available =
       Math.max(
         0,
@@ -5590,6 +5656,10 @@ async function requestWithdrawal(){
         alreadyRequested
       );
 
+
+    /* -------------------------------------------------------
+       CHECK AVAILABLE BALANCE
+    ------------------------------------------------------- */
 
     if(amount > available){
 
@@ -5604,8 +5674,13 @@ async function requestWithdrawal(){
     }
 
 
+    /* -------------------------------------------------------
+       DOUBLE CHECK MINIMUM
+    ------------------------------------------------------- */
+
     if(
-      amount < WITHDRAWAL_MINIMUM
+      amount <
+      WITHDRAWAL_MINIMUM
     ){
 
       showMessage(
@@ -5622,6 +5697,10 @@ async function requestWithdrawal(){
     withdrawButton.textContent =
       "Submitting...";
 
+
+    /* -------------------------------------------------------
+       INSERT WITHDRAWAL REQUEST
+    ------------------------------------------------------- */
 
     const {
       error:insertError
@@ -5654,6 +5733,10 @@ async function requestWithdrawal(){
     }
 
 
+    /* -------------------------------------------------------
+       SUCCESS
+    ------------------------------------------------------- */
+
     showMessage(
       "withdrawalMessage",
       "Withdrawal request submitted successfully.",
@@ -5661,16 +5744,26 @@ async function requestWithdrawal(){
     );
 
 
+    /* -------------------------------------------------------
+       CLEAR FORM
+    ------------------------------------------------------- */
+
     amountInput.value = "";
+
 
     document.getElementById(
       "paymentMethod"
     ).value = "";
 
+
     document.getElementById(
       "paymentDetails"
     ).value = "";
 
+
+    /* -------------------------------------------------------
+       REFRESH WITHDRAWALS AND BALANCE
+    ------------------------------------------------------- */
 
     await loadMyWithdrawals();
 
@@ -5728,6 +5821,11 @@ async function loadWithdrawals(){
     );
 
 
+  if(!tbody){
+    return;
+  }
+
+
   tbody.innerHTML = `
     <tr>
       <td colspan="6">
@@ -5768,9 +5866,10 @@ async function loadWithdrawals(){
       data || [];
 
 
-    /*
-     * Load artist names.
-     */
+    /* -------------------------------------------------------
+       LOAD ARTIST NAMES
+    ------------------------------------------------------- */
+
     const {
       data:artists,
       error:artistsError
@@ -5846,6 +5945,10 @@ async function loadWithdrawals(){
         let actions = "";
 
 
+        /* ---------------------------------------------------
+           PENDING ACTIONS
+        --------------------------------------------------- */
+
         if(status === "pending"){
 
           actions = `
@@ -5873,6 +5976,10 @@ async function loadWithdrawals(){
         }
 
 
+        /* ---------------------------------------------------
+           PROCESSING ACTIONS
+        --------------------------------------------------- */
+
         if(status === "processing"){
 
           actions = `
@@ -5899,6 +6006,10 @@ async function loadWithdrawals(){
 
         }
 
+
+        /* ---------------------------------------------------
+           COMPLETED
+        --------------------------------------------------- */
 
         if(
           status === "paid" ||
@@ -7191,4 +7302,4 @@ document
 </script>
 
 </body>
-</html>
+  </html>
