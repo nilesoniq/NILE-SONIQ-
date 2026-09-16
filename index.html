@@ -7064,20 +7064,50 @@ function savePlatformWallet(){
 
 async function startPlatformDeposit(){
   const phone=(document.getElementById("platformWalletPhone")?.value||"").trim();
-  const network=(document.getElementById("platformWalletNetwork")?.value||"MTN").trim();
+  const network=(document.getElementById("platformWalletNetwork")?.value||"MTN").trim().toLowerCase();
   const amount=Number(document.getElementById("platformDepositAmount")?.value||0);
-  if(!phone || !amount || amount<1000){
+
+  if(!phone || !amount || amount < 1000){
     showMessage("platformWalletMessage","Enter the mobile-money number and a deposit amount of at least UGX 1,000.","error");
     return;
   }
 
-  /*
-    PesaJet requests must be handled by a secure backend.
-    Never place PesaJet API keys/secrets in this HTML.
-    This frontend sends only safe request data when a backend endpoint is connected.
-  */
-  showMessage("platformWalletMessage","PesaJet payment request is ready for secure backend connection. TEST MODE is available below.","success");
-  console.log("PesaJet deposit payload:",{phone,network,amount,mode:"LIVE_BACKEND_REQUIRED"});
+  try{
+    showMessage("platformWalletMessage","Sending PesaJet deposit request...","success");
+
+    const { data, error } = await supabase.functions.invoke(
+      "pesajet-collection",
+      {
+        body:{
+          phone,
+          amount,
+          provider:network,
+          reference:"NILESONIQ-DEPOSIT-"+Date.now(),
+          description:"NileSoniq platform wallet deposit"
+        }
+      }
+    );
+
+    if(error){
+      throw error;
+    }
+
+    console.log("PesaJet deposit response:",data);
+
+    showMessage(
+      "platformWalletMessage",
+      "Deposit request sent successfully.",
+      "success"
+    );
+
+  }catch(err){
+    console.error("PesaJet deposit error:",err);
+    showMessage(
+      "platformWalletMessage",
+      "PesaJet deposit request failed.",
+      "error"
+    );
+  }
 }
 
 async function pesaJetTestMode(){
