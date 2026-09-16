@@ -2280,6 +2280,7 @@ class="dashboard-card hidden">
 <div style="display:flex;gap:10px;flex-wrap:wrap;">
   <button class="btn btn-orange" onclick="savePlatformWallet()">Save Account</button>
   <button class="btn" onclick="startPlatformDeposit()">Deposit Money</button>
+  <button class="btn btn-warning" onclick="pesaJetTestMode()">PesaJet TEST MODE</button>
 </div>
 
 <div id="platformWalletMessage" class="message" style="margin-top:15px;"></div>
@@ -7069,8 +7070,35 @@ async function startPlatformDeposit(){
     showMessage("platformWalletMessage","Enter the mobile-money number and a deposit amount of at least UGX 1,000.","error");
     return;
   }
-  showMessage("platformWalletMessage","Deposit request needs the secure payment backend. No money is moved by this HTML alone.","error");
-  console.warn("Connect this action to a Supabase Edge Function for",{phone,network,amount});
+
+  /*
+    PesaJet requests must be handled by a secure backend.
+    Never place PesaJet API keys/secrets in this HTML.
+    This frontend sends only safe request data when a backend endpoint is connected.
+  */
+  showMessage("platformWalletMessage","PesaJet payment request is ready for secure backend connection. TEST MODE is available below.","success");
+  console.log("PesaJet deposit payload:",{phone,network,amount,mode:"LIVE_BACKEND_REQUIRED"});
+}
+
+function pesaJetTestMode(){
+  const phone=(document.getElementById("platformWalletPhone")?.value||"TEST_PHONE").trim();
+  const network=(document.getElementById("platformWalletNetwork")?.value||"MTN").trim();
+  const amount=Number(document.getElementById("platformDepositAmount")?.value||1000);
+
+  showMessage(
+    "platformWalletMessage",
+    "PesaJet TEST MODE: simulated payment request created. No real money moved.",
+    "success"
+  );
+
+  console.log("PesaJet TEST MODE transaction:",{
+    provider:"PesaJet",
+    test:true,
+    phone,
+    network,
+    amount,
+    status:"SIMULATED"
+  });
 }
 
 /* =========================================================
