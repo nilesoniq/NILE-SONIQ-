@@ -7080,25 +7080,57 @@ async function startPlatformDeposit(){
   console.log("PesaJet deposit payload:",{phone,network,amount,mode:"LIVE_BACKEND_REQUIRED"});
 }
 
-function pesaJetTestMode(){
-  const phone=(document.getElementById("platformWalletPhone")?.value||"TEST_PHONE").trim();
-  const network=(document.getElementById("platformWalletNetwork")?.value||"MTN").trim();
+async function pesaJetTestMode(){
+  const phone=(document.getElementById("platformWalletPhone")?.value||"").trim();
+  const network=(document.getElementById("platformWalletNetwork")?.value||"MTN").trim().toLowerCase();
   const amount=Number(document.getElementById("platformDepositAmount")?.value||1000);
+
+  if(!phone || !amount || amount < 1000){
+    showMessage("platformWalletMessage","Enter a valid phone number and amount of at least UGX 1,000.","error");
+    return;
+  }
 
   showMessage(
     "platformWalletMessage",
-    "PesaJet TEST MODE: simulated payment request created. No real money moved.",
+    "Sending PesaJet TEST MODE request...",
     "success"
   );
 
-  console.log("PesaJet TEST MODE transaction:",{
-    provider:"PesaJet",
-    test:true,
-    phone,
-    network,
-    amount,
-    status:"SIMULATED"
-  });
+  try{
+    const { data, error } = await supabase.functions.invoke(
+      "pesajet-collection",
+      {
+        body:{
+          phone_number:phone,
+          amount,
+          provider:network,
+          reference:`NILESONIQ-TEST-${Date.now()}`,
+          description:"NileSoniq platform wallet test payment"
+        }
+      }
+    );
+
+    if(error){
+      throw error;
+    }
+
+    console.log("PesaJet TEST MODE response:", data);
+
+    showMessage(
+      "platformWalletMessage",
+      data?.message || "PesaJet TEST MODE request completed.",
+      "success"
+    );
+
+  }catch(error){
+    console.error("PesaJet error:", error);
+
+    showMessage(
+      "platformWalletMessage",
+      "PesaJet request failed. Check Edge Function settings.",
+      "error"
+    );
+  }
 }
 
 /* =========================================================
