@@ -6846,6 +6846,66 @@ async function updateWithdrawalStatus(
 
   try{
 
+    /*
+      When a withdrawal becomes PAID, deduct the
+      withdrawal amount from the artist wallet.
+
+      Important:
+      - Only deduct when changing TO paid.
+      - If the request is already paid, do not deduct twice.
+    */
+
+    let withdrawal = null;
+
+    if(status === "paid"){
+
+      const {
+        data,
+        error:withdrawalError
+      } = await sb
+        .from("withdrawal_requests")
+        .select(
+          "id,artist_id,amount,status"
+        )
+        .eq(
+          "id",
+          withdrawalId
+        )
+        .maybeSingle();
+
+      if(withdrawalError){
+        throw withdrawalError;
+      }
+
+      if(!data){
+        throw new Error(
+          "Withdrawal request was not found."
+        );
+      }
+
+      withdrawal = data;
+
+      if(
+        String(
+          withdrawal.status || ""
+        ).toLowerCase() === "paid"
+      ){
+
+        showMessage(
+          "withdrawalAdminMessage",
+          "This withdrawal is already marked as paid. Wallet was not deducted again.",
+          "success"
+        );
+
+        await loadWithdrawals();
+
+        return;
+
+      }
+
+    }
+
+
     const updateData = {
       status
     };
@@ -6882,6 +6942,106 @@ async function updateWithdrawalStatus(
     }
 
 
+    /*
+      Deduct the wallet only after the withdrawal has
+      successfully been marked as paid.
+    */
+
+    if(
+      status === "paid" &&
+      withdrawal
+    ){
+
+      const amount =
+        Number(
+          withdrawal.amount || 0
+        );
+
+      const artistId =
+        withdrawal.artist_id;
+
+      if(
+        !artistId ||
+        !Number.isFinite(amount) ||
+        amount <= 0
+      ){
+
+        throw new Error(
+          "Invalid withdrawal amount or artist."
+        );
+
+      }
+
+
+      const {
+        data:wallet,
+        error:walletError
+      } = await sb
+        .from("artist_wallets")
+        .select(
+          "balance"
+        )
+        .eq(
+          "user_id",
+          artistId
+        )
+        .maybeSingle();
+
+
+      if(walletError){
+        throw walletError;
+      }
+
+
+      if(!wallet){
+
+        throw new Error(
+          "Artist wallet was not found."
+        );
+
+      }
+
+
+      const currentBalance =
+        Number(
+          wallet.balance || 0
+        );
+
+
+      if(amount > currentBalance){
+
+        throw new Error(
+          "Withdrawal is marked paid, but the artist wallet does not have enough balance to deduct."
+        );
+
+      }
+
+
+      const newBalance =
+        currentBalance - amount;
+
+
+      const {
+        error:balanceError
+      } = await sb
+        .from("artist_wallets")
+        .update({
+          balance:newBalance,
+          updated_at:new Date().toISOString()
+        })
+        .eq(
+          "user_id",
+          artistId
+        );
+
+
+      if(balanceError){
+        throw balanceError;
+      }
+
+    }
+
+
     showMessage(
       "withdrawalAdminMessage",
       "Withdrawal updated successfully.",
@@ -6905,7 +7065,6 @@ async function updateWithdrawalStatus(
   }
 
 }
-
 
 async function processWithdrawal(id){
 
