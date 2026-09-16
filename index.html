@@ -6329,136 +6329,49 @@ async function loadMyWithdrawals(){
    BALANCE
 ========================================================= */
 
-async function updateAvailableBalance(
-  withdrawals=null
-){
+async function updateAvailableBalance(){
 
   if(!currentUser){
     return;
   }
-
 
   const balanceElement =
     document.getElementById(
       "availableBalance"
     );
 
+  if(!balanceElement){
+    return;
+  }
 
   try{
 
     const {
-      data:songs,
-      error:songsError
+      data:wallet,
+      error:walletError
     } = await sb
-      .from("songs")
-      .select("plays")
+      .from("artist_wallets")
+      .select("balance")
       .eq(
-        "artist_id",
+        "user_id",
         currentUser.id
-      );
-
-
-    if(songsError){
-      throw songsError;
-    }
-
-
-    const totalPlays =
-      (songs || []).reduce(
-        (sum,song) =>
-          sum +
-          Number(
-            song.plays || 0
-          ),
-        0
-      );
-
-
-    const totalEarnings =
-      totalPlays *
-      EARNINGS_PER_PLAY;
-
-
-    let withdrawalList =
-      Array.isArray(withdrawals)
-      ? withdrawals
-      : null;
-
-
-    if(withdrawalList === null){
-
-      const {
-        data:withdrawalData,
-        error:withdrawalError
-      } = await sb
-        .from("withdrawal_requests")
-        .select(
-          "amount,status"
-        )
-        .eq(
-          "artist_id",
-          currentUser.id
-        );
-
-
-      if(withdrawalError){
-
-        console.warn(
-          withdrawalError
-        );
-
-        withdrawalList = [];
-
-      }else{
-
-        withdrawalList =
-          withdrawalData || [];
-
-      }
-
-    }
-
-
-    const alreadyRequested =
-      withdrawalList
-      .filter(item =>
-        [
-          "pending",
-          "processing",
-          "paid"
-        ].includes(
-          item.status
-        )
       )
-      .reduce(
-        (sum,item) =>
-          sum +
-          Number(
-            item.amount || 0
-          ),
-        0
-      );
+      .maybeSingle();
 
-
-    const available =
-      Math.max(
-        0,
-        totalEarnings -
-        alreadyRequested
-      );
-
-
-    if(balanceElement){
-
-      balanceElement.textContent =
-        "UGX " +
-        formatNumber(
-          Math.floor(
-            available
-          )
-        );
-
+    if(walletError){
+      throw walletError;
     }
+
+    const balance =
+      Number(
+        wallet?.balance || 0
+      );
+
+    balanceElement.textContent =
+      "UGX " +
+      formatNumber(
+        Math.floor(balance)
+      );
 
   }catch(error){
 
@@ -6467,14 +6380,10 @@ async function updateAvailableBalance(
       error
     );
 
+    balanceElement.textContent =
+      "UGX 0";
   }
-
 }
-
-
-/* =========================================================
-   REQUEST WITHDRAWAL
-========================================================= */
 
 async function requestWithdrawal(){
 
@@ -6571,85 +6480,25 @@ async function requestWithdrawal(){
   try{
 
     const {
-      data:songs,
-      error:songsError
+      data:wallet,
+      error:walletError
     } = await sb
-      .from("songs")
-      .select("plays")
+      .from("artist_wallets")
+      .select("balance")
       .eq(
-        "artist_id",
+        "user_id",
         currentUser.id
-      );
-
-
-    if(songsError){
-      throw songsError;
-    }
-
-
-    const totalPlays =
-      (songs || []).reduce(
-        (sum,song) =>
-          sum +
-          Number(
-            song.plays || 0
-          ),
-        0
-      );
-
-
-    const totalEarnings =
-      totalPlays *
-      EARNINGS_PER_PLAY;
-
-
-    const {
-      data:withdrawals,
-      error:withdrawalsError
-    } = await sb
-      .from("withdrawal_requests")
-      .select(
-        "amount,status"
       )
-      .eq(
-        "artist_id",
-        currentUser.id
-      );
+      .maybeSingle();
 
-
-    if(withdrawalsError){
-      throw withdrawalsError;
+    if(walletError){
+      throw walletError;
     }
-
-
-    const alreadyRequested =
-      (withdrawals || [])
-      .filter(item =>
-        [
-          "pending",
-          "processing",
-          "paid"
-        ].includes(
-          item.status
-        )
-      )
-      .reduce(
-        (sum,item) =>
-          sum +
-          Number(
-            item.amount || 0
-          ),
-        0
-      );
-
 
     const available =
-      Math.max(
-        0,
-        totalEarnings -
-        alreadyRequested
+      Number(
+        wallet?.balance || 0
       );
-
 
     if(amount > available){
 
