@@ -2253,7 +2253,7 @@ class="dashboard-card hidden">
   <div style="color:#888;font-size:12px;">Payout account</div>
   <div id="platformWalletNumber" style="font-size:20px;font-weight:800;margin-top:5px;">Not configured</div>
   <div class="wallet-balance" id="platformWalletBalance">UGX 0</div>
-  <div style="color:#888;font-size:12px;">Total of completed deposits recorded in public.platform_deposits.</div>
+  <div style="color:#888;font-size:12px;">Available platform balance shown here when a secure payment backend is connected.</div>
 </div>
 
 <div class="form-grid" style="margin-top:18px;">
@@ -7040,10 +7040,9 @@ async function loadAdminAnalytics(){
    PLATFORM WALLET SETTINGS
 ========================================================= */
 
-let platformWalletRefreshTimer = null;
+let platformWalletRefreshTimer=null;
 
 async function loadPlatformWallet(){
-  /* Keep the existing local payout-account settings. */
   const saved=localStorage.getItem("nilesoniq_platform_wallet");
   if(saved){
     try{
@@ -7051,14 +7050,9 @@ async function loadPlatformWallet(){
       const phone=document.getElementById("platformWalletPhone");
       const network=document.getElementById("platformWalletNetwork");
       const number=document.getElementById("platformWalletNumber");
-
       if(phone) phone.value=data.phone||"";
       if(network) network.value=data.network||"MTN";
-      if(number){
-        number.textContent=data.phone
-          ? `${data.network||"MTN"} — ${data.phone}`
-          : "Not configured";
-      }
+      if(number) number.textContent=data.phone ? `${data.network||"MTN"} — ${data.phone}` : "Not configured";
     }catch(e){
       console.warn("Wallet settings error",e);
     }
@@ -7073,77 +7067,32 @@ async function loadPlatformWallet(){
   }
 
   try{
-    /*
-      IMPORTANT:
-      The PesaJet collection function is not changed here.
-      This dashboard reads the deposits that the payment backend
-      has already recorded in public.platform_deposits.
+    const { data, error } = await sb.rpc("get_platform_completed_total");
+    if(error) throw error;
 
-      We only count deposits whose status is COMPLETED.
-      Amount is returned by Supabase as a number or numeric string,
-      so Number() is used before adding it.
-    */
-    let totalAmount=0;
-    let from=0;
-    const pageSize=1000;
+    const totalAmount = Number(data ?? 0);
 
-    while(true){
-      const {data,error}=await sb
-        .from("platform_deposits")
-        .select("amount")
-        .eq("status","COMPLETED")
-        .range(from,from + pageSize - 1);
-
-      if(error) throw error;
-
-      const rows=data || [];
-
-      for(const deposit of rows){
-        const amount=Number(deposit.amount);
-        if(Number.isFinite(amount)){
-          totalAmount += amount;
-        }
-      }
-
-      if(rows.length < pageSize) break;
-      from += pageSize;
+    if(!Number.isFinite(totalAmount)){
+      throw new Error("Invalid balance returned by get_platform_completed_total.");
     }
 
-    balanceElement.textContent =
-      "UGX " + formatNumber(Math.floor(totalAmount));
+    balanceElement.textContent = "UGX " + formatNumber(Math.floor(totalAmount));
 
-    console.log(
-      "Platform completed deposits total:",
-      totalAmount
-    );
-
+    console.log("Platform completed deposits total:", totalAmount);
   }catch(error){
-    console.error(
-      "Platform completed deposits error:",
-      error
-    );
-
-    /*
-      Do not silently pretend the balance is zero when the database
-      query fails. Show a short status message while keeping the
-      existing dashboard design.
-    */
-    balanceElement.textContent="UGX 0";
+    console.error("Platform completed deposits error:",error);
+    balanceElement.textContent="Balance unavailable";
 
     const message=document.getElementById("platformWalletMessage");
     if(message){
       showMessage(
         "platformWalletMessage",
-        "Could not load completed deposits. Check the browser console and your Supabase read policy for platform_deposits.",
+        "Could not load the Platform Wallet balance. Please try again or check the Supabase RPC.",
         "error"
       );
     }
   }
 
-  /*
-    Keep the balance current. This does not call PesaJet and does not
-    modify any payment function. It only re-reads completed deposits.
-  */
   if(!platformWalletRefreshTimer){
     platformWalletRefreshTimer=setInterval(()=>{
       const panel=document.getElementById("adminWalletPanel");
