@@ -2280,7 +2280,6 @@ class="dashboard-card hidden">
 <div style="display:flex;gap:10px;flex-wrap:wrap;">
   <button class="btn btn-orange" onclick="savePlatformWallet()">Save Account</button>
   <button class="btn" onclick="startPlatformDeposit()">Deposit Money</button>
-  <button class="btn btn-warning" onclick="pesaJetTestMode()">PesaJet TEST MODE</button>
 </div>
 
 <div id="platformWalletMessage" class="message" style="margin-top:15px;"></div>
@@ -6835,52 +6834,53 @@ async function updateWithdrawalStatus(
 ){
 
   if(!await isCurrentUserAdmin()){
-    alert("You are not authorized.");
+
+    alert(
+      "You are not authorized."
+    );
+
     return;
+
   }
+
 
   try{
 
-    if(status === "paid"){
-      const { data, error } = await sb.rpc(
-        "pay_artist_withdrawal",
-        { p_withdrawal_id: withdrawalId }
-      );
+    const updateData = {
+      status
+    };
 
-      if(error) throw error;
 
-      if(data && data.already_paid){
-        showMessage(
-          "withdrawalAdminMessage",
-          "This withdrawal is already marked as paid. Wallet was not deducted again.",
-          "success"
-        );
-      }else{
-        showMessage(
-          "withdrawalAdminMessage",
-          "Withdrawal marked as paid and artist wallet deducted successfully.",
-          "success"
-        );
-      }
+    if(
+      status === "paid" ||
+      status === "rejected"
+    ){
 
-      await loadWithdrawals();
-      return;
-    }
+      updateData.processed_at =
+        new Date().toISOString();
 
-    const updateData = { status };
-
-    if(status === "rejected"){
-      updateData.processed_at = new Date().toISOString();
     }else{
+
       updateData.processed_at = null;
+
     }
 
-    const { error } = await sb
+
+    const {
+      error
+    } = await sb
       .from("withdrawal_requests")
       .update(updateData)
-      .eq("id", withdrawalId);
+      .eq(
+        "id",
+        withdrawalId
+      );
 
-    if(error) throw error;
+
+    if(error){
+      throw error;
+    }
+
 
     showMessage(
       "withdrawalAdminMessage",
@@ -6888,15 +6888,20 @@ async function updateWithdrawalStatus(
       "success"
     );
 
+
     await loadWithdrawals();
 
   }catch(error){
-    console.error("Withdrawal status update error:", error);
+
+    console.error(error);
+
     showMessage(
       "withdrawalAdminMessage",
-      error.message || "Could not update withdrawal.",
+      error.message ||
+      "Could not update withdrawal.",
       "error"
     );
+
   }
 
 }
@@ -7064,100 +7069,14 @@ function savePlatformWallet(){
 
 async function startPlatformDeposit(){
   const phone=(document.getElementById("platformWalletPhone")?.value||"").trim();
-  const network=(document.getElementById("platformWalletNetwork")?.value||"MTN").trim().toLowerCase();
+  const network=(document.getElementById("platformWalletNetwork")?.value||"MTN").trim();
   const amount=Number(document.getElementById("platformDepositAmount")?.value||0);
-
-  if(!phone || !amount || amount < 1000){
+  if(!phone || !amount || amount<1000){
     showMessage("platformWalletMessage","Enter the mobile-money number and a deposit amount of at least UGX 1,000.","error");
     return;
   }
-
-  showMessage("platformWalletMessage","Sending PesaJet deposit request...","success");
-
-  try{
-    const { data, error } = await sb.functions.invoke(
-      "pesajet-collection",
-      {
-        body:{
-          phone:phone,
-          amount:amount,
-          provider:network
-        }
-      }
-    );
-
-    console.log("PesaJet deposit response:",data);
-    console.log("Supabase function error:",error);
-
-    if(error){
-      showMessage("platformWalletMessage","Edge Function error: " + (error.message || "Unknown function error"),"error");
-      return;
-    }
-
-    if(!data || data.success !== true){
-      showMessage("platformWalletMessage","PesaJet failed: " + (data?.error || data?.result?.message || "Unknown PesaJet error"),"error");
-      return;
-    }
-
-    showMessage("platformWalletMessage",data.message || "PesaJet deposit request sent successfully.","success");
-
-  }catch(err){
-    console.error("PesaJet deposit error:",err);
-    showMessage("platformWalletMessage","PesaJet deposit request failed: " + (err?.message || "Unknown error"),"error");
-  }
-}
-
-async function pesaJetTestMode(){
-  const phone=(document.getElementById("platformWalletPhone")?.value||"").trim();
-  const network=(document.getElementById("platformWalletNetwork")?.value||"MTN").trim().toLowerCase();
-  const amount=Number(document.getElementById("platformDepositAmount")?.value||1000);
-
-  if(!phone || !amount || amount < 1000){
-    showMessage("platformWalletMessage","Enter a valid phone number and amount of at least UGX 1,000.","error");
-    return;
-  }
-
-  showMessage(
-    "platformWalletMessage",
-    "Sending PesaJet TEST MODE request...",
-    "success"
-  );
-
-  try{
-    const { data, error } = await supabase.functions.invoke(
-      "pesajet-collection",
-      {
-        body:{
-          phone_number:phone,
-          amount,
-          provider:network,
-          reference:`NILESONIQ-TEST-${Date.now()}`,
-          description:"NileSoniq platform wallet test payment"
-        }
-      }
-    );
-
-    if(error){
-      throw error;
-    }
-
-    console.log("PesaJet TEST MODE response:", data);
-
-    showMessage(
-      "platformWalletMessage",
-      data?.message || "PesaJet TEST MODE request completed.",
-      "success"
-    );
-
-  }catch(error){
-    console.error("PesaJet error:", error);
-
-    showMessage(
-      "platformWalletMessage",
-      "PesaJet request failed. Check Edge Function settings.",
-      "error"
-    );
-  }
+  showMessage("platformWalletMessage","Deposit request needs the secure payment backend. No money is moved by this HTML alone.","error");
+  console.warn("Connect this action to a Supabase Edge Function for",{phone,network,amount});
 }
 
 /* =========================================================
