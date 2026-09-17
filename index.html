@@ -7071,12 +7071,89 @@ async function startPlatformDeposit(){
   const phone=(document.getElementById("platformWalletPhone")?.value||"").trim();
   const network=(document.getElementById("platformWalletNetwork")?.value||"MTN").trim();
   const amount=Number(document.getElementById("platformDepositAmount")?.value||0);
+  const button=document.querySelector('button[onclick="startPlatformDeposit()"]');
+
   if(!phone || !amount || amount<1000){
     showMessage("platformWalletMessage","Enter the mobile-money number and a deposit amount of at least UGX 1,000.","error");
     return;
   }
-  showMessage("platformWalletMessage","Deposit request needs the secure payment backend. No money is moved by this HTML alone.","error");
-  console.warn("Connect this action to a Supabase Edge Function for",{phone,network,amount});
+
+  if(network !== "MTN"){
+    showMessage("platformWalletMessage","PesaJet collection is currently configured here for MTN Mobile Money.","error");
+    return;
+  }
+
+  if(!window.supabase || !sb){
+    showMessage("platformWalletMessage","Supabase is not available. Please refresh the page and try again.","error");
+    return;
+  }
+
+  if(button){
+    button.disabled=true;
+    button.textContent="Sending request...";
+  }
+
+  showMessage("platformWalletMessage","Sending deposit request to the secure payment backend...","success");
+
+  try{
+    const { data, error } = await sb.functions.invoke("pesajet-collection",{
+      body:{
+        phone_number:phone,
+        amount:amount,
+        network:network
+      }
+    });
+
+    console.log("PesaJet collection response:",data);
+
+    if(error){
+      let detail=error.message || "The payment backend returned an error.";
+      try{
+        if(error.context){
+          const responseBody=await error.context.json();
+          detail=responseBody?.error || responseBody?.message || detail;
+        }
+      }catch(_){}
+      throw new Error(detail);
+    }
+
+    if(!data){
+      throw new Error("The payment backend returned an empty response.");
+    }
+
+    const result=data.result || data;
+    const transactionId=result.transactionId || result.transaction_id || data.transactionId || data.transaction_id;
+    const status=String(result.status || data.status || "").toUpperCase();
+    const pesajetStatus=data.pesajet_status || result.pesajet_status;
+
+    if(data.success === false){
+      throw new Error(data.message || data.error || "PesaJet rejected the collection request.");
+    }
+
+    if(status === "PENDING"){
+      const txText=transactionId ? ` Transaction ID: ${transactionId}` : "";
+      showMessage("platformWalletMessage",`Deposit request accepted and is PENDING. Check the MTN phone for the payment prompt.${txText}`,"success");
+      const amountInput=document.getElementById("platformDepositAmount");
+      if(amountInput) amountInput.value="";
+      return;
+    }
+
+    if(pesajetStatus === 201 || String(pesajetStatus) === "201"){
+      const txText=transactionId ? ` Transaction ID: ${transactionId}` : "";
+      showMessage("platformWalletMessage",`PesaJet accepted the deposit request.${txText}`,"success");
+      return;
+    }
+
+    showMessage("platformWalletMessage",`Payment backend response received: ${status || "REQUESTED"}. ${transactionId ? `Transaction ID: ${transactionId}` : ""}`,"success");
+  }catch(error){
+    console.error("Platform deposit error:",error);
+    showMessage("platformWalletMessage",error.message || "Could not start the deposit request.","error");
+  }finally{
+    if(button){
+      button.disabled=false;
+      button.textContent="Deposit Money";
+    }
+  }
 }
 
 /* =========================================================
