@@ -1513,6 +1513,17 @@ footer{
 .boost-note{margin-top:14px;padding:12px;border-radius:10px;background:#202020;color:#aaa;font-size:12px;line-height:1.5}.boost-status{margin-top:12px;min-height:20px;font-size:13px}
 @media(max-width:600px){.boost-packages{grid-template-columns:1fr}}
 
+
+/* NILESONIQ ADMIN ADS */
+.ad-space{margin:24px auto;max-width:1100px;padding:0 18px;}
+.ad-space-inner{min-height:120px;border:1px dashed var(--border);border-radius:16px;background:var(--card);display:flex;align-items:center;justify-content:center;overflow:hidden;text-align:center;}
+.ad-banner{display:block;width:100%;text-decoration:none;color:inherit;}
+.ad-banner img{display:block;width:100%;max-height:260px;object-fit:cover;}
+.ad-banner-content{padding:16px;}
+.ad-banner-title{font-weight:800;font-size:18px;}
+.ad-admin-preview{margin-top:14px;border:1px solid var(--border);border-radius:12px;overflow:hidden;background:#101010;}
+.ad-admin-preview img{display:block;width:100%;max-height:220px;object-fit:cover;}
+.ad-admin-preview .preview-text{padding:10px;font-size:13px;color:#bbb;}
 </style>
 </head>
 
@@ -1653,13 +1664,10 @@ class="song-grid">
 
 </section>
 
-<section class="ad-space">
-
-<div>
-<strong>ADVERTISEMENT</strong>
-Space reserved for ads
+<section class="ad-space" id="publicAdSpace">
+<div class="ad-space-inner" id="publicAdContainer">
+<div><strong>ADVERTISEMENT</strong><br><span style="color:#777;font-size:13px;">Space reserved for ads</span></div>
 </div>
-
 </section>
 
 <section id="newReleases" class="section">
@@ -2177,6 +2185,10 @@ onclick="showAdminTab('wallet')">
 Platform Wallet
 </button>
 
+<button id="adminTabAds" onclick="showAdminTab('ads')">
+Ads & Banners
+</button>
+
 <button id="adminTabAdmins"
 class="hidden"
 onclick="showAdminTab('admins')">
@@ -2346,6 +2358,47 @@ class="dashboard-card hidden">
   For safety, this screen only stores the payout account settings locally in this browser. Actual deposits and automatic artist payouts require a Supabase Edge Function/payment provider so your secret API keys are never exposed to website visitors.
 </div>
 
+</div>
+
+<div id="adminAdsPanel" class="dashboard-card hidden">
+
+<h2>Ads & Banners</h2>
+<p style="color:#999;font-size:13px;margin-bottom:18px;">Create the banner that appears in the public advertising space.</p>
+
+<div id="adminAdsMessage" class="message"></div>
+
+<div class="form-grid">
+<div class="field">
+<label>Banner Image URL</label>
+<input id="adImageUrl" type="url" placeholder="https://example.com/banner.jpg">
+</div>
+<div class="field">
+<label>Ad Title</label>
+<input id="adTitle" type="text" placeholder="Your advert title">
+</div>
+<div class="field full">
+<label>Ad Link</label>
+<input id="adLink" type="url" placeholder="https://example.com">
+</div>
+<div class="field">
+<label>Status</label>
+<select id="adEnabled">
+<option value="true">Active</option>
+<option value="false">Disabled</option>
+</select>
+</div>
+</div>
+
+<div id="adAdminPreview" class="ad-admin-preview hidden"></div>
+
+<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;">
+<button class="btn btn-orange" type="button" onclick="saveAdminAd()">Save Advertisement</button>
+<button class="btn" type="button" onclick="clearAdminAd()">Remove Advertisement</button>
+</div>
+
+<p style="color:#777;font-size:12px;margin-top:12px;">
+This first HTML version saves the advert in this browser for testing. We can connect it to Supabase storage/database next so every NileSoniq visitor sees the same admin-managed banner.
+</p>
 </div>
 
 <div id="adminManagementPanel"
@@ -3425,22 +3478,98 @@ function updateAdminTabs(){
 }
 
 
-async function showAdminTab(tab){
+async /* =========================================================
+   ADMIN ADS / BANNERS
+========================================================= */
+
+function loadPublicAd(){
+  const container=document.getElementById("publicAdContainer");
+  if(!container) return;
+
+  let ad=null;
+  try{ ad=JSON.parse(localStorage.getItem("nilesoniq_admin_ad")||"null"); }catch(_){ ad=null; }
+
+  if(!ad || ad.enabled !== true || !ad.imageUrl){
+    container.innerHTML='<div><strong>ADVERTISEMENT</strong><br><span style="color:#777;font-size:13px;">Space reserved for ads</span></div>';
+    return;
+  }
+
+  const safeTitle=escapeHtml(ad.title||"Advertisement");
+  const safeImage=escapeAttribute(ad.imageUrl||"");
+  const safeLink=escapeAttribute(ad.link||"#");
+
+  container.innerHTML=`
+    <a class="ad-banner" href="${safeLink}" target="_blank" rel="noopener noreferrer">
+      <img src="${safeImage}" alt="${safeTitle}" onerror="this.style.display='none'">
+      <div class="ad-banner-content">
+        <div class="ad-banner-title">${safeTitle}</div>
+      </div>
+    </a>`;
+}
+
+function loadAdminAd(){
+  let ad=null;
+  try{ ad=JSON.parse(localStorage.getItem("nilesoniq_admin_ad")||"null"); }catch(_){ ad=null; }
+
+  document.getElementById("adImageUrl").value=ad?.imageUrl||"";
+  document.getElementById("adTitle").value=ad?.title||"";
+  document.getElementById("adLink").value=ad?.link||"";
+  document.getElementById("adEnabled").value=ad?.enabled===false?"false":"true";
+  updateAdAdminPreview();
+}
+
+function updateAdAdminPreview(){
+  const box=document.getElementById("adAdminPreview");
+  if(!box) return;
+  const image=(document.getElementById("adImageUrl")?.value||"").trim();
+  const title=(document.getElementById("adTitle")?.value||"Advertisement").trim();
+  if(!image){ box.classList.add("hidden"); box.innerHTML=""; return; }
+  box.classList.remove("hidden");
+  box.innerHTML=`<img src="${escapeAttribute(image)}" alt="Ad preview" onerror="this.style.display='none'"><div class="preview-text">${escapeHtml(title)}</div>`;
+}
+
+function saveAdminAd(){
+  const imageUrl=(document.getElementById("adImageUrl")?.value||"").trim();
+  const title=(document.getElementById("adTitle")?.value||"").trim();
+  const link=(document.getElementById("adLink")?.value||"").trim();
+  const enabled=document.getElementById("adEnabled")?.value !== "false";
+
+  if(!imageUrl){
+    showMessage("adminAdsMessage","Please enter the banner image URL.","error");
+    return;
+  }
+
+  localStorage.setItem("nilesoniq_admin_ad",JSON.stringify({imageUrl,title,link,enabled}));
+  showMessage("adminAdsMessage","Advertisement saved successfully.","success");
+  updateAdAdminPreview();
+  loadPublicAd();
+}
+
+function clearAdminAd(){
+  localStorage.removeItem("nilesoniq_admin_ad");
+  loadAdminAd();
+  loadPublicAd();
+  showMessage("adminAdsMessage","Advertisement removed.","success");
+}
+
+function showAdminTab(tab){
 
   const analyticsPanel = document.getElementById("adminAnalyticsPanel");
   const songsPanel = document.getElementById("adminSongsPanel");
   const withdrawalsPanel = document.getElementById("adminWithdrawalsPanel");
   const walletPanel = document.getElementById("adminWalletPanel");
   const managementPanel = document.getElementById("adminManagementPanel");
+  const adsPanel = document.getElementById("adminAdsPanel");
 
   const analyticsTab = document.getElementById("adminTabAnalytics");
   const songTab = document.getElementById("adminTabSongs");
   const withdrawalTab = document.getElementById("adminTabWithdrawals");
   const walletTab = document.getElementById("adminTabWallet");
   const adminTab = document.getElementById("adminTabAdmins");
+  const adsTab = document.getElementById("adminTabAds");
 
-  [analyticsPanel,songsPanel,withdrawalsPanel,walletPanel,managementPanel].forEach(el=>{if(el)el.classList.add("hidden")});
-  [analyticsTab,songTab,withdrawalTab,walletTab,adminTab].forEach(el=>{if(el)el.classList.remove("active")});
+  [analyticsPanel,songsPanel,withdrawalsPanel,walletPanel,managementPanel,adsPanel].forEach(el=>{if(el)el.classList.add("hidden")});
+  [analyticsTab,songTab,withdrawalTab,walletTab,adminTab,adsTab].forEach(el=>{if(el)el.classList.remove("active")});
 
   if(tab === "analytics"){
     analyticsPanel.classList.remove("hidden");
@@ -3476,6 +3605,12 @@ async function showAdminTab(tab){
     loadPlatformWallet();
   }
 
+
+  if(tab === "ads"){
+    if(adsPanel){ adsPanel.classList.remove("hidden"); }
+    if(adsTab){ adsTab.classList.add("active"); }
+    loadAdminAd();
+  }
 
   if(tab === "admins"){
 
@@ -5495,6 +5630,7 @@ async function openArtistBySlug(slug){
     const artist = (data || []).find(item => artistPublicSlug(item) === wanted);
     if(!artist){
       await showPage("home");
+    loadPublicAd();
       alert("Artist profile not found.");
       return;
     }
