@@ -190,20 +190,6 @@ nav button.active{
   display:block;
 }
 
-
-/* BOOST */
-#boostPage .dashboard-header{padding:28px 0 16px}
-#boostPage .boost-hero{background:linear-gradient(135deg,#151515,#222);border:1px solid var(--border);border-radius:16px;padding:22px;margin-bottom:14px}
-#boostPage .boost-hero h2{margin:0 0 8px;font-size:22px}
-#boostPage .boost-hero p{margin:0;color:#aaa;font-size:13px;line-height:1.6}
-.boost-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
-.boost-package{border:1px solid var(--border);border-radius:14px;padding:16px;background:#111}
-.boost-package h3{margin:0 0 6px;font-size:17px}
-.boost-package .boost-price{font-size:21px;font-weight:900;margin:8px 0 12px}
-.boost-package p{font-size:12px;color:#999;min-height:36px}
-.boost-note{font-size:11px;color:#888;margin-top:12px}
-@media(max-width:760px){.boost-grid{grid-template-columns:1fr}}
-
 /* HERO */
 
 .hero{
@@ -1459,6 +1445,20 @@ footer{
   .artist-profile-song-actions{width:100%;margin-left:75px}
 }
 
+
+/* NILESONIQ BOOST - safe UI only */
+.boost-card{border:1px solid rgba(255,106,0,.35);background:linear-gradient(135deg,rgba(255,106,0,.10),rgba(255,106,0,.03));}
+.boost-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+.boost-modal{position:fixed;inset:0;z-index:9999;display:none;align-items:center;justify-content:center;padding:18px;background:rgba(0,0,0,.78)}
+.boost-modal.open{display:flex}
+.boost-panel{width:min(560px,100%);max-height:90vh;overflow:auto;background:#151515;border:1px solid #333;border-radius:18px;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.boost-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
+.boost-head h2{margin:0}.boost-close{border:0;background:#242424;color:#fff;width:38px;height:38px;border-radius:50%;cursor:pointer;font-size:20px}
+.boost-field{margin:14px 0}.boost-field label{display:block;margin-bottom:7px;font-size:13px;color:#ccc}
+.boost-field select{width:100%;padding:12px;border-radius:10px;border:1px solid #3a3a3a;background:#0f0f0f;color:#fff}
+.boost-packages{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.boost-package{border:1px solid #3a3a3a;background:#101010;color:#fff;border-radius:12px;padding:14px 10px;cursor:pointer;text-align:center}.boost-package.active{border-color:var(--orange);box-shadow:0 0 0 1px var(--orange)}.boost-package strong{display:block}.boost-package span{display:block;color:#aaa;font-size:12px;margin-top:4px}
+.boost-note{margin-top:14px;padding:12px;border-radius:10px;background:#202020;color:#aaa;font-size:12px;line-height:1.5}.boost-status{margin-top:12px;min-height:20px;font-size:13px}
+@media(max-width:600px){.boost-packages{grid-template-columns:1fr}}
 </style>
 </head>
 
@@ -1786,16 +1786,10 @@ Minimum withdrawal: UGX 10,000
 
 </div>
 
-<div class="dashboard-card" id="artistBoostCard">
-
-<h2>Boost Your Music</h2>
-
-<p style="color:#999;font-size:12px;margin-bottom:14px;">Promote one of your songs and give it more visibility on NileSoniq.</p>
-
-<button class="btn btn-orange" onclick="showPage('boost')">
-Boost a Song
-</button>
-
+<div class="dashboard-card boost-card">
+<h2>🚀 Boost Your Music</h2>
+<p style="color:#aaa;line-height:1.6;">Give one of your approved songs extra promotion on NileSoniq.</p>
+<div class="boost-actions"><button class="btn btn-orange" type="button" onclick="openBoostPage()">Boost a Song</button></div>
 </div>
 
 <div class="dashboard-card">
@@ -2057,61 +2051,20 @@ Uploaded songs are sent for admin approval before appearing publicly.
 </div>
 </section>
 
-<!-- BOOST PAGE -->
-<section id="boostPage" class="page">
-
-<div class="container">
-
-<div class="dashboard-header">
-<h1>Boost Your Music</h1>
-<p>Choose a song and a boost package.</p>
-</div>
-
-<div class="boost-hero">
-<h2>Get more attention for your music</h2>
-<p>Boosting will be connected to the payment system after the test version is approved. Nothing on this page charges real money yet.</p>
-</div>
-
-<div class="dashboard-card">
-<h2>Select a Song</h2>
-<div class="field">
-<label>Song</label>
-<select id="boostSongSelect">
-<option value="">Loading your songs...</option>
-</select>
-</div>
-<div id="boostMessage" class="message"></div>
-</div>
-
-<div class="dashboard-card">
-<h2>Choose a Package</h2>
-<div class="boost-grid">
-<div class="boost-package">
-<h3>1 Day Boost</h3>
-<div class="boost-price">Coming soon</div>
-<p>Short promotion for a new release or campaign.</p>
-<button class="btn btn-orange" onclick="startBoost('1 Day')">Choose 1 Day</button>
-</div>
-<div class="boost-package">
-<h3>3 Day Boost</h3>
-<div class="boost-price">Coming soon</div>
-<p>Keep your song visible for a longer promotion.</p>
-<button class="btn btn-orange" onclick="startBoost('3 Days')">Choose 3 Days</button>
-</div>
-<div class="boost-package">
-<h3>7 Day Boost</h3>
-<div class="boost-price">Coming soon</div>
-<p>Extended promotion for an important release.</p>
-<button class="btn btn-orange" onclick="startBoost('7 Days')">Choose 7 Days</button>
-</div>
-</div>
-<div class="boost-note">Test mode: selecting a package does not deduct money or activate a paid promotion.</div>
-</div>
-
-<button class="btn btn-dark" onclick="showPage('dashboard')">← Back to Dashboard</button>
-
-</div>
-</section>
+<!-- NILESONIQ BOOST PAGE -->
+<div id="boostModal" class="boost-modal" aria-hidden="true">
+<div class="boost-panel">
+<div class="boost-head"><h2>🚀 Boost Your Song</h2><button class="boost-close" type="button" onclick="closeBoostPage()">×</button></div>
+<div class="boost-field"><label for="boostSongSelect">Choose your approved song</label><select id="boostSongSelect"><option value="">Select a song</option></select></div>
+<div class="boost-field"><label>Choose boost duration</label><div class="boost-packages">
+<button type="button" class="boost-package active" data-days="1" data-price="1000" onclick="selectBoostPackage(this)"><strong>1 Day</strong><span>UGX 1,000</span></button>
+<button type="button" class="boost-package" data-days="3" data-price="2500" onclick="selectBoostPackage(this)"><strong>3 Days</strong><span>UGX 2,500</span></button>
+<button type="button" class="boost-package" data-days="7" data-price="5000" onclick="selectBoostPackage(this)"><strong>7 Days</strong><span>UGX 5,000</span></button>
+</div></div>
+<div class="boost-note">Boost checkout is currently in <strong>test mode</strong>. This button does not charge the artist or change the wallet yet.</div>
+<div id="boostStatus" class="boost-status"></div>
+<div class="boost-actions"><button class="btn btn-orange" type="button" onclick="startBoostTest()">Continue to Boost</button><button class="btn" type="button" onclick="closeBoostPage()">Cancel</button></div>
+</div></div>
 
 <!-- ADMIN -->
 
@@ -3160,7 +3113,6 @@ async function showPage(page){
     "home",
     "artists",
     "dashboard",
-    "boost",
     "admin"
   ];
 
@@ -3226,18 +3178,6 @@ async function showPage(page){
 
       await loadMyWithdrawals();
 
-    }
-
-  }
-
-
-  if(page === "boost"){
-
-    if(currentUser){
-      await loadBoostSongs();
-    }else{
-      openAuthModal("artist");
-      return;
     }
 
   }
@@ -5985,6 +5925,8 @@ async function loadMySongs(){
     const songs =
       data || [];
 
+    window.nileSoniqArtistSongs = songs;
+
 
     if(!songs.length){
 
@@ -6449,80 +6391,7 @@ async function updateAvailableBalance(
    REQUEST WITHDRAWAL
 ========================================================= */
 
-async async function loadBoostSongs(){
-
-  const select = document.getElementById("boostSongSelect");
-
-  if(!select || !currentUser){
-    return;
-  }
-
-  select.innerHTML = `<option value="">Loading your songs...</option>`;
-
-  try{
-
-    const { data, error } = await sb
-      .from("songs")
-      .select("id,title,approved")
-      .eq("artist_id", currentUser.id)
-      .order("created_at", { ascending:false });
-
-    if(error){
-      throw error;
-    }
-
-    const songs = data || [];
-
-    if(!songs.length){
-      select.innerHTML = `<option value="">No songs found</option>`;
-      return;
-    }
-
-    select.innerHTML = `<option value="">Select a song</option>` + songs.map(song =>
-      `<option value="${escapeHtml(String(song.id))}">${escapeHtml(song.title || "Untitled")}${song.approved ? "" : " (Pending approval)"}</option>`
-    ).join("");
-
-  }catch(error){
-
-    console.error("Boost songs error:", error);
-    select.innerHTML = `<option value="">Could not load songs</option>`;
-
-    showMessage(
-      "boostMessage",
-      error.message || "Could not load your songs.",
-      "error"
-    );
-
-  }
-
-}
-
-
-function startBoost(packageName){
-
-  if(!currentUser){
-    openAuthModal("artist");
-    return;
-  }
-
-  const songSelect = document.getElementById("boostSongSelect");
-  const songId = songSelect ? songSelect.value : "";
-
-  if(!songId){
-    showMessage("boostMessage", "Please select a song first.", "error");
-    return;
-  }
-
-  showMessage(
-    "boostMessage",
-    `Test mode: ${packageName} selected. No money has been charged and no paid boost has been activated yet.`,
-    "success"
-  );
-
-}
-
-
-function requestWithdrawal(){
+async function requestWithdrawal(){
 
   if(!currentUser){
 
@@ -8092,6 +7961,28 @@ document
     }
   );
 
+
+/* NILESONIQ BOOST - isolated test-mode UI */
+let nilesoniqBoostDays=1;
+let nilesoniqBoostPrice=1000;
+function openBoostPage(){
+ const modal=document.getElementById("boostModal"), select=document.getElementById("boostSongSelect"), status=document.getElementById("boostStatus");
+ if(!modal||!select)return;
+ select.innerHTML='<option value="">Select a song</option>';
+ const songs=Array.isArray(window.nileSoniqArtistSongs)?window.nileSoniqArtistSongs:[];
+ songs.filter(song=>song&&song.approved===true).forEach(song=>{const o=document.createElement("option");o.value=String(song.id||"");o.textContent=song.title||"Untitled";select.appendChild(o);});
+ if(status)status.textContent=songs.some(song=>song&&song.approved===true)?"":"No approved songs are available for boosting yet.";
+ modal.classList.add("open");modal.setAttribute("aria-hidden","false");
+}
+function closeBoostPage(){const modal=document.getElementById("boostModal");if(!modal)return;modal.classList.remove("open");modal.setAttribute("aria-hidden","true");}
+function selectBoostPackage(button){document.querySelectorAll(".boost-package").forEach(x=>x.classList.remove("active"));button.classList.add("active");nilesoniqBoostDays=Number(button.dataset.days||1);nilesoniqBoostPrice=Number(button.dataset.price||1000);}
+function startBoostTest(){
+ const select=document.getElementById("boostSongSelect"),status=document.getElementById("boostStatus");if(!select||!status)return;
+ if(!select.value){status.textContent="Please choose a song first.";return;}
+ const songs=Array.isArray(window.nileSoniqArtistSongs)?window.nileSoniqArtistSongs:[];
+ const song=songs.find(x=>String(x.id)===String(select.value));
+ status.textContent="Boost test ready: "+(song&&song.title?song.title:"your song")+" • "+nilesoniqBoostDays+" day(s) • UGX "+nilesoniqBoostPrice.toLocaleString()+". No money was charged.";
+}
 </script>
 
 </body>
