@@ -9,7 +9,30 @@
 <meta name="description"
 content="NileSoniq — Uganda's music platform. Stream music, discover artists and support Ugandan music.">
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2">
+/* NILESONIQ BOOST - isolated test-mode UI; no wallet changes */
+let nilesoniqBoostDays=1;
+let nilesoniqBoostPrice=1000;
+function openBoostPage(){
+ const modal=document.getElementById("boostModal"),select=document.getElementById("boostSongSelect"),status=document.getElementById("boostStatus");
+ if(!modal||!select)return;
+ select.innerHTML='<option value="">Select a song</option>';
+ const songs=Array.isArray(window.nileSoniqArtistSongs)?window.nileSoniqArtistSongs:[];
+ songs.filter(song=>song&&song.approved===true).forEach(song=>{const o=document.createElement("option");o.value=String(song.id||"");o.textContent=song.title||"Untitled";select.appendChild(o);});
+ if(status)status.textContent=songs.some(song=>song&&song.approved===true)?"":"No approved songs are available for boosting yet.";
+ modal.classList.add("open");modal.setAttribute("aria-hidden","false");
+}
+function closeBoostPage(){const modal=document.getElementById("boostModal");if(!modal)return;modal.classList.remove("open");modal.setAttribute("aria-hidden","true");}
+function selectBoostPackage(button){document.querySelectorAll(".boost-package").forEach(x=>x.classList.remove("active"));button.classList.add("active");nilesoniqBoostDays=Number(button.dataset.days||1);nilesoniqBoostPrice=Number(button.dataset.price||1000);}
+function startBoostTest(){
+ const select=document.getElementById("boostSongSelect"),status=document.getElementById("boostStatus");if(!select||!status)return;
+ if(!select.value){status.textContent="Please choose a song first.";return;}
+ const songs=Array.isArray(window.nileSoniqArtistSongs)?window.nileSoniqArtistSongs:[];
+ const song=songs.find(x=>String(x.id)===String(select.value));
+ status.textContent="Boost test ready: "+(song&&song.title?song.title:"your song")+" • "+nilesoniqBoostDays+" day(s) • UGX "+nilesoniqBoostPrice.toLocaleString()+". No money was charged.";
+}
+
+</script>
 
 <style>
 :root{
@@ -1446,19 +1469,50 @@ footer{
 }
 
 
-/* NILESONIQ BOOST - safe UI only */
+/* =========================================================
+   ANALYTICS + PLATFORM WALLET
+========================================================= */
+.analytics-grid{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:14px;
+  margin:18px 0;
+}
+.analytics-card{
+  background:#151515;
+  border:1px solid var(--border);
+  border-radius:16px;
+  padding:18px;
+}
+.analytics-card span{display:block;color:#888;font-size:12px;margin-bottom:8px}
+.analytics-card strong{font-size:25px;display:block}
+.analytics-card small{display:block;color:#777;margin-top:7px}
+.analytics-toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.analytics-live{font-size:12px;color:#78d49a}
+.analytics-live::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:#35c878;margin-right:7px}
+.analytics-two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.analytics-list{width:100%;border-collapse:collapse}
+.analytics-list th,.analytics-list td{padding:10px 8px;border-bottom:1px solid var(--border);text-align:left}
+.analytics-list th{font-size:11px;color:#888}
+.wallet-box{background:linear-gradient(135deg,#171717,#111);border:1px solid var(--border);border-radius:18px;padding:22px}
+.wallet-balance{font-size:34px;font-weight:900;margin:8px 0 18px}
+.wallet-note{color:#888;font-size:12px;line-height:1.5;margin-top:10px}
+@media(max-width:900px){.analytics-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.analytics-two{grid-template-columns:1fr}}
+@media(max-width:520px){.analytics-grid{grid-template-columns:1fr}.wallet-balance{font-size:28px}}
+
+
+/* NILESONIQ BOOST - added without changing wallet/payout code */
 .boost-card{border:1px solid rgba(255,106,0,.35);background:linear-gradient(135deg,rgba(255,106,0,.10),rgba(255,106,0,.03));}
 .boost-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
 .boost-modal{position:fixed;inset:0;z-index:9999;display:none;align-items:center;justify-content:center;padding:18px;background:rgba(0,0,0,.78)}
 .boost-modal.open{display:flex}
 .boost-panel{width:min(560px,100%);max-height:90vh;overflow:auto;background:#151515;border:1px solid #333;border-radius:18px;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
-.boost-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
-.boost-head h2{margin:0}.boost-close{border:0;background:#242424;color:#fff;width:38px;height:38px;border-radius:50%;cursor:pointer;font-size:20px}
-.boost-field{margin:14px 0}.boost-field label{display:block;margin-bottom:7px;font-size:13px;color:#ccc}
-.boost-field select{width:100%;padding:12px;border-radius:10px;border:1px solid #3a3a3a;background:#0f0f0f;color:#fff}
+.boost-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}.boost-head h2{margin:0}.boost-close{border:0;background:#242424;color:#fff;width:38px;height:38px;border-radius:50%;cursor:pointer;font-size:20px}
+.boost-field{margin:14px 0}.boost-field label{display:block;margin-bottom:7px;font-size:13px;color:#ccc}.boost-field select{width:100%;padding:12px;border-radius:10px;border:1px solid #3a3a3a;background:#0f0f0f;color:#fff}
 .boost-packages{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.boost-package{border:1px solid #3a3a3a;background:#101010;color:#fff;border-radius:12px;padding:14px 10px;cursor:pointer;text-align:center}.boost-package.active{border-color:var(--orange);box-shadow:0 0 0 1px var(--orange)}.boost-package strong{display:block}.boost-package span{display:block;color:#aaa;font-size:12px;margin-top:4px}
 .boost-note{margin-top:14px;padding:12px;border-radius:10px;background:#202020;color:#aaa;font-size:12px;line-height:1.5}.boost-status{margin-top:12px;min-height:20px;font-size:13px}
 @media(max-width:600px){.boost-packages{grid-template-columns:1fr}}
+
 </style>
 </head>
 
@@ -1784,12 +1838,12 @@ UGX 0
 Minimum withdrawal: UGX 10,000
 </p>
 
-</div>
-
 <div class="dashboard-card boost-card">
 <h2>🚀 Boost Your Music</h2>
 <p style="color:#aaa;line-height:1.6;">Give one of your approved songs extra promotion on NileSoniq.</p>
 <div class="boost-actions"><button class="btn btn-orange" type="button" onclick="openBoostPage()">Boost a Song</button></div>
+</div>
+
 </div>
 
 <div class="dashboard-card">
@@ -2051,6 +2105,7 @@ Uploaded songs are sent for admin approval before appearing publicly.
 </div>
 </section>
 
+
 <!-- NILESONIQ BOOST PAGE -->
 <div id="boostModal" class="boost-modal" aria-hidden="true">
 <div class="boost-panel">
@@ -2061,7 +2116,7 @@ Uploaded songs are sent for admin approval before appearing publicly.
 <button type="button" class="boost-package" data-days="3" data-price="2500" onclick="selectBoostPackage(this)"><strong>3 Days</strong><span>UGX 2,500</span></button>
 <button type="button" class="boost-package" data-days="7" data-price="5000" onclick="selectBoostPackage(this)"><strong>7 Days</strong><span>UGX 5,000</span></button>
 </div></div>
-<div class="boost-note">Boost checkout is currently in <strong>test mode</strong>. This button does not charge the artist or change the wallet yet.</div>
+<div class="boost-note">Boost checkout is currently in <strong>test mode</strong>. This does not charge the artist or change the wallet.</div>
 <div id="boostStatus" class="boost-status"></div>
 <div class="boost-actions"><button class="btn btn-orange" type="button" onclick="startBoostTest()">Continue to Boost</button><button class="btn" type="button" onclick="closeBoostPage()">Cancel</button></div>
 </div></div>
@@ -2101,8 +2156,13 @@ You do not have permission to access this section.
 
 <div class="admin-tabs">
 
-<button id="adminTabSongs"
+<button id="adminTabAnalytics"
 class="active"
+onclick="showAdminTab('analytics')">
+Analytics
+</button>
+
+<button id="adminTabSongs"
 onclick="showAdminTab('songs')">
 Songs
 </button>
@@ -2110,6 +2170,11 @@ Songs
 <button id="adminTabWithdrawals"
 onclick="showAdminTab('withdrawals')">
 Withdrawals
+</button>
+
+<button id="adminTabWallet"
+onclick="showAdminTab('wallet')">
+Platform Wallet
 </button>
 
 <button id="adminTabAdmins"
@@ -2120,8 +2185,60 @@ Administrators
 
 </div>
 
-<div id="adminSongsPanel"
+<div id="adminAnalyticsPanel"
 class="dashboard-card">
+
+<div class="analytics-toolbar">
+  <div>
+    <h2>Live Analytics</h2>
+    <div class="analytics-live">Auto-refreshes every 30 seconds</div>
+  </div>
+  <button class="btn btn-orange" onclick="loadAdminAnalytics()">Refresh Now</button>
+</div>
+
+<div class="analytics-grid">
+  <div class="analytics-card"><span>Total Songs</span><strong id="analyticsTotalSongs">0</strong></div>
+  <div class="analytics-card"><span>Approved Songs</span><strong id="analyticsApprovedSongs">0</strong></div>
+  <div class="analytics-card"><span>Pending Songs</span><strong id="analyticsPendingSongs">0</strong></div>
+  <div class="analytics-card"><span>Total Artists</span><strong id="analyticsTotalArtists">0</strong></div>
+  <div class="analytics-card"><span>Total Plays</span><strong id="analyticsTotalPlays">0</strong></div>
+  <div class="analytics-card"><span>Total Likes</span><strong id="analyticsTotalLikes">0</strong></div>
+  <div class="analytics-card"><span>Total Withdrawals</span><strong id="analyticsTotalWithdrawals">0</strong></div>
+  <div class="analytics-card"><span>Pending Withdrawals</span><strong id="analyticsPendingWithdrawals">0</strong></div>
+</div>
+
+<div class="analytics-two">
+  <div class="analytics-card">
+    <h3>Top Songs</h3>
+    <div class="table-wrap">
+      <table class="analytics-list">
+        <thead><tr><th>Song</th><th>Artist</th><th>Plays</th></tr></thead>
+        <tbody id="analyticsTopSongs"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="analytics-card">
+    <h3>Top Artists</h3>
+    <div class="table-wrap">
+      <table class="analytics-list">
+        <thead><tr><th>Artist</th><th>Songs</th><th>Plays</th></tr></thead>
+        <tbody id="analyticsTopArtists"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="analytics-card" style="margin-top:16px;">
+  <h3>Withdrawal Money</h3>
+  <p style="color:#888;font-size:13px;line-height:1.5;margin-top:8px;">
+    Artists can request withdrawals, but real mobile-money transfers must be processed through a secure payment backend. Your mobile-money number and payment API secret must never be placed in this HTML file.
+  </p>
+</div>
+
+</div>
+
+<div id="adminSongsPanel"
+class="dashboard-card hidden">
 
 <h2>Song Submissions</h2>
 
@@ -2181,6 +2298,52 @@ class="message"></div>
 
 </table>
 
+</div>
+
+</div>
+
+<div id="adminWalletPanel"
+class="dashboard-card hidden">
+
+<h2>Platform Wallet</h2>
+
+<div class="wallet-box">
+  <div style="color:#888;font-size:12px;">Payout account</div>
+  <div id="platformWalletNumber" style="font-size:20px;font-weight:800;margin-top:5px;">Not configured</div>
+  <div class="wallet-balance" id="platformWalletBalance">UGX 0</div>
+  <div style="color:#888;font-size:12px;">Available platform balance shown here when a secure payment backend is connected.</div>
+</div>
+
+<div class="form-grid" style="margin-top:18px;">
+  <div class="field">
+    <label>Mobile Money Number</label>
+    <input id="platformWalletPhone" type="tel" inputmode="numeric" placeholder="e.g. 077xxxxxxx">
+  </div>
+  <div class="field">
+    <label>Network</label>
+    <select id="platformWalletNetwork">
+      <option value="MTN">MTN Mobile Money</option>
+      <option value="AIRTEL">Airtel Money</option>
+    </select>
+  </div>
+</div>
+
+<div class="form-grid">
+  <div class="field">
+    <label>Deposit Amount (UGX)</label>
+    <input id="platformDepositAmount" type="number" min="1000" step="100" placeholder="10000">
+  </div>
+</div>
+
+<div style="display:flex;gap:10px;flex-wrap:wrap;">
+  <button class="btn btn-orange" onclick="savePlatformWallet()">Save Account</button>
+  <button class="btn" onclick="startPlatformDeposit()">Deposit Money</button>
+</div>
+
+<div id="platformWalletMessage" class="message" style="margin-top:15px;"></div>
+
+<div class="wallet-note">
+  For safety, this screen only stores the payout account settings locally in this browser. Actual deposits and automatic artist payouts require a Supabase Edge Function/payment provider so your secret API keys are never exposed to website visitors.
 </div>
 
 </div>
@@ -3215,7 +3378,7 @@ async function showPage(page){
 
       updateAdminTabs();
 
-      await loadAdminSongs();
+      await showAdminTab("analytics");
 
     }else{
 
@@ -3264,51 +3427,26 @@ function updateAdminTabs(){
 
 async function showAdminTab(tab){
 
-  const songsPanel =
-    document.getElementById(
-      "adminSongsPanel"
-    );
+  const analyticsPanel = document.getElementById("adminAnalyticsPanel");
+  const songsPanel = document.getElementById("adminSongsPanel");
+  const withdrawalsPanel = document.getElementById("adminWithdrawalsPanel");
+  const walletPanel = document.getElementById("adminWalletPanel");
+  const managementPanel = document.getElementById("adminManagementPanel");
 
-  const withdrawalsPanel =
-    document.getElementById(
-      "adminWithdrawalsPanel"
-    );
+  const analyticsTab = document.getElementById("adminTabAnalytics");
+  const songTab = document.getElementById("adminTabSongs");
+  const withdrawalTab = document.getElementById("adminTabWithdrawals");
+  const walletTab = document.getElementById("adminTabWallet");
+  const adminTab = document.getElementById("adminTabAdmins");
 
-  const managementPanel =
-    document.getElementById(
-      "adminManagementPanel"
-    );
+  [analyticsPanel,songsPanel,withdrawalsPanel,walletPanel,managementPanel].forEach(el=>{if(el)el.classList.add("hidden")});
+  [analyticsTab,songTab,withdrawalTab,walletTab,adminTab].forEach(el=>{if(el)el.classList.remove("active")});
 
-  const songTab =
-    document.getElementById(
-      "adminTabSongs"
-    );
-
-  const withdrawalTab =
-    document.getElementById(
-      "adminTabWithdrawals"
-    );
-
-  const adminTab =
-    document.getElementById(
-      "adminTabAdmins"
-    );
-
-
-  songsPanel.classList.add("hidden");
-
-  withdrawalsPanel.classList.add("hidden");
-
-  managementPanel.classList.add("hidden");
-
-  songTab.classList.remove("active");
-
-  withdrawalTab.classList.remove("active");
-
-  if(adminTab){
-    adminTab.classList.remove("active");
+  if(tab === "analytics"){
+    analyticsPanel.classList.remove("hidden");
+    analyticsTab.classList.add("active");
+    await loadAdminAnalytics();
   }
-
 
   if(tab === "songs"){
 
@@ -3329,6 +3467,13 @@ async function showAdminTab(tab){
 
     await loadWithdrawals();
 
+  }
+
+
+  if(tab === "wallet"){
+    walletPanel.classList.remove("hidden");
+    walletTab.classList.add("active");
+    loadPlatformWallet();
   }
 
 
@@ -4448,6 +4593,8 @@ async function loadTopCharts(){
    SONG RENDERING
 ========================================================= */
 
+window.__nileSongRegistry = window.__nileSongRegistry || {};
+
 function renderSongCards(
   songs,
   containerId,
@@ -4489,6 +4636,8 @@ function renderSongCards(
         currentPlayingSong &&
         currentPlayingSong.id === song.id;
 
+      window.__nileSongRegistry[String(song.id)] = song;
+
 
       const cover =
         song.cover_url
@@ -4522,7 +4671,9 @@ function renderSongCards(
 
           <div class="song-info">
 
-            <div class="song-title">
+            <div class="song-title"
+              style="cursor:pointer;"
+              onclick="openSongLink(window.__nileSongRegistry['${escapeAttribute(song.id)}'])">
               ${escapeHtml(
                 song.title ||
                 "Untitled"
@@ -5300,10 +5451,181 @@ function refreshSongDisplays(){
 
 
 /* =========================================================
+   SHORT PUBLIC URL HELPERS
+========================================================= */
+function cleanSlug(value){
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .substring(0, 70) || "page";
+}
+
+function artistPublicSlug(artist){
+  return cleanSlug(artist?.name || "artist");
+}
+
+function artistPublicUrl(artist){
+  return "/artist/" + artistPublicSlug(artist);
+}
+
+function songPublicSlug(song){
+  return cleanSlug(song?.title || "song");
+}
+
+function songPublicUrl(song){
+  return "/song/" + songPublicSlug(song);
+}
+
+function isShortPublicRoute(){
+  return /^\/(artist|user|song)\/[^/]+\/?$/i.test(window.location.pathname);
+}
+
+async function openArtistBySlug(slug){
+  const wanted = cleanSlug(decodeURIComponent(slug || ""));
+  try{
+    const {data,error} = await sb
+      .from("artists")
+      .select("*")
+      .order("created_at",{ascending:false});
+    if(error) throw error;
+    const artist = (data || []).find(item => artistPublicSlug(item) === wanted);
+    if(!artist){
+      await showPage("home");
+      alert("Artist profile not found.");
+      return;
+    }
+    await openArtistProfile(artist.id, true);
+  }catch(error){
+    console.error("Public artist route error:",error);
+    await showPage("home");
+    alert("Could not load artist profile.");
+  }
+}
+
+async function openSongBySlug(slug){
+  const wanted = cleanSlug(decodeURIComponent(slug || ""));
+  try{
+    const {data,error} = await sb
+      .from("songs")
+      .select("*")
+      .eq("approved",true)
+      .order("created_at",{ascending:false});
+    if(error) throw error;
+
+    const song = (data || []).find(item => songPublicSlug(item) === wanted);
+    if(!song){
+      await showPage("home");
+      alert("Song not found.");
+      return;
+    }
+
+    showPublicSongPage(song);
+  }catch(error){
+    console.error("Public song route error:",error);
+    await showPage("home");
+    alert("Could not load song.");
+  }
+}
+
+function showPublicSongPage(song){
+  let modal = document.getElementById("songPublicModal");
+  if(!modal){
+    modal = document.createElement("div");
+    modal.id = "songPublicModal";
+    modal.style.cssText = "position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(0,0,0,.82);backdrop-filter:blur(8px);";
+    document.body.appendChild(modal);
+  }
+
+  const cover = song.cover_url
+    ? `<img src="${escapeAttribute(song.cover_url)}" alt="${escapeAttribute(song.title || "Song")}" style="width:170px;height:170px;object-fit:cover;border-radius:16px;display:block;margin:0 auto 20px;">`
+    : `<div style="width:170px;height:170px;border-radius:16px;display:flex;align-items:center;justify-content:center;background:#191919;color:var(--orange);font-size:55px;margin:0 auto 20px;">♪</div>`;
+
+  const url = songPublicUrl(song);
+  modal.innerHTML = `
+    <div style="position:relative;width:min(520px,100%);background:#111;border:1px solid var(--border);border-radius:22px;padding:28px;text-align:center;box-shadow:0 25px 80px rgba(0,0,0,.5);">
+      <button onclick="closePublicSongPage()" aria-label="Close" style="position:absolute;right:12px;top:10px;width:38px;height:38px;border:0;border-radius:50%;background:#292929;color:#fff;font-size:24px;cursor:pointer;">×</button>
+      ${cover}
+      <h2 style="margin:0 0 7px;">${escapeHtml(song.title || "Untitled")}</h2>
+      <p style="margin:0 0 18px;color:#aaa;">${escapeHtml(song.artist || "Unknown Artist")}</p>
+      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+        <button class="btn btn-orange" onclick="playPublicSongFromPage('${escapeAttribute(song.id)}')">▶ Play Song</button>
+        <button class="btn btn-dark" onclick="downloadSong('${escapeAttribute(song.id)}')">↓ Download</button>
+        <button class="btn btn-dark" onclick="copyPublicSongUrl('${escapeAttribute(url)}')">🔗 Copy Link</button>
+      </div>
+      <div style="margin-top:18px;padding:10px;border-radius:10px;background:#191919;color:#999;font-size:12px;word-break:break-all;">${escapeHtml(window.location.origin + url)}</div>
+    </div>`;
+}
+
+async function playPublicSongFromPage(songId){
+  const song = findSongById(songId);
+  if(song){
+    await playSong(song.id);
+  }else{
+    const {data} = await sb.from("songs").select("*").eq("id",songId).eq("approved",true).maybeSingle();
+    if(data) await playSong(data.id);
+  }
+}
+
+function closePublicSongPage(){
+  const modal = document.getElementById("songPublicModal");
+  if(modal) modal.remove();
+  document.body.style.overflow = "";
+}
+
+async function copyPublicSongUrl(url){
+  const full = window.location.origin + url;
+  try{
+    await navigator.clipboard.writeText(full);
+    alert("Song link copied.");
+  }catch(e){
+    window.prompt("Copy this song link:",full);
+  }
+}
+
+async function handleShortPublicRoute(){
+  if(!isShortPublicRoute()) return;
+  const parts = window.location.pathname.split("/").filter(Boolean);
+  if(parts.length !== 2) return;
+
+  const type = parts[0].toLowerCase();
+  if(type === "song"){
+    await openSongBySlug(parts[1]);
+  }else{
+    await openArtistBySlug(parts[1]);
+  }
+}
+
+function navigateToArtistSlug(artist){
+  if(!artist) return;
+  const url = artistPublicUrl(artist);
+  if(window.location.pathname !== url){
+    window.history.pushState({nilesoniqPublic:true},"",url);
+  }
+}
+
+function navigateToSongSlug(song){
+  if(!song) return;
+  const url = songPublicUrl(song);
+  if(window.location.pathname !== url){
+    window.history.pushState({nilesoniqPublic:true},"",url);
+  }
+}
+
+function openSongLink(song){
+  if(!song) return;
+  navigateToSongSlug(song);
+  showPublicSongPage(song);
+}
+
+/* =========================================================
    PUBLIC ARTIST PROFILE
 ========================================================= */
 
-async function openArtistProfile(artistId){
+async function openArtistProfile(artistId, fromPublicRoute=false){
 
   let modal =
     document.getElementById("artistProfileModal");
@@ -5372,6 +5694,10 @@ async function openArtistProfile(artistId){
       `;
 
       return;
+    }
+
+    if(!fromPublicRoute){
+      navigateToArtistSlug(artist);
     }
 
     let artistSongs = [];
@@ -5585,6 +5911,11 @@ function closeArtistProfile(){
   }
 
   document.body.style.overflow = "";
+
+  if(isShortPublicRoute()){
+    window.history.pushState({},"", "/");
+    showPage("home");
+  }
 }
 
 
@@ -5678,6 +6009,15 @@ async function downloadSong(songId){
 }
 
 
+/*
+  Downloads the MP3 with embedded cover artwork.
+  Priority:
+    1. The song's own cover_art / cover_url
+    2. The artist's avatar
+    3. A generated NileSoniq logo image
+  The artwork is written into the MP3 as an ID3v2 APIC frame so it
+  travels with the downloaded song and can be displayed by music players.
+*/
 async function downloadSongObject(song){
 
   const url = song.audio_url || song.file_url;
@@ -5689,18 +6029,95 @@ async function downloadSongObject(song){
 
   try{
 
-    const response = await fetch(url,{
-      method:"GET",
-      cache:"no-store"
-    });
+    const response = await fetch(url,{ method:"GET", cache:"no-store" });
 
     if(!response.ok){
       throw new Error("Could not download the song.");
     }
 
-    const blob = await response.blob();
-    const blobUrl = URL.createObjectURL(blob);
+    const audioBlob = await response.blob();
 
+    /* Find the best artwork available. */
+    let artworkUrl = song.cover_url || song.cover_art || song.artwork_url || null;
+    let artworkBlob = null;
+
+    if(artworkUrl){
+      try{
+        const artResponse = await fetch(artworkUrl,{ method:"GET", cache:"no-store" });
+        if(artResponse.ok){
+          artworkBlob = await artResponse.blob();
+        }
+      }catch(artError){
+        console.warn("Song artwork could not be fetched:",artError);
+      }
+    }
+
+    /* If the song has no artwork, try the artist avatar. */
+    if(!artworkBlob){
+      try{
+        let artistAvatar = null;
+        const artistId = song.artist_id || null;
+
+        if(artistId){
+          const {data:artistById} = await sb
+            .from("artists")
+            .select("avatar_url")
+            .eq("id",artistId)
+            .maybeSingle();
+          artistAvatar = artistById?.avatar_url || null;
+        }
+
+        if(!artistAvatar && song.artist){
+          const {data:artistByName} = await sb
+            .from("artists")
+            .select("avatar_url")
+            .eq("name",song.artist)
+            .maybeSingle();
+          artistAvatar = artistByName?.avatar_url || null;
+        }
+
+        if(artistAvatar){
+          const avatarResponse = await fetch(artistAvatar,{ method:"GET", cache:"no-store" });
+          if(avatarResponse.ok){
+            artworkBlob = await avatarResponse.blob();
+          }
+        }
+      }catch(artistArtError){
+        console.warn("Artist artwork could not be fetched:",artistArtError);
+      }
+    }
+
+    /* Final fallback: create a small NileSoniq logo image. */
+    if(!artworkBlob){
+      try{
+        artworkBlob = await createNileSoniqArtwork(
+          song.title || "NileSoniq",
+          song.artist || "Music"
+        );
+      }catch(logoError){
+        console.warn("NileSoniq fallback artwork could not be created:",logoError);
+      }
+    }
+
+    let finalBlob = audioBlob;
+
+    /* Embed artwork only for MP3 files. Other formats are downloaded normally. */
+    if(artworkBlob && isMp3Audio(audioBlob,url)){
+      try{
+        finalBlob = await embedArtworkInMp3(
+          audioBlob,
+          artworkBlob,
+          song.title || "NileSoniq Song",
+          song.artist || "NileSoniq Artist",
+          "NileSoniq"
+        );
+      }catch(tagError){
+        console.warn("Could not embed artwork into MP3; downloading original audio:",tagError);
+        finalBlob = audioBlob;
+      }
+    }
+
+    const blobUrl = URL.createObjectURL(finalBlob);
     const link = document.createElement("a");
 
     link.href = blobUrl;
@@ -5712,17 +6129,13 @@ async function downloadSongObject(song){
     link.click();
     link.remove();
 
-    setTimeout(
-      () => URL.revokeObjectURL(blobUrl),
-      5000
-    );
+    setTimeout(() => URL.revokeObjectURL(blobUrl),5000);
 
   }catch(error){
 
     console.error("MP3 download error:",error);
 
     try{
-
       const link = document.createElement("a");
       link.href = url;
       link.target = "_blank";
@@ -5733,13 +6146,197 @@ async function downloadSongObject(song){
       document.body.appendChild(link);
       link.click();
       link.remove();
-
     }catch(fallbackError){
-
       console.error(fallbackError);
       alert("Download could not start. Please try again.");
     }
   }
+}
+
+
+function isMp3Audio(blob,url){
+  const type = String(blob?.type || "").toLowerCase();
+  const source = String(url || "").toLowerCase().split("?")[0];
+  return type.includes("mpeg") || type.includes("mp3") || source.endsWith(".mp3");
+}
+
+
+function textToLatin1Bytes(text){
+  const value = String(text || "");
+  const bytes = new Uint8Array(value.length);
+  for(let i=0;i<value.length;i++){
+    bytes[i] = value.charCodeAt(i) & 255;
+  }
+  return bytes;
+}
+
+
+function makeSynchsafeInteger(number){
+  const n = Math.max(0,Math.floor(Number(number) || 0));
+  return new Uint8Array([
+    (n >> 21) & 0x7f,
+    (n >> 14) & 0x7f,
+    (n >> 7) & 0x7f,
+    n & 0x7f
+  ]);
+}
+
+
+function makeId3TextFrame(frameId,text){
+  const value = String(text || "");
+  const encoded = new TextEncoder().encode(value);
+  const payload = new Uint8Array(1 + encoded.length);
+  payload[0] = 3; /* UTF-8 */
+  payload.set(encoded,1);
+
+  const frame = new Uint8Array(10 + payload.length);
+  frame.set(textToLatin1Bytes(frameId),0);
+
+  const size = payload.length;
+  frame[4] = (size >> 24) & 255;
+  frame[5] = (size >> 16) & 255;
+  frame[6] = (size >> 8) & 255;
+  frame[7] = size & 255;
+  frame.set(payload,10);
+  return frame;
+}
+
+
+function makeApicFrame(imageBytes,mimeType){
+  const mime = String(mimeType || "image/jpeg").toLowerCase().includes("png")
+    ? "image/png"
+    : "image/jpeg";
+
+  const mimeBytes = textToLatin1Bytes(mime);
+  const description = new Uint8Array([0]);
+
+  /*
+    APIC payload:
+    text encoding (3 = UTF-8), MIME type, picture type (3 = front cover),
+    empty description, then binary image data.
+  */
+  const payload = new Uint8Array(
+    1 + mimeBytes.length + 1 + 1 + description.length + imageBytes.length
+  );
+
+  let offset = 0;
+  payload[offset++] = 3;
+  payload.set(mimeBytes,offset);
+  offset += mimeBytes.length;
+  payload[offset++] = 0;
+  payload[offset++] = 3;
+  payload[offset++] = 0;
+  payload.set(imageBytes,offset);
+
+  const frame = new Uint8Array(10 + payload.length);
+  frame.set(textToLatin1Bytes("APIC"),0);
+
+  const size = payload.length;
+  frame[4] = (size >> 24) & 255;
+  frame[5] = (size >> 16) & 255;
+  frame[6] = (size >> 8) & 255;
+  frame[7] = size & 255;
+  frame.set(payload,10);
+  return frame;
+}
+
+
+async function createNileSoniqArtwork(title,artist){
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="1000" height="1000" viewBox="0 0 1000 1000">
+      <rect width="1000" height="1000" fill="#111827"/>
+      <circle cx="500" cy="420" r="250" fill="#22c55e" opacity="0.18"/>
+      <circle cx="500" cy="420" r="170" fill="#22c55e" opacity="0.25"/>
+      <text x="500" y="445" text-anchor="middle" font-family="Arial,sans-serif" font-size="150" font-weight="700" fill="white">NS</text>
+      <text x="500" y="720" text-anchor="middle" font-family="Arial,sans-serif" font-size="58" font-weight="700" fill="white">NileSoniq</text>
+      <text x="500" y="800" text-anchor="middle" font-family="Arial,sans-serif" font-size="34" fill="#d1d5db">${escapeHtml(String(artist || "Music")).substring(0,50)}</text>
+      <text x="500" y="855" text-anchor="middle" font-family="Arial,sans-serif" font-size="28" fill="#9ca3af">${escapeHtml(String(title || "Song")).substring(0,55)}</text>
+    </svg>`;
+
+  /* Rasterize the fallback logo to PNG because MP3 cover art expects a
+     standard image format such as JPEG or PNG. */
+  const svgBlob = new Blob([svg],{type:"image/svg+xml"});
+  const svgUrl = URL.createObjectURL(svgBlob);
+
+  try{
+    const image = new Image();
+    await new Promise((resolve,reject) => {
+      image.onload = resolve;
+      image.onerror = reject;
+      image.src = svgUrl;
+    });
+
+    const canvas = document.createElement("canvas");
+    canvas.width = 1000;
+    canvas.height = 1000;
+    const context = canvas.getContext("2d");
+    context.drawImage(image,0,0,1000,1000);
+
+    return await new Promise((resolve,reject) => {
+      canvas.toBlob(blob => {
+        if(blob) resolve(blob);
+        else reject(new Error("Could not create NileSoniq artwork."));
+      },"image/png");
+    });
+  }finally{
+    URL.revokeObjectURL(svgUrl);
+  }
+}
+
+
+async function embedArtworkInMp3(audioBlob,artworkBlob,title,artist,album){
+  const audioBytes = new Uint8Array(await audioBlob.arrayBuffer());
+  const imageBytes = new Uint8Array(await artworkBlob.arrayBuffer());
+
+  const mimeType = artworkBlob.type || "image/jpeg";
+
+  const frames = [
+    makeId3TextFrame("TIT2",title),
+    makeId3TextFrame("TPE1",artist),
+    makeId3TextFrame("TALB",album),
+    makeApicFrame(imageBytes,mimeType)
+  ];
+
+  let frameLength = 0;
+  frames.forEach(frame => frameLength += frame.length);
+
+  const tagSize = frameLength;
+  const header = new Uint8Array(10);
+  header.set(textToLatin1Bytes("ID3"),0);
+  header[3] = 3; /* ID3v2.3 */
+  header[4] = 0;
+  header[5] = 0;
+  header.set(makeSynchsafeInteger(tagSize),6);
+
+  /*
+    If the source already contains an ID3v2 tag, remove it so the new tag
+    is the one music players see. The MP3 audio frames are preserved.
+  */
+  let audioStart = 0;
+  if(audioBytes.length >= 10 &&
+     audioBytes[0] === 0x49 &&
+     audioBytes[1] === 0x44 &&
+     audioBytes[2] === 0x33){
+    const oldTagSize =
+      ((audioBytes[6] & 0x7f) << 21) |
+      ((audioBytes[7] & 0x7f) << 14) |
+      ((audioBytes[8] & 0x7f) << 7) |
+      (audioBytes[9] & 0x7f);
+    audioStart = Math.min(audioBytes.length,10 + oldTagSize + ((audioBytes[5] & 0x10) ? 10 : 0));
+  }
+
+  const output = new Uint8Array(10 + frameLength + (audioBytes.length - audioStart));
+  output.set(header,0);
+
+  let position = 10;
+  for(const frame of frames){
+    output.set(frame,position);
+    position += frame.length;
+  }
+
+  output.set(audioBytes.subarray(audioStart),position);
+
+  return new Blob([output],{type:"audio/mpeg"});
 }
 
 
@@ -6244,136 +6841,49 @@ async function loadMyWithdrawals(){
    BALANCE
 ========================================================= */
 
-async function updateAvailableBalance(
-  withdrawals=null
-){
+async function updateAvailableBalance(){
 
   if(!currentUser){
     return;
   }
-
 
   const balanceElement =
     document.getElementById(
       "availableBalance"
     );
 
+  if(!balanceElement){
+    return;
+  }
 
   try{
 
     const {
-      data:songs,
-      error:songsError
+      data:wallet,
+      error:walletError
     } = await sb
-      .from("songs")
-      .select("plays")
+      .from("artist_wallets")
+      .select("balance")
       .eq(
-        "artist_id",
+        "user_id",
         currentUser.id
-      );
-
-
-    if(songsError){
-      throw songsError;
-    }
-
-
-    const totalPlays =
-      (songs || []).reduce(
-        (sum,song) =>
-          sum +
-          Number(
-            song.plays || 0
-          ),
-        0
-      );
-
-
-    const totalEarnings =
-      totalPlays *
-      EARNINGS_PER_PLAY;
-
-
-    let withdrawalList =
-      Array.isArray(withdrawals)
-      ? withdrawals
-      : null;
-
-
-    if(withdrawalList === null){
-
-      const {
-        data:withdrawalData,
-        error:withdrawalError
-      } = await sb
-        .from("withdrawal_requests")
-        .select(
-          "amount,status"
-        )
-        .eq(
-          "artist_id",
-          currentUser.id
-        );
-
-
-      if(withdrawalError){
-
-        console.warn(
-          withdrawalError
-        );
-
-        withdrawalList = [];
-
-      }else{
-
-        withdrawalList =
-          withdrawalData || [];
-
-      }
-
-    }
-
-
-    const alreadyRequested =
-      withdrawalList
-      .filter(item =>
-        [
-          "pending",
-          "processing",
-          "paid"
-        ].includes(
-          item.status
-        )
       )
-      .reduce(
-        (sum,item) =>
-          sum +
-          Number(
-            item.amount || 0
-          ),
-        0
-      );
+      .maybeSingle();
 
-
-    const available =
-      Math.max(
-        0,
-        totalEarnings -
-        alreadyRequested
-      );
-
-
-    if(balanceElement){
-
-      balanceElement.textContent =
-        "UGX " +
-        formatNumber(
-          Math.floor(
-            available
-          )
-        );
-
+    if(walletError){
+      throw walletError;
     }
+
+    const balance =
+      Number(
+        wallet?.balance || 0
+      );
+
+    balanceElement.textContent =
+      "UGX " +
+      formatNumber(
+        Math.floor(balance)
+      );
 
   }catch(error){
 
@@ -6382,14 +6892,10 @@ async function updateAvailableBalance(
       error
     );
 
+    balanceElement.textContent =
+      "UGX 0";
   }
-
 }
-
-
-/* =========================================================
-   REQUEST WITHDRAWAL
-========================================================= */
 
 async function requestWithdrawal(){
 
@@ -6486,85 +6992,25 @@ async function requestWithdrawal(){
   try{
 
     const {
-      data:songs,
-      error:songsError
+      data:wallet,
+      error:walletError
     } = await sb
-      .from("songs")
-      .select("plays")
+      .from("artist_wallets")
+      .select("balance")
       .eq(
-        "artist_id",
+        "user_id",
         currentUser.id
-      );
-
-
-    if(songsError){
-      throw songsError;
-    }
-
-
-    const totalPlays =
-      (songs || []).reduce(
-        (sum,song) =>
-          sum +
-          Number(
-            song.plays || 0
-          ),
-        0
-      );
-
-
-    const totalEarnings =
-      totalPlays *
-      EARNINGS_PER_PLAY;
-
-
-    const {
-      data:withdrawals,
-      error:withdrawalsError
-    } = await sb
-      .from("withdrawal_requests")
-      .select(
-        "amount,status"
       )
-      .eq(
-        "artist_id",
-        currentUser.id
-      );
+      .maybeSingle();
 
-
-    if(withdrawalsError){
-      throw withdrawalsError;
+    if(walletError){
+      throw walletError;
     }
-
-
-    const alreadyRequested =
-      (withdrawals || [])
-      .filter(item =>
-        [
-          "pending",
-          "processing",
-          "paid"
-        ].includes(
-          item.status
-        )
-      )
-      .reduce(
-        (sum,item) =>
-          sum +
-          Number(
-            item.amount || 0
-          ),
-        0
-      );
-
 
     const available =
-      Math.max(
-        0,
-        totalEarnings -
-        alreadyRequested
+      Number(
+        wallet?.balance || 0
       );
-
 
     if(amount > available){
 
@@ -7020,6 +7466,256 @@ async function markWithdrawalPaid(id){
 
 }
 
+
+/* =========================================================
+   ADMIN ANALYTICS
+========================================================= */
+
+let adminAnalyticsTimer = null;
+
+function setAnalyticsValue(id,value){
+  const el=document.getElementById(id);
+  if(el) el.textContent=formatNumber(value || 0);
+}
+
+async function loadAdminAnalytics(){
+  if(!currentUser || !await isCurrentUserAdmin()) return;
+
+  const topSongsEl=document.getElementById("analyticsTopSongs");
+  const topArtistsEl=document.getElementById("analyticsTopArtists");
+  if(topSongsEl) topSongsEl.innerHTML='<tr><td colspan="3">Loading...</td></tr>';
+  if(topArtistsEl) topArtistsEl.innerHTML='<tr><td colspan="3">Loading...</td></tr>';
+
+  try{
+    const [songsResult,artistsResult,withdrawalsResult]=await Promise.all([
+      sb.from("songs").select("title,artist,artist_id,plays,likes,approved,created_at"),
+      sb.from("artists").select("user_id,name"),
+      sb.from("withdrawal_requests").select("amount,status")
+    ]);
+
+    if(songsResult.error) throw songsResult.error;
+    if(artistsResult.error) throw artistsResult.error;
+    if(withdrawalsResult.error) throw withdrawalsResult.error;
+
+    const songs=songsResult.data || [];
+    const artists=artistsResult.data || [];
+    const withdrawals=withdrawalsResult.data || [];
+
+    const approved=songs.filter(s=>s.approved===true);
+    const pending=songs.filter(s=>s.approved!==true);
+    const plays=songs.reduce((n,s)=>n+Number(s.plays||0),0);
+    const likes=songs.reduce((n,s)=>n+Number(s.likes||0),0);
+    const pendingWithdrawals=withdrawals.filter(w=>["pending","processing"].includes(String(w.status||"pending").toLowerCase()));
+
+    setAnalyticsValue("analyticsTotalSongs",songs.length);
+    setAnalyticsValue("analyticsApprovedSongs",approved.length);
+    setAnalyticsValue("analyticsPendingSongs",pending.length);
+    setAnalyticsValue("analyticsTotalArtists",artists.length);
+    setAnalyticsValue("analyticsTotalPlays",plays);
+    setAnalyticsValue("analyticsTotalLikes",likes);
+    setAnalyticsValue("analyticsTotalWithdrawals",withdrawals.length);
+    setAnalyticsValue("analyticsPendingWithdrawals",pendingWithdrawals.length);
+
+    const topSongs=[...songs].sort((a,b)=>Number(b.plays||0)-Number(a.plays||0)).slice(0,10);
+    if(topSongsEl){
+      topSongsEl.innerHTML=topSongs.length ? topSongs.map(song=>`<tr><td>${escapeHtml(song.title||"Untitled")}</td><td>${escapeHtml(song.artist||"Unknown")}</td><td>${formatNumber(song.plays||0)}</td></tr>`).join("") : '<tr><td colspan="3">No songs yet.</td></tr>';
+    }
+
+    const artistNames={};
+    artists.forEach(a=>{artistNames[a.user_id]=a.name||"Unknown Artist"});
+    const artistStats={};
+    songs.forEach(song=>{
+      const key=song.artist_id || song.artist || "unknown";
+      if(!artistStats[key]) artistStats[key]={name:artistNames[song.artist_id] || song.artist || "Unknown Artist",songs:0,plays:0};
+      artistStats[key].songs += 1;
+      artistStats[key].plays += Number(song.plays||0);
+    });
+    const topArtists=Object.values(artistStats).sort((a,b)=>b.plays-a.plays).slice(0,10);
+    if(topArtistsEl){
+      topArtistsEl.innerHTML=topArtists.length ? topArtists.map(a=>`<tr><td>${escapeHtml(a.name)}</td><td>${formatNumber(a.songs)}</td><td>${formatNumber(a.plays)}</td></tr>`).join("") : '<tr><td colspan="3">No artist data yet.</td></tr>';
+    }
+
+    if(!adminAnalyticsTimer){
+      adminAnalyticsTimer=setInterval(()=>{
+        const panel=document.getElementById("adminAnalyticsPanel");
+        if(panel && !panel.classList.contains("hidden")) loadAdminAnalytics();
+      },30000);
+    }
+  }catch(error){
+    console.error("Analytics error:",error);
+    if(topSongsEl) topSongsEl.innerHTML=`<tr><td colspan="3">${escapeHtml(error.message||"Could not load analytics.")}</td></tr>`;
+    if(topArtistsEl) topArtistsEl.innerHTML=`<tr><td colspan="3">${escapeHtml(error.message||"Could not load analytics.")}</td></tr>`;
+  }
+}
+
+/* =========================================================
+   PLATFORM WALLET SETTINGS
+========================================================= */
+
+let platformWalletRefreshTimer=null;
+
+async function loadPlatformWallet(){
+  const saved=localStorage.getItem("nilesoniq_platform_wallet");
+  if(saved){
+    try{
+      const data=JSON.parse(saved);
+      const phone=document.getElementById("platformWalletPhone");
+      const network=document.getElementById("platformWalletNetwork");
+      const number=document.getElementById("platformWalletNumber");
+      if(phone) phone.value=data.phone||"";
+      if(network) network.value=data.network||"MTN";
+      if(number) number.textContent=data.phone ? `${data.network||"MTN"} — ${data.phone}` : "Not configured";
+    }catch(e){
+      console.warn("Wallet settings error",e);
+    }
+  }
+
+  const balanceElement=document.getElementById("platformWalletBalance");
+  if(!balanceElement) return;
+
+  if(!currentUser){
+    balanceElement.textContent="UGX 0";
+    return;
+  }
+
+  try{
+    const { data, error } = await sb.rpc("get_platform_completed_total");
+    if(error) throw error;
+
+    const totalAmount = Number(data ?? 0);
+
+    if(!Number.isFinite(totalAmount)){
+      throw new Error("Invalid balance returned by get_platform_completed_total.");
+    }
+
+    balanceElement.textContent = "UGX " + formatNumber(Math.floor(totalAmount));
+
+    console.log("Platform completed deposits total:", totalAmount);
+  }catch(error){
+    console.error("Platform completed deposits error:",error);
+    balanceElement.textContent="Balance unavailable";
+
+    const message=document.getElementById("platformWalletMessage");
+    if(message){
+      showMessage(
+        "platformWalletMessage",
+        "Could not load the Platform Wallet balance. Please try again or check the Supabase RPC.",
+        "error"
+      );
+    }
+  }
+
+  if(!platformWalletRefreshTimer){
+    platformWalletRefreshTimer=setInterval(()=>{
+      const panel=document.getElementById("adminWalletPanel");
+      if(panel && !panel.classList.contains("hidden")){
+        loadPlatformWallet();
+      }
+    },30000);
+  }
+}
+
+function savePlatformWallet(){
+  const phone=(document.getElementById("platformWalletPhone")?.value||"").trim();
+  const network=(document.getElementById("platformWalletNetwork")?.value||"MTN").trim();
+  if(!/^\+?256\d{9}$|^0\d{9}$/.test(phone.replace(/\s+/g,""))){
+    showMessage("platformWalletMessage","Enter a valid Ugandan mobile-money number.","error");
+    return;
+  }
+  localStorage.setItem("nilesoniq_platform_wallet",JSON.stringify({phone,network}));
+  const number=document.getElementById("platformWalletNumber");
+  if(number) number.textContent=`${network} — ${phone}`;
+  showMessage("platformWalletMessage","Platform payout account saved on this device.","success");
+}
+
+async function startPlatformDeposit(){
+  const phone=(document.getElementById("platformWalletPhone")?.value||"").trim();
+  const network=(document.getElementById("platformWalletNetwork")?.value||"MTN").trim();
+  const amount=Number(document.getElementById("platformDepositAmount")?.value||0);
+  const button=document.querySelector('button[onclick="startPlatformDeposit()"]');
+
+  if(!phone || !amount || amount<1000){
+    showMessage("platformWalletMessage","Enter the mobile-money number and a deposit amount of at least UGX 1,000.","error");
+    return;
+  }
+
+  if(network !== "MTN"){
+    showMessage("platformWalletMessage","PesaJet collection is currently configured here for MTN Mobile Money.","error");
+    return;
+  }
+
+  if(!window.supabase || !sb){
+    showMessage("platformWalletMessage","Supabase is not available. Please refresh the page and try again.","error");
+    return;
+  }
+
+  if(button){
+    button.disabled=true;
+    button.textContent="Sending request...";
+  }
+
+  showMessage("platformWalletMessage","Sending deposit request to the secure payment backend...","success");
+
+  try{
+    const { data, error } = await sb.functions.invoke("pesajet-collection",{
+      body:{
+        phone_number:phone,
+        amount:amount,
+        network:network
+      }
+    });
+
+    console.log("PesaJet collection response:",data);
+
+    if(error){
+      let detail=error.message || "The payment backend returned an error.";
+      try{
+        if(error.context){
+          const responseBody=await error.context.json();
+          detail=responseBody?.error || responseBody?.message || detail;
+        }
+      }catch(_){}
+      throw new Error(detail);
+    }
+
+    if(!data){
+      throw new Error("The payment backend returned an empty response.");
+    }
+
+    const result=data.result || data;
+    const transactionId=result.transactionId || result.transaction_id || data.transactionId || data.transaction_id;
+    const status=String(result.status || data.status || "").toUpperCase();
+    const pesajetStatus=data.pesajet_status || result.pesajet_status;
+
+    if(data.success === false){
+      throw new Error(data.message || data.error || "PesaJet rejected the collection request.");
+    }
+
+    if(status === "PENDING"){
+      const txText=transactionId ? ` Transaction ID: ${transactionId}` : "";
+      showMessage("platformWalletMessage",`Deposit request accepted and is PENDING. Check the MTN phone for the payment prompt.${txText}`,"success");
+      const amountInput=document.getElementById("platformDepositAmount");
+      if(amountInput) amountInput.value="";
+      return;
+    }
+
+    if(pesajetStatus === 201 || String(pesajetStatus) === "201"){
+      const txText=transactionId ? ` Transaction ID: ${transactionId}` : "";
+      showMessage("platformWalletMessage",`PesaJet accepted the deposit request.${txText}`,"success");
+      return;
+    }
+
+    showMessage("platformWalletMessage",`Payment backend response received: ${status || "REQUESTED"}. ${transactionId ? `Transaction ID: ${transactionId}` : ""}`,"success");
+  }catch(error){
+    console.error("Platform deposit error:",error);
+    showMessage("platformWalletMessage",error.message || "Could not start the deposit request.","error");
+  }finally{
+    if(button){
+      button.disabled=false;
+      button.textContent="Deposit Money";
+    }
+  }
+}
 
 /* =========================================================
    ADMIN SONGS
@@ -7961,28 +8657,25 @@ document
     }
   );
 
+/* SHORT PUBLIC URL ROUTING */
+window.addEventListener("popstate", async () => {
+  if(isShortPublicRoute()){
+    await handleShortPublicRoute();
+  }else{
+    const modal = document.getElementById("artistProfileModal");
+    if(modal) modal.classList.remove("show");
+    closePublicSongPage();
+    document.body.style.overflow = "";
+    await showPage("home");
+  }
+});
 
-/* NILESONIQ BOOST - isolated test-mode UI */
-let nilesoniqBoostDays=1;
-let nilesoniqBoostPrice=1000;
-function openBoostPage(){
- const modal=document.getElementById("boostModal"), select=document.getElementById("boostSongSelect"), status=document.getElementById("boostStatus");
- if(!modal||!select)return;
- select.innerHTML='<option value="">Select a song</option>';
- const songs=Array.isArray(window.nileSoniqArtistSongs)?window.nileSoniqArtistSongs:[];
- songs.filter(song=>song&&song.approved===true).forEach(song=>{const o=document.createElement("option");o.value=String(song.id||"");o.textContent=song.title||"Untitled";select.appendChild(o);});
- if(status)status.textContent=songs.some(song=>song&&song.approved===true)?"":"No approved songs are available for boosting yet.";
- modal.classList.add("open");modal.setAttribute("aria-hidden","false");
-}
-function closeBoostPage(){const modal=document.getElementById("boostModal");if(!modal)return;modal.classList.remove("open");modal.setAttribute("aria-hidden","true");}
-function selectBoostPackage(button){document.querySelectorAll(".boost-package").forEach(x=>x.classList.remove("active"));button.classList.add("active");nilesoniqBoostDays=Number(button.dataset.days||1);nilesoniqBoostPrice=Number(button.dataset.price||1000);}
-function startBoostTest(){
- const select=document.getElementById("boostSongSelect"),status=document.getElementById("boostStatus");if(!select||!status)return;
- if(!select.value){status.textContent="Please choose a song first.";return;}
- const songs=Array.isArray(window.nileSoniqArtistSongs)?window.nileSoniqArtistSongs:[];
- const song=songs.find(x=>String(x.id)===String(select.value));
- status.textContent="Boost test ready: "+(song&&song.title?song.title:"your song")+" • "+nilesoniqBoostDays+" day(s) • UGX "+nilesoniqBoostPrice.toLocaleString()+". No money was charged.";
-}
+document.addEventListener("DOMContentLoaded", async () => {
+  if(isShortPublicRoute()){
+    await handleShortPublicRoute();
+  }
+});
+
 </script>
 
 </body>
