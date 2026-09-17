@@ -4576,6 +4576,8 @@ function renderSongCards(
         currentPlayingSong &&
         currentPlayingSong.id === song.id;
 
+      window["__nileSong_" + String(song.id)] = song;
+
 
       const cover =
         song.cover_url
@@ -4609,7 +4611,9 @@ function renderSongCards(
 
           <div class="song-info">
 
-            <div class="song-title">
+            <div class="song-title"
+              style="cursor:pointer;"
+              onclick="openSongLink(window.__nileSong_${escapeAttribute(song.id)})">
               ${escapeHtml(
                 song.title ||
                 "Untitled"
@@ -5397,7 +5401,7 @@ function cleanSlug(value){
     .trim()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
-    .substring(0, 70) || "artist";
+    .substring(0, 70) || "page";
 }
 
 function artistPublicSlug(artist){
@@ -5408,8 +5412,16 @@ function artistPublicUrl(artist){
   return "/artist/" + artistPublicSlug(artist);
 }
 
+function songPublicSlug(song){
+  return cleanSlug(song?.title || "song");
+}
+
+function songPublicUrl(song){
+  return "/song/" + songPublicSlug(song);
+}
+
 function isShortPublicRoute(){
-  return /^\/(artist|user)\/[^/]+\/?$/i.test(window.location.pathname);
+  return /^\/(artist|user|song)\/[^/]+\/?$/i.test(window.location.pathname);
 }
 
 async function openArtistBySlug(slug){
@@ -5434,11 +5446,97 @@ async function openArtistBySlug(slug){
   }
 }
 
+async function openSongBySlug(slug){
+  const wanted = cleanSlug(decodeURIComponent(slug || ""));
+  try{
+    const {data,error} = await sb
+      .from("songs")
+      .select("*")
+      .eq("approved",true)
+      .order("created_at",{ascending:false});
+    if(error) throw error;
+
+    const song = (data || []).find(item => songPublicSlug(item) === wanted);
+    if(!song){
+      await showPage("home");
+      alert("Song not found.");
+      return;
+    }
+
+    showPublicSongPage(song);
+  }catch(error){
+    console.error("Public song route error:",error);
+    await showPage("home");
+    alert("Could not load song.");
+  }
+}
+
+function showPublicSongPage(song){
+  let modal = document.getElementById("songPublicModal");
+  if(!modal){
+    modal = document.createElement("div");
+    modal.id = "songPublicModal";
+    modal.style.cssText = "position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(0,0,0,.82);backdrop-filter:blur(8px);";
+    document.body.appendChild(modal);
+  }
+
+  const cover = song.cover_url
+    ? `<img src="${escapeAttribute(song.cover_url)}" alt="${escapeAttribute(song.title || "Song")}" style="width:170px;height:170px;object-fit:cover;border-radius:16px;display:block;margin:0 auto 20px;">`
+    : `<div style="width:170px;height:170px;border-radius:16px;display:flex;align-items:center;justify-content:center;background:#191919;color:var(--orange);font-size:55px;margin:0 auto 20px;">♪</div>`;
+
+  const url = songPublicUrl(song);
+  modal.innerHTML = `
+    <div style="position:relative;width:min(520px,100%);background:#111;border:1px solid var(--border);border-radius:22px;padding:28px;text-align:center;box-shadow:0 25px 80px rgba(0,0,0,.5);">
+      <button onclick="closePublicSongPage()" aria-label="Close" style="position:absolute;right:12px;top:10px;width:38px;height:38px;border:0;border-radius:50%;background:#292929;color:#fff;font-size:24px;cursor:pointer;">×</button>
+      ${cover}
+      <h2 style="margin:0 0 7px;">${escapeHtml(song.title || "Untitled")}</h2>
+      <p style="margin:0 0 18px;color:#aaa;">${escapeHtml(song.artist || "Unknown Artist")}</p>
+      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+        <button class="btn btn-orange" onclick="playPublicSongFromPage('${escapeAttribute(song.id)}')">▶ Play Song</button>
+        <button class="btn btn-dark" onclick="downloadSong('${escapeAttribute(song.id)}')">↓ Download</button>
+        <button class="btn btn-dark" onclick="copyPublicSongUrl('${escapeAttribute(url)}')">🔗 Copy Link</button>
+      </div>
+      <div style="margin-top:18px;padding:10px;border-radius:10px;background:#191919;color:#999;font-size:12px;word-break:break-all;">${escapeHtml(window.location.origin + url)}</div>
+    </div>`;
+}
+
+async function playPublicSongFromPage(songId){
+  const song = findSongById(songId);
+  if(song){
+    await playSong(song.id);
+  }else{
+    const {data} = await sb.from("songs").select("*").eq("id",songId).eq("approved",true).maybeSingle();
+    if(data) await playSong(data.id);
+  }
+}
+
+function closePublicSongPage(){
+  const modal = document.getElementById("songPublicModal");
+  if(modal) modal.remove();
+  document.body.style.overflow = "";
+}
+
+async function copyPublicSongUrl(url){
+  const full = window.location.origin + url;
+  try{
+    await navigator.clipboard.writeText(full);
+    alert("Song link copied.");
+  }catch(e){
+    window.prompt("Copy this song link:",full);
+  }
+}
+
 async function handleShortPublicRoute(){
   if(!isShortPublicRoute()) return;
   const parts = window.location.pathname.split("/").filter(Boolean);
   if(parts.length !== 2) return;
-  await openArtistBySlug(parts[1]);
+
+  const type = parts[0].toLowerCase();
+  if(type === "song"){
+    await openSongBySlug(parts[1]);
+  }else{
+    await openArtistBySlug(parts[1]);
+  }
 }
 
 function navigateToArtistSlug(artist){
@@ -5447,6 +5545,20 @@ function navigateToArtistSlug(artist){
   if(window.location.pathname !== url){
     window.history.pushState({nilesoniqPublic:true},"",url);
   }
+}
+
+function navigateToSongSlug(song){
+  if(!song) return;
+  const url = songPublicUrl(song);
+  if(window.location.pathname !== url){
+    window.history.pushState({nilesoniqPublic:true},"",url);
+  }
+}
+
+function openSongLink(song){
+  if(!song) return;
+  navigateToSongSlug(song);
+  showPublicSongPage(song);
 }
 
 /* =========================================================
@@ -8224,6 +8336,7 @@ window.addEventListener("popstate", async () => {
   }else{
     const modal = document.getElementById("artistProfileModal");
     if(modal) modal.classList.remove("show");
+    closePublicSongPage();
     document.body.style.overflow = "";
     await showPage("home");
   }
