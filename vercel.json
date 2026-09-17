@@ -1,0 +1,16 @@
+{
+  "rewrites": [
+    {
+      "source": "/song/:path*",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/artist/:path*",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/user/:path*",
+      "destination": "/index.html"
+    }
+  ]
+}
