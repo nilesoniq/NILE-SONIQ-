@@ -1477,6 +1477,28 @@ footer{
 @media(max-width:900px){.analytics-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.analytics-two{grid-template-columns:1fr}}
 @media(max-width:520px){.analytics-grid{grid-template-columns:1fr}.wallet-balance{font-size:28px}}
 
+
+/* CLEAN PUBLIC URL PAGES */
+.dynamic-page{padding:32px 0 80px;min-height:70vh}
+.public-back{margin-bottom:22px}
+.public-header{display:flex;gap:22px;align-items:center;background:var(--card);border:1px solid var(--border);border-radius:20px;padding:24px;margin-bottom:24px}
+.public-avatar{width:110px;height:110px;border-radius:50%;overflow:hidden;background:#242424;border:2px solid #333;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+.public-avatar img{width:100%;height:100%;object-fit:cover}
+.public-avatar span{font-size:38px;font-weight:800;color:var(--orange)}
+.public-header h1{font-size:34px;margin-bottom:6px}
+.public-header p{color:var(--muted)}
+.public-url-copy{margin-top:12px}
+.public-song-list{display:grid;gap:12px}
+.public-song{display:flex;align-items:center;gap:14px;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px}
+.public-song-cover{width:58px;height:58px;border-radius:9px;overflow:hidden;background:#222;flex:0 0 auto;display:flex;align-items:center;justify-content:center;color:var(--orange)}
+.public-song-cover img{width:100%;height:100%;object-fit:cover}
+.public-song-main{min-width:0;flex:1}
+.public-song-main strong{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.public-song-main span{display:block;color:var(--muted);font-size:13px;margin-top:3px}
+.public-song-actions{display:flex;gap:8px;align-items:center}
+.public-empty{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:28px;text-align:center;color:var(--muted)}
+@media(max-width:650px){.public-header{align-items:flex-start}.public-avatar{width:82px;height:82px}.public-header h1{font-size:26px}.public-song-actions .download-btn{display:none}}
+
 </style>
 </head>
 
@@ -2360,6 +2382,20 @@ class="table-wrap">
 
 </div>
 </div>
+</section>
+
+
+
+<!-- CLEAN PUBLIC PAGES -->
+<section id="dynamicPage" class="page">
+  <div class="container dynamic-page">
+    <div class="public-back">
+      <button class="btn btn-dark" onclick="goHomeFromPublic()">← Back</button>
+    </div>
+    <div id="dynamicPageContent">
+      <div class="loading">Loading...</div>
+    </div>
+  </div>
 </section>
 
 </main>
@@ -4610,17 +4646,15 @@ function renderSongCards(
           <div class="song-info">
 
             <div class="song-title">
-              ${escapeHtml(
-                song.title ||
-                "Untitled"
-              )}
+              <a href="${publicUrl("song", song.id)}" onclick="event.preventDefault();navigatePublic('song', song.id);return false;">
+                ${escapeHtml(song.title || "Untitled")}
+              </a>
             </div>
 
             <div class="artist-name">
-              ${escapeHtml(
-                song.artist ||
-                "Unknown Artist"
-              )}
+              <a href="${publicUrl("artist", song.artist_id || "")}" onclick="event.preventDefault();${song.artist_id ? "navigatePublic('artist', song.artist_id)" : "return false"};return false;">
+                ${escapeHtml(song.artist || "Unknown Artist")}
+              </a>
             </div>
 
             <div class="song-meta">
@@ -5055,6 +5089,8 @@ function setupAudioEvents(){
           player.duration
         );
 
+      handlePlayGateProgress();
+
     }
   );
 
@@ -5089,29 +5125,9 @@ function setupAudioEvents(){
 
   player.addEventListener(
     "play",
-    async () => {
-
+    () => {
       updatePlayerButton();
-
-      if(
-        currentPlayingSong &&
-        !playCountedForCurrentSong
-      ){
-
-        await recordSongPlay(
-          currentPlayingSong.id
-        );
-
-        playCountedForCurrentSong =
-          true;
-
-        countedPlaySongId =
-          currentPlayingSong.id;
-
-      }
-
       refreshSongDisplays();
-
     }
   );
 
@@ -5913,8 +5929,8 @@ async function loadArtists(){
             class="artist-card"
             role="button"
             tabindex="0"
-            onclick="openArtistProfile('${escapeAttribute(artist.id)}')"
-            onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openArtistProfile('${escapeAttribute(artist.id)}');}"
+            onclick="navigatePublic('artist','${escapeAttribute(artist.id)}')"
+            onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();navigatePublic('artist','${escapeAttribute(artist.id)}');}"
           >
 
             <div class="artist-avatar">
@@ -8144,6 +8160,260 @@ document
 
     }
   );
+
+
+
+/* =========================================================
+   CLEAN PUBLIC URL ROUTING
+========================================================= */
+const NILESONIQ_PUBLIC_PREFIX = "";
+
+function cleanSlug(value){
+  return String(value ?? "").trim().toLowerCase()
+    .replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"");
+}
+
+function publicUrl(type,value){
+  const prefix=NILESONIQ_PUBLIC_PREFIX.replace(/\/$/,"");
+  return prefix+"/"+type+"/"+encodeURIComponent(String(value ?? ""));
+}
+
+function navigatePublic(type,value){
+  if(!value){ return; }
+  const url=publicUrl(type,value);
+  history.pushState({publicType:type,publicValue:String(value)},"",url);
+  handlePublicRoute();
+}
+
+function goHomeFromPublic(){
+  history.pushState({},"","/");
+  handlePublicRoute();
+}
+
+function hideAllPagesForPublic(){
+  ["homePage","artistsPage","dashboardPage","adminPage","dynamicPage"].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.classList.remove("active");
+  });
+  document.querySelectorAll("nav button[data-page]").forEach(b=>b.classList.remove("active"));
+}
+
+async function handlePublicRoute(){
+  const path=window.location.pathname.replace(/\/+$/g,"") || "/";
+  const parts=path.split("/").filter(Boolean).map(decodeURIComponent);
+  const type=parts[0] || "";
+  const value=parts.slice(1).join("/");
+  const valid=["artist","song","genre","user"].includes(type) && !!value;
+
+  if(!valid){
+    const dynamic=document.getElementById("dynamicPage");
+    if(dynamic) dynamic.classList.remove("active");
+    await showPage("home");
+    return;
+  }
+
+  hideAllPagesForPublic();
+  const dynamic=document.getElementById("dynamicPage");
+  const content=document.getElementById("dynamicPageContent");
+  if(!dynamic || !content){ return; }
+  dynamic.classList.add("active");
+  content.innerHTML='<div class="loading">Loading...</div>';
+  window.scrollTo({top:0,behavior:"smooth"});
+
+  try{
+    if(type==="artist") await renderPublicArtistPage(value);
+    else if(type==="song") await renderPublicSongPage(value);
+    else if(type==="genre") await renderPublicGenrePage(value);
+    else if(type==="user") await renderPublicUserPage(value);
+  }catch(error){
+    console.error("Public page error:",error);
+    content.innerHTML='<div class="public-empty"><h3>Could not load this page</h3><p style="margin-top:8px">Please check the link and try again.</p></div>';
+  }
+}
+
+function publicAvatarHtml(artist){
+  if(artist && artist.avatar_url){
+    return '<img src="'+escapeAttribute(artist.avatar_url)+'" alt="">';
+  }
+  return '<span>'+escapeHtml(getInitials(artist?.name || "NS"))+'</span>';
+}
+
+function publicSongMiniCard(song){
+  const artistId=song.artist_id || "";
+  const artistName=song.artist || "Unknown Artist";
+  const cover=song.cover_url ? '<img src="'+escapeAttribute(song.cover_url)+'" alt="">' : '♪';
+  return `
+    <div class="public-song">
+      <div class="public-song-cover">${cover}</div>
+      <div class="public-song-main">
+        <strong>${escapeHtml(song.title || "Untitled")}</strong>
+        <span>${artistId ? '<a href="'+publicUrl("artist",artistId)+'" onclick="event.preventDefault();navigatePublic(\'artist\',\''+escapeAttribute(artistId)+'\');return false;">'+escapeHtml(artistName)+'</a>' : escapeHtml(artistName)}</span>
+        <span>${formatNumber(song.plays || 0)} plays</span>
+      </div>
+      <div class="public-song-actions">
+        <button class="btn btn-orange" onclick="playPublicSong('${escapeAttribute(song.id)}')">▶ Play</button>
+        <button class="download-btn" onclick="downloadSong('${escapeAttribute(song.id)}')">↓ Download</button>
+      </div>
+    </div>`;
+}
+
+async function renderPublicArtistPage(artistId){
+  const content=document.getElementById("dynamicPageContent");
+  const {data:artist,error}=await sb.from("artists").select("*").eq("id",artistId).maybeSingle();
+  if(error) throw error;
+  if(!artist){ content.innerHTML='<div class="public-empty"><h3>Artist not found</h3></div>'; return; }
+
+  const {data:songs,error:songError}=await sb.from("songs").select("*").eq("artist_id",artist.id).eq("approved",true).order("created_at",{ascending:false});
+  if(songError) throw songError;
+
+  content.innerHTML=`
+    <div class="public-header">
+      <div class="public-avatar">${publicAvatarHtml(artist)}</div>
+      <div>
+        <h1>${escapeHtml(artist.name || "Artist")}</h1>
+        <p>${escapeHtml(artist.bio || "NileSoniq artist")}</p>
+        ${artist.location ? '<p>'+escapeHtml(artist.location)+'</p>' : ''}
+        <div class="public-url-copy"><button class="btn btn-dark" onclick="copyCurrentPublicUrl()">Copy profile link</button></div>
+      </div>
+    </div>
+    <h2 style="margin-bottom:14px">Songs</h2>
+    <div class="public-song-list">${(songs||[]).map(publicSongMiniCard).join("") || '<div class="public-empty">No approved songs yet.</div>'}</div>`;
+}
+
+async function renderPublicSongPage(songId){
+  const content=document.getElementById("dynamicPageContent");
+  const {data:song,error}=await sb.from("songs").select("*").eq("id",songId).maybeSingle();
+  if(error) throw error;
+  if(!song){ content.innerHTML='<div class="public-empty"><h3>Song not found</h3></div>'; return; }
+  content.innerHTML=`
+    <div class="public-header">
+      <div class="public-avatar">${song.cover_url ? '<img src="'+escapeAttribute(song.cover_url)+'" alt="">' : '<span>♪</span>'}</div>
+      <div>
+        <h1>${escapeHtml(song.title || "Untitled")}</h1>
+        <p>${escapeHtml(song.artist || "Unknown Artist")}</p>
+        <p>${formatNumber(song.plays || 0)} plays</p>
+        <div class="public-song-actions" style="margin-top:14px">
+          <button class="btn btn-orange" onclick="playPublicSong('${escapeAttribute(song.id)}')">▶ Play</button>
+          <button class="download-btn" onclick="downloadSong('${escapeAttribute(song.id)}')">↓ Download</button>
+          <button class="btn btn-dark" onclick="copyCurrentPublicUrl()">Copy link</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function renderPublicGenrePage(genreValue){
+  const content=document.getElementById("dynamicPageContent");
+  const {data:songs,error}=await sb.from("songs").select("*").eq("approved",true).order("created_at",{ascending:false});
+  if(error) throw error;
+  const target=cleanSlug(genreValue);
+  const filtered=(songs||[]).filter(song=>cleanSlug(song.genre || "")===target);
+  content.innerHTML=`<div class="public-header"><div><h1>${escapeHtml(genreValue.replace(/-/g," "))}</h1><p>Music in this genre on NileSoniq</p><div class="public-url-copy"><button class="btn btn-dark" onclick="copyCurrentPublicUrl()">Copy genre link</button></div></div></div>
+  <div class="public-song-list">${filtered.map(publicSongMiniCard).join("") || '<div class="public-empty">No approved songs with this genre were found. Songs need a genre value for this page to list them.</div>'}</div>`;
+}
+
+async function renderPublicUserPage(userValue){
+  const content=document.getElementById("dynamicPageContent");
+  let artist=null;
+  let result=await sb.from("artists").select("*").eq("user_id",userValue).maybeSingle();
+  if(!result.error) artist=result.data;
+  if(!artist){
+    result=await sb.from("artists").select("*").eq("id",userValue).maybeSingle();
+    if(!result.error) artist=result.data;
+  }
+  if(!artist){
+    const {data:artists,error}=await sb.from("artists").select("*");
+    if(error) throw error;
+    artist=(artists||[]).find(a=>cleanSlug(a.name)===cleanSlug(userValue));
+  }
+  if(!artist){ content.innerHTML='<div class="public-empty"><h3>User profile not found</h3></div>'; return; }
+  await renderPublicArtistPage(artist.id);
+}
+
+async function playPublicSong(songId){
+  const {data:song,error}=await sb.from("songs").select("*").eq("id",songId).maybeSingle();
+  if(error || !song){ alert("Song could not be loaded."); return; }
+  if(typeof playSong === "function"){
+    await playSong(song.id);
+  }
+}
+
+function copyCurrentPublicUrl(){
+  navigator.clipboard?.writeText(window.location.href).then(()=>alert("Link copied."),()=>alert(window.location.href));
+}
+
+window.addEventListener("popstate",handlePublicRoute);
+
+/* =========================================================
+   ANTI-FAKE PLAY GATE
+   Front-end gate: 30 seconds, login required, one counted play
+   per song per UTC day in this browser. Server-side RPC/RLS
+   should enforce the same rule for real anti-fraud protection.
+========================================================= */
+const MIN_PLAY_SECONDS=30;
+const PLAY_DAY_KEY="nilesoniq_play_day_v2";
+
+function todayPlayKey(){
+  return new Date().toISOString().slice(0,10);
+}
+
+function getDailyPlayMap(){
+  try{return JSON.parse(localStorage.getItem(PLAY_DAY_KEY)||"{}");}catch(e){return {};}
+}
+
+function hasPlayedToday(songId){
+  const map=getDailyPlayMap();
+  const day=todayPlayKey();
+  return !!(map[day] && map[day][String(songId)]);
+}
+
+function markPlayedToday(songId){
+  const map=getDailyPlayMap();
+  const day=todayPlayKey();
+  map[day]=map[day]||{};
+  map[day][String(songId)]=true;
+  const days=Object.keys(map).sort();
+  while(days.length>7) delete map[days.shift()];
+  localStorage.setItem(PLAY_DAY_KEY,JSON.stringify(map));
+}
+
+async function handlePlayGateProgress(){
+  const player=document.getElementById("audioPlayer");
+  if(!player || !currentPlayingSong || player.paused) return;
+  if(playCountedForCurrentSong) return;
+  if(player.currentTime < MIN_PLAY_SECONDS) return;
+  if(!currentUser) return;
+  if(hasPlayedToday(currentPlayingSong.id)){
+    playCountedForCurrentSong=true;
+    countedPlaySongId=currentPlayingSong.id;
+    return;
+  }
+  await recordSongPlay(currentPlayingSong.id);
+}
+
+/* Replace the play counter with the gated version. */
+const originalRecordSongPlayForGate=recordSongPlay;
+recordSongPlay=async function(songId){
+  if(!songId || !currentUser) return;
+  if(playCountedForCurrentSong && countedPlaySongId===songId) return;
+  if(hasPlayedToday(songId)){
+    playCountedForCurrentSong=true;
+    countedPlaySongId=songId;
+    return;
+  }
+  try{
+    await originalRecordSongPlayForGate(songId);
+    markPlayedToday(songId);
+    playCountedForCurrentSong=true;
+    countedPlaySongId=songId;
+  }catch(error){
+    console.error("Gated play error:",error);
+  }
+}
+
+/* Route only after the document exists. Root '/' stays on the normal home page. */
+document.addEventListener("DOMContentLoaded",()=>{
+  setTimeout(()=>handlePublicRoute(),0);
+});
 
 </script>
 
