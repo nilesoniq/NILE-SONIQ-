@@ -4535,6 +4535,8 @@ async function loadTopCharts(){
    SONG RENDERING
 ========================================================= */
 
+window.__nileSongRegistry = window.__nileSongRegistry || {};
+
 function renderSongCards(
   songs,
   containerId,
@@ -4576,7 +4578,7 @@ function renderSongCards(
         currentPlayingSong &&
         currentPlayingSong.id === song.id;
 
-      window["__nileSong_" + String(song.id)] = song;
+      window.__nileSongRegistry[String(song.id)] = song;
 
 
       const cover =
@@ -4613,7 +4615,7 @@ function renderSongCards(
 
             <div class="song-title"
               style="cursor:pointer;"
-              onclick="openSongLink(window.__nileSong_${escapeAttribute(song.id)})">
+              onclick="openSongLink(window.__nileSongRegistry['${escapeAttribute(song.id)}'])">
               ${escapeHtml(
                 song.title ||
                 "Untitled"
