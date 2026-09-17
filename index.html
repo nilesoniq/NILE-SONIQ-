@@ -7072,15 +7072,15 @@ async function startPlatformDeposit(){
     return;
   }
 
-  try{
-    showMessage("platformWalletMessage","Sending PesaJet deposit request...","success");
+  showMessage("platformWalletMessage","Sending PesaJet deposit request...","success");
 
-    const { data, error } = await supabase.functions.invoke(
+  try{
+    const { data, error } = await sb.functions.invoke(
       "pesajet-collection",
       {
         body:{
-          phone,
-          amount,
+          phone:phone,
+          amount:amount,
           provider:network,
           reference:"NILESONIQ-DEPOSIT-"+Date.now(),
           description:"NileSoniq platform wallet deposit"
@@ -7088,15 +7088,30 @@ async function startPlatformDeposit(){
       }
     );
 
+    console.log("PesaJet deposit response:",data);
+    console.log("Supabase function error:",error);
+
     if(error){
-      throw error;
+      showMessage(
+        "platformWalletMessage",
+        "Edge Function error: " + (error.message || "Unknown function error"),
+        "error"
+      );
+      return;
     }
 
-    console.log("PesaJet deposit response:",data);
+    if(!data || data.success !== true){
+      showMessage(
+        "platformWalletMessage",
+        "PesaJet failed: " + (data?.error || data?.result?.message || "Unknown PesaJet error"),
+        "error"
+      );
+      return;
+    }
 
     showMessage(
       "platformWalletMessage",
-      "Deposit request sent successfully.",
+      data.message || "PesaJet deposit request sent successfully.",
       "success"
     );
 
@@ -7104,7 +7119,7 @@ async function startPlatformDeposit(){
     console.error("PesaJet deposit error:",err);
     showMessage(
       "platformWalletMessage",
-      "PesaJet deposit request failed.",
+      "PesaJet deposit request failed: " + (err?.message || "Unknown error"),
       "error"
     );
   }
@@ -7127,7 +7142,7 @@ async function pesaJetTestMode(){
   );
 
   try{
-    const { data, error } = await supabase.functions.invoke(
+    const { data, error } = await sb.functions.invoke(
       "pesajet-collection",
       {
         body:{
