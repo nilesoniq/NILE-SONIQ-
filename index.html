@@ -7081,9 +7081,7 @@ async function startPlatformDeposit(){
         body:{
           phone:phone,
           amount:amount,
-          provider:network,
-          reference:"NILESONIQ-DEPOSIT-"+Date.now(),
-          description:"NileSoniq platform wallet deposit"
+          provider:network
         }
       }
     );
@@ -7092,36 +7090,20 @@ async function startPlatformDeposit(){
     console.log("Supabase function error:",error);
 
     if(error){
-      showMessage(
-        "platformWalletMessage",
-        "Edge Function error: " + (error.message || "Unknown function error"),
-        "error"
-      );
+      showMessage("platformWalletMessage","Edge Function error: " + (error.message || "Unknown function error"),"error");
       return;
     }
 
     if(!data || data.success !== true){
-      showMessage(
-        "platformWalletMessage",
-        "PesaJet failed: " + (data?.error || data?.result?.message || "Unknown PesaJet error"),
-        "error"
-      );
+      showMessage("platformWalletMessage","PesaJet failed: " + (data?.error || data?.result?.message || "Unknown PesaJet error"),"error");
       return;
     }
 
-    showMessage(
-      "platformWalletMessage",
-      data.message || "PesaJet deposit request sent successfully.",
-      "success"
-    );
+    showMessage("platformWalletMessage",data.message || "PesaJet deposit request sent successfully.","success");
 
   }catch(err){
     console.error("PesaJet deposit error:",err);
-    showMessage(
-      "platformWalletMessage",
-      "PesaJet deposit request failed: " + (err?.message || "Unknown error"),
-      "error"
-    );
+    showMessage("platformWalletMessage","PesaJet deposit request failed: " + (err?.message || "Unknown error"),"error");
   }
 }
 
@@ -7142,7 +7124,7 @@ async function pesaJetTestMode(){
   );
 
   try{
-    const { data, error } = await sb.functions.invoke(
+    const { data, error } = await supabase.functions.invoke(
       "pesajet-collection",
       {
         body:{
