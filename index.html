@@ -1543,6 +1543,16 @@ onclick="showPage('artists')">
 Artists
 </button>
 
+<button data-page="songs"
+onclick="showPage(\'songs\')">
+Songs
+</button>
+
+<button data-page="about"
+onclick="showPage(\'about\')">
+About
+</button>
+
 <button data-page="dashboard"
 onclick="showPage('dashboard')">
 Dashboard
@@ -1771,10 +1781,31 @@ Loading artists...
 
 </div>
 
+
+
+<!-- SONGS -->
+<section id="songsPage" class="page">
+<div class="container">
+<div class="dashboard-header"><h1>NileSoniq Songs</h1><p>Discover approved music from NileSoniq artists.</p></div>
+<div id="songsPageContainer" class="song-grid"><div class="loading">Loading music...</div></div>
 </div>
 </section>
 
-<!-- ARTIST DASHBOARD -->
+<!-- ABOUT -->
+<section id="aboutPage" class="page">
+<div class="container">
+<div class="dashboard-header"><h1>About NileSoniq</h1><p>Learn more about NileSoniq and our mission.</p></div>
+<div class="dashboard-card" style="line-height:1.7;">
+<h2>Welcome to NileSoniq - The Home of Ugandan Music</h2>
+<p>NileSoniq is a music streaming platform proudly built in Kampala, Uganda, and launched in 2026. Our mission is to empower Ugandan artists and connect them directly with fans across Uganda and the world.</p>
+<h3>Who We Are</h3><p>We are a team of Ugandan music lovers, developers, and artists based in Kampala. We built NileSoniq to help local artists share their music and reach more listeners.</p>
+<h3>Our Platform</h3><p>NileSoniq hosts original music uploaded directly by artists who own the rights to their work.</p>
+<h3>What Makes Us Different</h3><p><strong>Artist-First:</strong> Artists upload their music and keep ownership.</p><p><strong>Fair Play Counting:</strong> A play is counted after 30 seconds of listening.</p><p><strong>No Piracy:</strong> Uploaded content is reviewed and approved.</p><p><strong>Supporting Local:</strong> We focus on promoting Ugandan talent.</p>
+<h3>Our Vision</h3><p>To become a leading platform for original African music where artists can reach fans and build their audiences.</p>
+<p style="color:#aaa;margin-bottom:0;">NileSoniq Team<br>Kampala, Uganda<br>2026</p>
+</div></div></section>
+
+
 
 <section id="dashboardPage" class="page">
 
@@ -2765,8 +2796,9 @@ async () => {
 
   await loadArtists();
 
-  await showPage("home");
-
+  const path=window.location.pathname.replace(/\/+$/,"") || "/";
+  if(path === "/artists" || path === "/songs" || path === "/about") await showPage(path.slice(1),false);
+  else if(path === "/" || !isShortPublicRoute()) await showPage("home",false);
 });
 
 
@@ -3289,14 +3321,15 @@ async function updateUI(){
    NAVIGATION
 ========================================================= */
 
-async function showPage(page){
+async function showPage(page, updateUrl=true){
 
-  const pages = [
-    "home",
-    "artists",
-    "dashboard",
-    "admin"
-  ];
+  const pages = ["home","artists","songs","about","dashboard","admin"];
+  if(!pages.includes(page)) page="home";
+
+  if(updateUrl && ["home","artists","songs","about"].includes(page)){
+    const target = page === "home" ? "/" : "/" + page;
+    if(window.location.pathname !== target) window.history.pushState({page}, "", target);
+  }
 
 
   pages.forEach(name => {
@@ -3348,6 +3381,20 @@ async function showPage(page){
     await loadArtists();
 
   }
+  if(page === "songs"){
+    const container=document.getElementById("songsPageContainer");
+    if(container){
+      if(!currentSongs || !currentSongs.length) await loadSongs();
+      const source=document.getElementById("songsContainer");
+      container.innerHTML=source ? source.innerHTML : "<div class=\"empty\">No songs available.</div>";
+    }
+  }
+
+  if(page === "about"){
+    const modal=document.getElementById("sitePolicyModal");
+    if(modal) modal.remove();
+  }
+
 
 
   if(page === "dashboard"){
@@ -8794,23 +8841,19 @@ document
     }
   );
 
-/* SHORT PUBLIC URL ROUTING */
+/* PUBLIC URL ROUTING */
 window.addEventListener("popstate", async () => {
-  if(isShortPublicRoute()){
-    await handleShortPublicRoute();
-  }else{
-    const modal = document.getElementById("artistProfileModal");
-    if(modal) modal.classList.remove("show");
-    closePublicSongPage();
-    document.body.style.overflow = "";
-    await showPage("home");
-  }
+  if(isShortPublicRoute()){ await handleShortPublicRoute(); return; }
+  const modal=document.getElementById("artistProfileModal"); if(modal) modal.classList.remove("show");
+  if(typeof closePublicSongPage === "function") closePublicSongPage();
+  document.body.style.overflow="";
+  const path=window.location.pathname.replace(/\/+$/,"") || "/";
+  if(path === "/artists" || path === "/songs" || path === "/about") await showPage(path.slice(1),false);
+  else await showPage("home",false);
 });
 
 document.addEventListener("DOMContentLoaded", async () => {
-  if(isShortPublicRoute()){
-    await handleShortPublicRoute();
-  }
+  if(isShortPublicRoute()) await handleShortPublicRoute();
 });
 
 </script>
