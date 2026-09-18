@@ -2445,6 +2445,11 @@ Uganda's music, free to stream.
 <div class="footer-links">
 
 <a href="#"
+onclick="showAbout();return false;">
+About Us
+</a>
+
+<a href="#"
 onclick="showPrivacy();return false;">
 Privacy
 </a>
@@ -2454,8 +2459,14 @@ onclick="showTerms();return false;">
 Terms
 </a>
 
-<a href="mailto:info@nilesoniq.com">
+<a href="#"
+onclick="showContact();return false;">
 Contact
+</a>
+
+<a href="#"
+onclick="showDMCA();return false;">
+DMCA
 </a>
 
 <button
@@ -8616,12 +8627,86 @@ function escapeAttribute(value){
    PRIVACY / TERMS
 ========================================================= */
 
+function showAbout(){
+
+  alert(
+    "About Us - NileSoniQ | Uganda's Leading Artist-First Music Streaming Platform\n\n" +
+    "Welcome to NileSoniQ - The Home of Ugandan Music\n\n" +
+    "NileSoniQ is a premier music streaming platform proudly built in Kampala, Uganda, and launched in 2026. Our platform was created with a single mission: to empower Ugandan artists and give them 100% control over their music while connecting them directly to fans across Uganda and the world.\n\n" +
+    "Who We Are:\n\n" +
+    "We are a team of Ugandan music lovers, developers, and artists based in Kampala. We saw that many Ugandan artists struggle to earn from their music on foreign platforms. We built NileSoniQ to solve this problem.\n\n" +
+    "Our Platform Today:\n\n" +
+    "As of September 2026, NileSoniQ hosts over 40 original songs from 21+ verified Ugandan artists, with over 4,000 organic plays and growing daily. Every song on our platform is uploaded directly by the artist who owns full rights.\n\n" +
+    "What Makes Us Different:\n\n" +
+    "1. Artist-First Model: Artists upload themselves and keep ownership. We never upload songs without permission.\n" +
+    "2. Fair Play Counting: We count 1 play only after 30 seconds of listening to ensure real fans, not bots.\n" +
+    "3. No Piracy: We have zero tolerance for unauthorized content. Every upload is reviewed and approved.\n" +
+    "4. Supporting Local: We are 100% Ugandan owned and focused on promoting Ugandan talent from Kampala, Gulu, Mbarara, and beyond.\n" +
+    "5. Community: We feature artist stories, interviews, and news about the Ugandan music industry.\n\n" +
+    "Our Vision:\n\n" +
+    "To become East Africa's largest platform for original African music where artists earn fairly and fans discover the best new music first.\n\n" +
+    "Join Us:\n\n" +
+    "Are you an artist? Contact us today to get verified and start uploading your music to thousands of fans.\n\n" +
+    "Thank you for supporting Ugandan music. Thank you for supporting NileSoniQ.\n\n" +
+    "NileSoniQ Team\n" +
+    "Kampala, Uganda\n" +
+    "2026"
+  );
+
+}
+
+
 function showPrivacy(){
 
   alert(
-    "NileSoniq Privacy Policy\n\n" +
-    "NileSoniq uses account information and uploaded " +
-    "music to provide its music platform services."
+    "Privacy Policy for NileSoniQ - nilesoniq.com\n\n" +
+    "Effective Date: September 18, 2026\n\n" +
+    "At NileSoniQ, accessible from https://nilesoniq.com, your privacy is our top priority. This Privacy Policy explains what information we collect, how we use it, and your rights.\n\n" +
+    "1. Information We Collect:\n\n" +
+    "A. Personal Information You Provide:\n" +
+    "- When you contact us via email or WhatsApp, we collect your name and contact info to respond.\n" +
+    "- When artists register, we collect artist name, email, and proof of ownership.\n\n" +
+    "B. Automatic Information:\n" +
+    "- Log Files: Like most websites, we collect IP addresses, browser type, ISP, date/time, referring pages. This is used to count plays (currently 4,000+ plays) and prevent fraud.\n" +
+    "- Cookies: We use cookies to store preferences such as your favorite songs, and to improve streaming experience.\n" +
+    "- Device Information: Screen size and device type to optimize music player.\n\n" +
+    "2. How We Use Your Information:\n\n" +
+    "- To provide and improve our music streaming service\n" +
+    "- To count plays fairly and prevent fake plays\n" +
+    "- To respond to your inquiries within 24 hours\n" +
+    "- To prevent fraud and abuse\n" +
+    "- To comply with legal obligations\n\n" +
+    "3. Google AdSense and Advertising:\n\n" +
+    "This website uses Google AdSense, a third-party advertising service provided by Google Inc.\n\n" +
+    "- Google, as a third party vendor, uses cookies to serve ads on our site.\n" +
+    "- Google's use of the DART cookie enables it to serve ads to our users based on their visit to our site and other sites on the Internet.\n" +
+    "- Users may opt out of the use of the DART cookie by visiting https://policies.google.com/technologies/ads\n" +
+    "- You can opt-out of personalized advertising by visiting https://www.google.com/settings/ads\n\n" +
+    "We also may use other ad networks in the future. These networks may also use cookies.\n\n" +
+    "4. Third-Party Privacy Policies:\n\n" +
+    "NileSoniQ's Privacy Policy does not apply to other advertisers or websites. We advise you to consult the respective Privacy Policies of these third-party ad servers.\n\n" +
+    "5. What We Do NOT Do:\n\n" +
+    "- We do NOT sell your personal data to anyone\n" +
+    "- We do NOT collect sensitive personal information like bank details (payments are handled by secure partners Flutterwave and CinetPay)\n" +
+    "- We do NOT allow unauthorized MP3 downloads of artist content without permission\n" +
+    "- We do NOT spam you\n\n" +
+    "6. Data Protection Rights (GDPR):\n\n" +
+    "Every user is entitled to:\n" +
+    "- The right to access - Request copies of your personal data\n" +
+    "- The right to rectification - Request correction of inaccurate data\n" +
+    "- The right to erasure - Request deletion of your personal data\n" +
+    "- The right to restrict processing\n" +
+    "- The right to object to processing\n\n" +
+    "If you make a request, we have one month to respond.\n\n" +
+    "7. Children's Information:\n\n" +
+    "NileSoniQ is for users 13 years and older. We do not knowingly collect information from children under 13. If you believe your child provided information, contact us immediately and we will delete it.\n\n" +
+    "8. Consent:\n\n" +
+    "By using our website, you consent to our Privacy Policy.\n\n" +
+    "9. Contact Us:\n\n" +
+    "If you have questions about this Privacy Policy, contact us at:\n" +
+    "Email: nilesoniq@gmail.com\n" +
+    "Location: Kampala, Uganda\n\n" +
+    "Last Updated: September 18, 2026"
   );
 
 }
@@ -8630,9 +8715,83 @@ function showPrivacy(){
 function showTerms(){
 
   alert(
-    "NileSoniq Terms\n\n" +
-    "Artists must only upload music and artwork they " +
-    "have the right to distribute."
+    "Terms and Conditions - NileSoniQ\n\n" +
+    "By using NileSoniQ.com, you agree to these terms:\n\n" +
+    "1. All songs are property of respective artists. We provide streaming only.\n" +
+    "2. Artists by uploading confirm: \"I am the original owner of this song and I give NileSoniQ permission to stream my song.\"\n" +
+    "3. Users must be 13 years or older to use this site.\n" +
+    "4. We reserve the right to remove any song if a valid copyright claim is received. Removal within 24 hours.\n" +
+    "5. Play counts are counted fairly - 1 play per 30 seconds of listening to prevent fake plays.\n" +
+    "6. You may not copy, redistribute or resell any content from this site.\n\n" +
+    "If you violate these terms, we may block your access."
+  );
+
+}
+
+
+function showContact(){
+
+  alert(
+    "Contact NileSoniQ - Kampala, Uganda\n\n" +
+    "We are available 24/7 to help you.\n\n" +
+    "Address: Kampala, Uganda\n" +
+    "Email: nilesoniq@gmail.com\n" +
+    "Phone/WhatsApp: 0785 823496\n" +
+    "Response Time: Within 24 hours\n\n" +
+    "For Artists:\n" +
+    "Want to upload your music? Contact us on WhatsApp. We verify all artists.\n\n" +
+    "For Copyright Issues:\n" +
+    "If you believe any song violates your rights, email us. We remove within 24 hours.\n\n" +
+    "Thank you for supporting Ugandan music."
+  );
+
+}
+
+
+function showDMCA(){
+
+  alert(
+    "DMCA Copyright Policy - NileSoniQ.com - 24 Hour Takedown Guarantee\n\n" +
+    "Effective Date: September 18, 2026\n\n" +
+    "NileSoniQ respects intellectual property rights of artists and copyright owners worldwide. We comply with the Digital Millennium Copyright Act (DMCA) and Uganda copyright laws.\n\n" +
+    "Our Content Model:\n\n" +
+    "- All 40+ songs on NileSoniQ are uploaded directly by 21+ verified artists who own their music.\n" +
+    "- Every song is manually reviewed and approved by our team (40 approved, 0 pending).\n" +
+    "- Artists must check a box confirming: \"I own full rights to this song and authorize NileSoniQ to stream it.\"\n" +
+    "- We do NOT allow users to upload copyrighted music they do not own.\n\n" +
+    "If You Believe Your Copyright is Infringed:\n\n" +
+    "If you are a copyright owner or authorized agent and believe content on NileSoniQ infringes your rights, please send a written DMCA takedown notice to:\n\n" +
+    "Email: nilesoniq@gmail.com\n" +
+    "Subject Line: DMCA Takedown Request\n\n" +
+    "Your notice MUST include:\n\n" +
+    "1. Your full name and contact information (email, phone, address)\n" +
+    "2. Description of copyrighted work you claim is infringed (e.g., song title)\n" +
+    "3. Exact URL of infringing material on NileSoniQ (e.g., https://nilesoniq.com/song/xyz)\n" +
+    "4. A statement that you have good faith belief that use is not authorized by copyright owner\n" +
+    "5. A statement under penalty of perjury that information in notice is accurate and you are copyright owner or authorized agent\n" +
+    "6. Your physical or electronic signature\n\n" +
+    "What Happens Next:\n\n" +
+    "1. We receive your notice and review within 12 hours\n" +
+    "2. If valid, we REMOVE the content within 24 hours guaranteed\n" +
+    "3. We notify the uploader artist and suspend repeat offenders\n" +
+    "4. We will notify you via email once removed\n\n" +
+    "Counter-Notification:\n\n" +
+    "If you are an artist and believe your song was removed by mistake, you may send counter-notification with proof of ownership. We will restore within 10 business days if no lawsuit is filed.\n\n" +
+    "Repeat Infringers:\n\n" +
+    "Artists who repeatedly upload infringing content will be banned and reported. We have zero tolerance.\n\n" +
+    "Prevention Measures:\n\n" +
+    "- Manual approval of all songs\n" +
+    "- Artist verification system\n" +
+    "- Play count fraud detection (1 play per 30 seconds per IP)\n" +
+    "- No direct MP3 download without artist permission documentation\n\n" +
+    "Contact for DMCA Only:\n\n" +
+    "Email: nilesoniq@gmail.com\n" +
+    "Location: Kampala, Uganda\n" +
+    "Response Time: 24 hours maximum\n\n" +
+    "We are committed to protecting Ugandan artists and international copyright.\n\n" +
+    "Thank you for helping us keep NileSoniQ legal and artist-friendly.\n\n" +
+    "NileSoniQ Legal Team\n" +
+    "Kampala, Uganda"
   );
 
 }
