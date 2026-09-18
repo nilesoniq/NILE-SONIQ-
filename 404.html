@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>NileSoniq</title>
+  <script>
+    (function () {
+      var path = window.location.pathname;
+      var search = window.location.search;
+      var hash = window.location.hash;
+
+      sessionStorage.setItem(
+        "nilesoniq_redirect",
+        path + search + hash
+      );
+
+      window.location.replace("/");
+    })();
+  </script>
+</head>
+<body>
+  <p>Loading NileSoniq...</p>
+</body>
+</html>
