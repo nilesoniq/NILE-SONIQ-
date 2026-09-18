@@ -2729,6 +2729,8 @@ let countedPlaySongId = null;
 let playCountedForCurrentSong = false;
 let playListenSecondsForCurrentSong = 0;
 let lastPlayTimeSample = null;
+let playCountRequestInFlight = false;
+let playCountRequestSongId = null;
 const PLAY_COUNT_THRESHOLD_SECONDS = 30;
 
 
@@ -4871,6 +4873,8 @@ async function playSong(songId){
   lastPlayTimeSample = null;
 
   countedPlaySongId = null;
+  playCountRequestInFlight = false;
+  playCountRequestSongId = null;
 
 
   try{
@@ -5139,6 +5143,7 @@ function setupAudioEvents(){
       if(
         currentPlayingSong &&
         !playCountedForCurrentSong &&
+        !playCountRequestInFlight &&
         !player.paused
       ){
 
@@ -5164,7 +5169,11 @@ function setupAudioEvents(){
           const songId = currentPlayingSong.id;
           const counted = await recordSongPlay(songId);
 
-          if(counted){
+          if(
+            counted &&
+            currentPlayingSong &&
+            String(currentPlayingSong.id) === String(songId)
+          ){
             playCountedForCurrentSong = true;
             countedPlaySongId = songId;
             refreshSongDisplays();
@@ -5340,6 +5349,22 @@ async function recordSongPlay(songId){
   }
 
 
+  /*
+    Prevent multiple timeupdate events from submitting
+    the same play while the previous RPC is still pending.
+  */
+  if(
+    playCountRequestInFlight &&
+    playCountRequestSongId === songId
+  ){
+    return false;
+  }
+
+
+  playCountRequestInFlight = true;
+  playCountRequestSongId = songId;
+
+
   try{
 
     const {
@@ -5379,6 +5404,13 @@ async function recordSongPlay(songId){
     );
 
     return false;
+
+  }finally{
+
+    if(playCountRequestSongId === songId){
+      playCountRequestInFlight = false;
+      playCountRequestSongId = null;
+    }
 
   }
 
