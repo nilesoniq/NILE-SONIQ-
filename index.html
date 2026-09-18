@@ -1808,42 +1808,14 @@ Artist Login
 <div id="dashboardContent" class="hidden">
 
 <div class="stats-grid">
-
-<div class="stat-card">
-<span>Total Plays</span>
-<strong id="totalPlays">0</strong>
+<div class="stat-card"><span>Total Plays</span><strong id="totalPlays">0</strong></div>
+<div class="stat-card"><span>Estimated Earnings</span><strong id="totalEarnings">UGX 0</strong></div>
+<div class="stat-card"><span>Your Songs</span><strong id="totalSongs">0</strong></div>
 </div>
 
-<div class="stat-card">
-<span>Estimated Earnings</span>
-<strong id="totalEarnings">UGX 0</strong>
-</div>
-
-<div class="stat-card">
-<span>Your Songs</span>
-<strong id="totalSongs">0</strong>
-</div>
-
-</div>
-
-<div class="stat-card balance-card">
-
-<span>Available Balance</span>
-
-<strong id="availableBalance">
-UGX 0
-</strong>
-
-<p style="color:#777;font-size:12px;margin-top:8px;">
-Minimum withdrawal: UGX 10,000
-</p>
-
-<div class="dashboard-card boost-card">
-<h2>🚀 Boost Your Music</h2>
-<p style="color:#aaa;line-height:1.6;">Give one of your approved songs extra promotion on NileSoniq.</p>
-<div class="boost-actions"><button class="btn btn-orange" type="button" onclick="openBoostPage()">Boost a Song</button></div>
-</div>
-
+<div class="stats-grid" style="margin-top:16px;">
+<div class="stat-card balance-card"><span>Available Balance</span><strong id="availableBalance">UGX 0</strong><p style="color:#777;font-size:12px;margin-top:8px;">Your current earnings available for withdrawal. Minimum withdrawal: UGX 10,000</p></div>
+<div class="stat-card balance-card"><span>Amount Withdrawn</span><strong id="amountWithdrawn">UGX 0</strong><p style="color:#777;font-size:12px;margin-top:8px;">Total amount from completed withdrawals.</p></div>
 </div>
 
 <div class="dashboard-card">
@@ -2346,6 +2318,18 @@ class="dashboard-card hidden">
   For safety, this screen only stores the payout account settings locally in this browser. Actual deposits and automatic artist payouts require a Supabase Edge Function/payment provider so your secret API keys are never exposed to website visitors.
 </div>
 
+</div>
+
+<div id="platformWithdrawPanel" class="dashboard-card hidden" style="margin-top:18px;">
+<h3>Withdraw Platform Money</h3>
+<p style="color:#888;font-size:13px;line-height:1.5;margin-top:8px;">Send available platform funds through the secure PesaJet disbursement backend.</p>
+<div class="form-grid" style="margin-top:16px;">
+<div class="field"><label>Withdrawal Amount (UGX)</label><input id="platformWithdrawAmount" type="number" min="1000" step="100" placeholder="10000"></div>
+<div class="field"><label>Mobile Money Number</label><input id="platformWithdrawPhone" type="tel" inputmode="numeric" placeholder="e.g. 077xxxxxxx"></div>
+<div class="field"><label>Network</label><select id="platformWithdrawNetwork"><option value="MTN">MTN Mobile Money</option><option value="AIRTEL">Airtel Money</option></select></div>
+</div>
+<button id="platformWithdrawButton" class="btn btn-orange" onclick="withdrawPlatformMoney()">Withdraw Platform Money</button>
+<div id="platformWithdrawMessage" class="message" style="margin-top:15px;"></div>
 </div>
 
 <div id="adminManagementPanel"
@@ -3228,16 +3212,13 @@ async function updateUI(){
       await isCurrentUserAdmin();
 
 
-    if(isAdmin){
+    if(isCurrentUserSuperAdmin()){
 
       adminFooterLink.classList.remove("hidden");
 
       adminBadge.classList.remove("hidden");
 
-      adminBadge.textContent =
-        currentAdmin?.role === "super_admin"
-        ? "SUPER ADMIN"
-        : "ADMIN";
+      adminBadge.textContent = "SUPER ADMIN";
 
     }else{
 
@@ -3253,6 +3234,7 @@ async function updateUI(){
     await loadMySongs();
 
     await loadMyWithdrawals();
+      await updateAmountWithdrawn();
 
 
     if(isAdmin){
@@ -3382,11 +3364,11 @@ async function showPage(page){
     }
 
 
-    const isAdmin =
-      await isCurrentUserAdmin();
+    await isCurrentUserAdmin();
+    const isSuperAdmin = isCurrentUserSuperAdmin();
 
 
-    if(isAdmin){
+    if(isSuperAdmin){
 
       denied.classList.add("hidden");
 
@@ -3438,10 +3420,24 @@ function updateAdminTabs(){
     !isCurrentUserSuperAdmin()
   );
 
+  const walletTab=document.getElementById("adminTabWallet");
+  if(walletTab) walletTab.classList.toggle("hidden", !isCurrentUserSuperAdmin());
+
+  const walletPanel=document.getElementById("adminWalletPanel");
+  if(walletPanel && !isCurrentUserSuperAdmin()) walletPanel.classList.add("hidden");
+
+  const platformWithdrawPanel=document.getElementById("platformWithdrawPanel");
+  if(platformWithdrawPanel && !isCurrentUserSuperAdmin()) platformWithdrawPanel.classList.add("hidden");
+
 }
 
 
 async function showAdminTab(tab){
+
+  if(!isCurrentUserSuperAdmin()){
+    alert("Only the Super Admin can access the Admin Dashboard.");
+    return;
+  }
 
   const analyticsPanel = document.getElementById("adminAnalyticsPanel");
   const songsPanel = document.getElementById("adminSongsPanel");
@@ -3487,7 +3483,13 @@ async function showAdminTab(tab){
 
 
   if(tab === "wallet"){
+    if(!isCurrentUserSuperAdmin()){
+      alert("Only the Super Admin can access the Platform Wallet.");
+      return;
+    }
     walletPanel.classList.remove("hidden");
+    const platformWithdrawPanel=document.getElementById("platformWithdrawPanel");
+    if(platformWithdrawPanel) platformWithdrawPanel.classList.remove("hidden");
     walletTab.classList.add("active");
     loadPlatformWallet();
   }
@@ -6760,6 +6762,25 @@ function updateDashboardStats(
    WITHDRAWALS
 ========================================================= */
 
+async function updateAmountWithdrawn(withdrawals=null){
+  if(!currentUser) return;
+  try{
+    if(!withdrawals){
+      const {data,error}=await sb.from("withdrawal_requests").select("amount,status").eq("artist_id",currentUser.id);
+      if(error) throw error;
+      withdrawals=data||[];
+    }
+    const withdrawn=(withdrawals||[]).reduce((sum,w)=>{
+      const status=String(w.status||"").toLowerCase();
+      return sum + ((status === "paid" || status === "completed") ? Number(w.amount)||0 : 0);
+    },0);
+    const el=document.getElementById("amountWithdrawn");
+    if(el) el.textContent="UGX "+formatNumber(Math.floor(withdrawn));
+  }catch(error){
+    console.error("Amount withdrawn error:",error);
+  }
+}
+
 async function loadMyWithdrawals(){
 
   if(!currentUser){
@@ -6882,9 +6903,8 @@ async function loadMyWithdrawals(){
     }
 
 
-    await updateAvailableBalance(
-      withdrawals
-    );
+    await updateAvailableBalance(withdrawals);
+    await updateAmountWithdrawn(withdrawals);
 
 
   }catch(error){
@@ -6916,60 +6936,22 @@ async function loadMyWithdrawals(){
    BALANCE
 ========================================================= */
 
-async function updateAvailableBalance(){
-
-  if(!currentUser){
-    return;
-  }
-
-  const balanceElement =
-    document.getElementById(
-      "availableBalance"
-    );
-
-  if(!balanceElement){
-    return;
-  }
-
+async function updateAvailableBalance(withdrawals=null){
+  if(!currentUser) return;
   try{
-
-    const {
-      data:wallet,
-      error:walletError
-    } = await sb
-      .from("artist_wallets")
-      .select("balance")
-      .eq(
-        "user_id",
-        currentUser.id
-      )
-      .maybeSingle();
-
-    if(walletError){
-      throw walletError;
+    if(!withdrawals){
+      const {data,error}=await sb.from("withdrawal_requests").select("amount,status").eq("artist_id",currentUser.id);
+      if(error) throw error; withdrawals=data||[];
     }
-
-    const balance =
-      Number(
-        wallet?.balance || 0
-      );
-
-    balanceElement.textContent =
-      "UGX " +
-      formatNumber(
-        Math.floor(balance)
-      );
-
-  }catch(error){
-
-    console.error(
-      "Available balance error:",
-      error
-    );
-
-    balanceElement.textContent =
-      "UGX 0";
-  }
+    const {data:songs,error:songsError}=await sb.from("songs").select("plays,approved").eq("artist_id",currentUser.id);
+    if(songsError) throw songsError;
+    const approvedPlays=(songs||[]).filter(s=>s.approved===true).reduce((sum,s)=>sum+Number(s.plays||0),0);
+    const currentBalance=approvedPlays*EARNINGS_PER_PLAY;
+    const reserved=(withdrawals||[]).reduce((sum,w)=>{const st=String(w.status||"").toLowerCase();return sum+((st==="pending"||st==="processing")?(Number(w.amount)||0):0);},0);
+    const available=Math.max(0,currentBalance-reserved);
+    const a=document.getElementById("availableBalance");
+    if(a)a.textContent="UGX "+formatNumber(Math.floor(available));
+  }catch(error){console.error("Balance error:",error);}
 }
 
 async function requestWithdrawal(){
@@ -7663,12 +7645,14 @@ async function loadPlatformWallet(){
       throw new Error("Invalid balance returned by get_platform_completed_total.");
     }
 
-    balanceElement.textContent = "UGX " + formatNumber(Math.floor(totalAmount));
+    const balanceElement=document.getElementById("platformWalletBalance");
+    if(balanceElement) balanceElement.textContent = "UGX " + formatNumber(Math.floor(totalAmount));
 
     console.log("Platform completed deposits total:", totalAmount);
   }catch(error){
     console.error("Platform completed deposits error:",error);
-    balanceElement.textContent="Balance unavailable";
+    const balanceElement=document.getElementById("platformWalletBalance");
+    if(balanceElement) balanceElement.textContent="Balance unavailable";
 
     const message=document.getElementById("platformWalletMessage");
     if(message){
@@ -7790,6 +7774,15 @@ async function startPlatformDeposit(){
       button.textContent="Deposit Money";
     }
   }
+}
+
+async function withdrawPlatformMoney(){
+ if(!currentUser||!await isCurrentUserSuperAdmin()){showMessage("platformWithdrawMessage","Only the Super Admin can withdraw platform money.","error");return;}
+ const amount=Number(document.getElementById("platformWithdrawAmount")?.value||0), phone=(document.getElementById("platformWithdrawPhone")?.value||"").trim(), network=(document.getElementById("platformWithdrawNetwork")?.value||"MTN").trim(), button=document.getElementById("platformWithdrawButton");
+ if(amount<1000){showMessage("platformWithdrawMessage","Enter an amount of at least UGX 1,000.","error");return;}
+ if(!/^\+?256\d{9}$|^0\d{9}$/.test(phone.replace(/\s+/g,""))){showMessage("platformWithdrawMessage","Enter a valid Ugandan mobile-money number.","error");return;}
+ if(button){button.disabled=true;button.textContent="Sending withdrawal...";}
+ try{const {data,error}=await sb.functions.invoke("pesajet-disbursement",{body:{phone_number:phone,amount,network,type:"platform_withdrawal"}});if(error)throw error;if(!data)throw new Error("The payment backend returned an empty response.");if(data.success===false)throw new Error(data.message||data.error||"PesaJet rejected the withdrawal request.");const r=data.result||data,tx=r.transactionId||r.transaction_id||data.transactionId||data.transaction_id,st=String(r.status||data.status||"REQUESTED").toUpperCase();showMessage("platformWithdrawMessage",`Platform withdrawal request submitted. Status: ${st}.${tx?` Transaction ID: ${tx}`:""}`,"success");document.getElementById("platformWithdrawAmount").value="";}catch(e){console.error("Platform withdrawal error:",e);showMessage("platformWithdrawMessage",e.message||"Could not process platform withdrawal.","error");}finally{if(button){button.disabled=false;button.textContent="Withdraw Platform Money";}}
 }
 
 /* =========================================================
