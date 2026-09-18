@@ -2727,6 +2727,9 @@ let currentAdmin = null;
 
 let countedPlaySongId = null;
 let playCountedForCurrentSong = false;
+let playListenSecondsForCurrentSong = 0;
+let lastPlayTimeSample = null;
+const PLAY_COUNT_THRESHOLD_SECONDS = 30;
 
 
 /* =========================================================
@@ -4864,6 +4867,8 @@ async function playSong(songId){
 
 
   playCountedForCurrentSong = false;
+  playListenSecondsForCurrentSong = 0;
+  lastPlayTimeSample = null;
 
   countedPlaySongId = null;
 
@@ -5075,9 +5080,7 @@ function setupAudioEvents(){
       "volumeBar"
     );
 
-
   player.volume = 1;
-
 
   player.addEventListener(
     "loadedmetadata",
@@ -5100,10 +5103,9 @@ function setupAudioEvents(){
     }
   );
 
-
   player.addEventListener(
     "timeupdate",
-    () => {
+    async () => {
 
       progress.max =
         Number.isFinite(
@@ -5114,7 +5116,6 @@ function setupAudioEvents(){
 
       progress.value =
         player.currentTime || 0;
-
 
       document.getElementById(
         "currentTime"
@@ -5130,9 +5131,51 @@ function setupAudioEvents(){
           player.duration
         );
 
+      /*
+        Anti-fake-play rule: a play is only eligible after
+        30 seconds of REAL playback time. Seeking forward does
+        not count because large/negative jumps are ignored.
+      */
+      if(
+        currentPlayingSong &&
+        !playCountedForCurrentSong &&
+        !player.paused
+      ){
+
+        const now = player.currentTime || 0;
+
+        if(lastPlayTimeSample !== null){
+
+          const delta = now - lastPlayTimeSample;
+
+          if(delta > 0 && delta <= 5){
+            playListenSecondsForCurrentSong += delta;
+          }
+
+        }
+
+        lastPlayTimeSample = now;
+
+        if(
+          playListenSecondsForCurrentSong >=
+          PLAY_COUNT_THRESHOLD_SECONDS
+        ){
+
+          const songId = currentPlayingSong.id;
+          const counted = await recordSongPlay(songId);
+
+          if(counted){
+            playCountedForCurrentSong = true;
+            countedPlaySongId = songId;
+            refreshSongDisplays();
+          }
+
+        }
+
+      }
+
     }
   );
-
 
   progress.addEventListener(
     "input",
@@ -5145,7 +5188,6 @@ function setupAudioEvents(){
 
     }
   );
-
 
   volume.addEventListener(
     "input",
@@ -5161,59 +5203,43 @@ function setupAudioEvents(){
     }
   );
 
-
   player.addEventListener(
     "play",
-    async () => {
+    () => {
 
       updatePlayerButton();
 
-      if(
-        currentPlayingSong &&
-        !playCountedForCurrentSong
-      ){
-
-        await recordSongPlay(
-          currentPlayingSong.id
-        );
-
-        playCountedForCurrentSong =
-          true;
-
-        countedPlaySongId =
-          currentPlayingSong.id;
-
-      }
+      lastPlayTimeSample =
+        player.currentTime || 0;
 
       refreshSongDisplays();
 
     }
   );
-
 
   player.addEventListener(
     "pause",
     () => {
 
       updatePlayerButton();
+      lastPlayTimeSample = null;
 
       refreshSongDisplays();
 
     }
   );
 
-
   player.addEventListener(
     "ended",
     () => {
 
       updatePlayerButton();
+      lastPlayTimeSample = null;
 
       nextSong();
 
     }
   );
-
 
   player.addEventListener(
     "error",
@@ -5300,7 +5326,7 @@ function formatTime(seconds){
 async function recordSongPlay(songId){
 
   if(!songId){
-    return;
+    return false;
   }
 
 
@@ -5309,7 +5335,7 @@ async function recordSongPlay(songId){
     playCountedForCurrentSong
   ){
 
-    return;
+    return true;
 
   }
 
@@ -5332,12 +5358,16 @@ async function recordSongPlay(songId){
         songId
       );
 
+      return true;
+
     }else{
 
       console.error(
         "Play RPC error:",
         error
       );
+
+      return false;
 
     }
 
@@ -5347,6 +5377,8 @@ async function recordSongPlay(songId){
       "Play RPC error:",
       error
     );
+
+    return false;
 
   }
 
