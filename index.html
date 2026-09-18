@@ -1811,10 +1811,11 @@ Artist Login
 <div class="stat-card"><span>Total Plays</span><strong id="totalPlays">0</strong></div>
 <div class="stat-card"><span>Estimated Earnings</span><strong id="totalEarnings">UGX 0</strong></div>
 <div class="stat-card"><span>Your Songs</span><strong id="totalSongs">0</strong></div>
+
 </div>
 
 <div class="stats-grid" style="margin-top:16px;">
-<div class="stat-card balance-card"><span>Available Balance</span><strong id="availableBalance">UGX 0</strong><p style="color:#777;font-size:12px;margin-top:8px;">Your current earnings available for withdrawal. Minimum withdrawal: UGX 10,000</p></div>
+<div class="stat-card balance-card"><span>Available Balance</span><strong id="availableBalance">UGX 0</strong><p style="color:#777;font-size:12px;margin-top:8px;">Amount currently available for withdrawal. Minimum withdrawal: UGX 10,000</p></div>
 <div class="stat-card balance-card"><span>Amount Withdrawn</span><strong id="amountWithdrawn">UGX 0</strong><p style="color:#777;font-size:12px;margin-top:8px;">Total amount from completed withdrawals.</p></div>
 </div>
 
@@ -2320,7 +2321,7 @@ class="dashboard-card hidden">
 
 </div>
 
-<div id="platformWithdrawPanel" class="dashboard-card hidden" style="margin-top:18px;">
+<div id="platformWithdrawPanel" class="dashboard-card" style="margin-top:18px;">
 <h3>Withdraw Platform Money</h3>
 <p style="color:#888;font-size:13px;line-height:1.5;margin-top:8px;">Send available platform funds through the secure PesaJet disbursement backend.</p>
 <div class="form-grid" style="margin-top:16px;">
@@ -3212,13 +3213,16 @@ async function updateUI(){
       await isCurrentUserAdmin();
 
 
-    if(isCurrentUserSuperAdmin()){
+    if(isAdmin){
 
       adminFooterLink.classList.remove("hidden");
 
       adminBadge.classList.remove("hidden");
 
-      adminBadge.textContent = "SUPER ADMIN";
+      adminBadge.textContent =
+        currentAdmin?.role === "super_admin"
+        ? "SUPER ADMIN"
+        : "ADMIN";
 
     }else{
 
@@ -3364,11 +3368,11 @@ async function showPage(page){
     }
 
 
-    await isCurrentUserAdmin();
-    const isSuperAdmin = isCurrentUserSuperAdmin();
+    const isAdmin =
+      await isCurrentUserAdmin();
 
 
-    if(isSuperAdmin){
+    if(isAdmin){
 
       denied.classList.add("hidden");
 
@@ -3376,7 +3380,7 @@ async function showPage(page){
 
       updateAdminTabs();
 
-      await showAdminTab("analytics");
+      await showAdminTab(isCurrentUserSuperAdmin() ? "analytics" : "songs");
 
     }else{
 
@@ -3406,38 +3410,20 @@ function toggleMenu(){
 
 function updateAdminTabs(){
 
-  const tab =
-    document.getElementById(
-      "adminTabAdmins"
-    );
+  const superAdmin = isCurrentUserSuperAdmin();
+  const analyticsTab = document.getElementById("adminTabAnalytics");
+  const adminTab = document.getElementById("adminTabAdmins");
+  const walletTab = document.getElementById("adminTabWallet");
 
-  if(!tab){
-    return;
-  }
-
-  tab.classList.toggle(
-    "hidden",
-    !isCurrentUserSuperAdmin()
-  );
-
-  const walletTab=document.getElementById("adminTabWallet");
-  if(walletTab) walletTab.classList.toggle("hidden", !isCurrentUserSuperAdmin());
-
-  const walletPanel=document.getElementById("adminWalletPanel");
-  if(walletPanel && !isCurrentUserSuperAdmin()) walletPanel.classList.add("hidden");
-
-  const platformWithdrawPanel=document.getElementById("platformWithdrawPanel");
-  if(platformWithdrawPanel && !isCurrentUserSuperAdmin()) platformWithdrawPanel.classList.add("hidden");
+  // Regular admins may manage artist songs and artist withdrawals only.
+  if(analyticsTab) analyticsTab.classList.toggle("hidden", !superAdmin);
+  if(adminTab) adminTab.classList.toggle("hidden", !superAdmin);
+  if(walletTab) walletTab.classList.toggle("hidden", !superAdmin);
 
 }
 
 
 async function showAdminTab(tab){
-
-  if(!isCurrentUserSuperAdmin()){
-    alert("Only the Super Admin can access the Admin Dashboard.");
-    return;
-  }
 
   const analyticsPanel = document.getElementById("adminAnalyticsPanel");
   const songsPanel = document.getElementById("adminSongsPanel");
@@ -3455,6 +3441,10 @@ async function showAdminTab(tab){
   [analyticsTab,songTab,withdrawalTab,walletTab,adminTab].forEach(el=>{if(el)el.classList.remove("active")});
 
   if(tab === "analytics"){
+    if(!isCurrentUserSuperAdmin()){
+      await showAdminTab("songs");
+      return;
+    }
     analyticsPanel.classList.remove("hidden");
     analyticsTab.classList.add("active");
     await loadAdminAnalytics();
@@ -3488,8 +3478,6 @@ async function showAdminTab(tab){
       return;
     }
     walletPanel.classList.remove("hidden");
-    const platformWithdrawPanel=document.getElementById("platformWithdrawPanel");
-    if(platformWithdrawPanel) platformWithdrawPanel.classList.remove("hidden");
     walletTab.classList.add("active");
     loadPlatformWallet();
   }
