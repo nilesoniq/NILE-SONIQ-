@@ -2676,10 +2676,27 @@ const SUPABASE_URL =
 const SUPABASE_PUBLISHABLE_KEY =
 "sb_publishable_MJYDrg3qcgynvoRTWHQvAA_qt7nRTDw";
 
+/*
+  AUTH REDIRECT
+  Always send Supabase email-confirmation callbacks back to the
+  website the artist is currently using (e.g. https://nilesoniq.com/).
+  The same URL must also be added to Supabase Dashboard ->
+  Authentication -> URL Configuration -> Redirect URLs.
+*/
+const AUTH_REDIRECT_URL =
+  `${window.location.origin}/`;
+
 const sb =
 window.supabase.createClient(
   SUPABASE_URL,
-  SUPABASE_PUBLISHABLE_KEY
+  SUPABASE_PUBLISHABLE_KEY,
+  {
+    auth:{
+      persistSession:true,
+      autoRefreshToken:true,
+      detectSessionInUrl:true
+    }
+  }
 );
 
 
@@ -3754,7 +3771,13 @@ async function submitAuth(){
         error
       } = await sb.auth.signUp({
         email,
-        password
+        password,
+        options:{
+          emailRedirectTo:AUTH_REDIRECT_URL,
+          data:{
+            artist_name:artistName
+          }
+        }
       });
 
 
@@ -3794,7 +3817,9 @@ async function submitAuth(){
 
       showMessage(
         "authMessage",
-        "Account created. Check your email if confirmation is required.",
+        data.session
+          ? "Account created successfully. You can now use NileSoniq."
+          : "Account created. Please check your email and click the confirmation link. You will be returned to NileSoniq.",
         "success"
       );
 
