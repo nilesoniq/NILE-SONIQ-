@@ -1833,9 +1833,9 @@ Artist Login
 
 <div class="stat-card balance-card">
 
-<span>Available Balance</span>
+<span>Amount Withdrawn</span>
 
-<strong id="availableBalance">
+<strong id="amountWithdrawn">
 UGX 0
 </strong>
 
@@ -3464,14 +3464,22 @@ function updateAdminTabs(){
       "adminTabAdmins"
     );
 
-  if(!tab){
-    return;
+  if(tab){
+    tab.classList.toggle(
+      "hidden",
+      !isCurrentUserSuperAdmin()
+    );
   }
 
-  tab.classList.toggle(
-    "hidden",
-    !isCurrentUserSuperAdmin()
-  );
+  const walletTab =
+    document.getElementById("adminTabWallet");
+
+  if(walletTab){
+    walletTab.classList.toggle(
+      "hidden",
+      !isCurrentUserSuperAdmin()
+    );
+  }
 
 }
 
@@ -3522,9 +3530,12 @@ async function showAdminTab(tab){
 
 
   if(tab === "wallet"){
+    if(!isCurrentUserSuperAdmin()){
+      return;
+    }
     walletPanel.classList.remove("hidden");
     walletTab.classList.add("active");
-    loadPlatformWallet();
+    await loadPlatformWallet();
   }
 
 
@@ -6957,8 +6968,8 @@ async function updateAvailableBalance(withdrawals=null){
     return;
   }
 
-  const balanceElement =
-    document.getElementById("availableBalance");
+  const withdrawnElement =
+    document.getElementById("amountWithdrawn");
 
   const currentBalanceElement =
     document.getElementById("currentBalance");
@@ -7000,26 +7011,23 @@ async function updateAvailableBalance(withdrawals=null){
     const currentBalance =
       approvedPlayCount * EARNINGS_PER_PLAY;
 
-    const reservedWithdrawals = (withdrawalRows || []).reduce((total,item)=>{
+    const amountWithdrawn = (withdrawalRows || []).reduce((total,item)=>{
       const status=String(item.status || "pending").toLowerCase();
-      if(["pending","processing","paid"].includes(status)){
+      if(status === "paid"){
         return total + Number(item.amount || 0);
       }
       return total;
     },0);
-
-    const availableBalance = Math.max(
-      0,
-      currentBalance - reservedWithdrawals
-    );
 
     if(currentBalanceElement){
       currentBalanceElement.textContent =
         "UGX " + formatNumber(Math.floor(currentBalance));
     }
 
-    balanceElement.textContent =
-      "UGX " + formatNumber(Math.floor(availableBalance));
+    if(withdrawnElement){
+      withdrawnElement.textContent =
+        "UGX " + formatNumber(Math.floor(amountWithdrawn));
+    }
 
   }catch(error){
 
@@ -7029,7 +7037,9 @@ async function updateAvailableBalance(withdrawals=null){
       currentBalanceElement.textContent = "UGX 0";
     }
 
-    balanceElement.textContent = "UGX 0";
+    if(withdrawnElement){
+      withdrawnElement.textContent = "UGX 0";
+    }
   }
 }
 
