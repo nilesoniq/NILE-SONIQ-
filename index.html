@@ -3414,11 +3414,13 @@ function updateAdminTabs(){
   const analyticsTab = document.getElementById("adminTabAnalytics");
   const adminTab = document.getElementById("adminTabAdmins");
   const walletTab = document.getElementById("adminTabWallet");
+  const platformWithdrawPanel = document.getElementById("platformWithdrawPanel");
 
   // Regular admins may manage artist songs and artist withdrawals only.
   if(analyticsTab) analyticsTab.classList.toggle("hidden", !superAdmin);
   if(adminTab) adminTab.classList.toggle("hidden", !superAdmin);
   if(walletTab) walletTab.classList.toggle("hidden", !superAdmin);
+  if(platformWithdrawPanel) platformWithdrawPanel.classList.toggle("hidden", !superAdmin);
 
 }
 
