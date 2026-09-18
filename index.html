@@ -3383,9 +3383,15 @@ async function showPage(page, updateUrl=true){
   if(page === "songs"){
     const container=document.getElementById("songsPageContainer");
     if(container){
-      if(!currentSongs || !currentSongs.length) await loadSongs();
-      const source=document.getElementById("songsContainer");
-      container.innerHTML=source ? source.innerHTML : "<div class=\"empty\">No songs available.</div>";
+      if(!currentSongs || !currentSongs.length){
+        await loadSongs();
+      }
+      renderSongCards(
+        currentSongs || [],
+        "songsPageContainer",
+        "No approved songs yet",
+        "New music will appear here after approval."
+      );
     }
   }
 
@@ -8852,7 +8858,7 @@ window.addEventListener("popstate", async () => {
 });
 
 document.addEventListener("DOMContentLoaded", async () => {
-  if(isShortPublicRoute()) await handleShortPublicRoute();
+  /* Route handling is performed by the main startup handler above. */
 });
 
 </script>
