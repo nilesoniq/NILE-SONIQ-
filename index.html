@@ -1820,6 +1820,11 @@ Artist Login
 </div>
 
 <div class="stat-card">
+<span>Current Balance</span>
+<strong id="currentBalance">UGX 0</strong>
+</div>
+
+<div class="stat-card">
 <span>Your Songs</span>
 <strong id="totalSongs">0</strong>
 </div>
@@ -2341,6 +2346,36 @@ class="dashboard-card hidden">
 </div>
 
 <div id="platformWalletMessage" class="message" style="margin-top:15px;"></div>
+
+<div class="dashboard-card" style="margin-top:18px;">
+  <h3>Withdraw Platform Money</h3>
+  <p style="color:#888;font-size:13px;line-height:1.5;margin-top:8px;">
+    Send available platform funds to the platform mobile-money account through the secure PesaJet disbursement backend.
+  </p>
+
+  <div class="form-grid" style="margin-top:16px;">
+    <div class="field">
+      <label>Withdrawal Amount (UGX)</label>
+      <input id="platformWithdrawAmount" type="number" min="1000" step="100" placeholder="10000">
+    </div>
+    <div class="field">
+      <label>Mobile Money Number</label>
+      <input id="platformWithdrawPhone" type="tel" inputmode="numeric" placeholder="e.g. 077xxxxxxx">
+    </div>
+    <div class="field">
+      <label>Network</label>
+      <select id="platformWithdrawNetwork">
+        <option value="MTN">MTN Mobile Money</option>
+        <option value="AIRTEL">Airtel Money</option>
+      </select>
+    </div>
+  </div>
+
+  <button id="platformWithdrawButton" class="btn btn-orange" onclick="withdrawPlatformMoney()">
+    Withdraw Platform Money
+  </button>
+  <div id="platformWithdrawMessage" class="message" style="margin-top:15px;"></div>
+</div>
 
 <div class="wallet-note">
   For safety, this screen only stores the payout account settings locally in this browser. Actual deposits and automatic artist payouts require a Supabase Edge Function/payment provider so your secret API keys are never exposed to website visitors.
@@ -6916,16 +6951,17 @@ async function loadMyWithdrawals(){
    BALANCE
 ========================================================= */
 
-async function updateAvailableBalance(){
+async function updateAvailableBalance(withdrawals=null){
 
   if(!currentUser){
     return;
   }
 
   const balanceElement =
-    document.getElementById(
-      "availableBalance"
-    );
+    document.getElementById("availableBalance");
+
+  const currentBalanceElement =
+    document.getElementById("currentBalance");
 
   if(!balanceElement){
     return;
@@ -6933,42 +6969,67 @@ async function updateAvailableBalance(){
 
   try{
 
-    const {
-      data:wallet,
-      error:walletError
-    } = await sb
-      .from("artist_wallets")
-      .select("balance")
-      .eq(
-        "user_id",
-        currentUser.id
-      )
-      .maybeSingle();
+    let withdrawalRows = withdrawals;
 
-    if(walletError){
-      throw walletError;
+    if(!Array.isArray(withdrawalRows)){
+      const { data, error } = await sb
+        .from("withdrawal_requests")
+        .select("amount,status")
+        .eq("artist_id",currentUser.id);
+
+      if(error){
+        throw error;
+      }
+
+      withdrawalRows = data || [];
     }
 
-    const balance =
-      Number(
-        wallet?.balance || 0
-      );
+    const { data:songs, error:songsError } = await sb
+      .from("songs")
+      .select("plays,approved")
+      .eq("artist_id",currentUser.id);
+
+    if(songsError){
+      throw songsError;
+    }
+
+    const approvedPlayCount = (songs || []).reduce((total,song)=>{
+      return total + (song.approved === true ? Number(song.plays || 0) : 0);
+    },0);
+
+    const currentBalance =
+      approvedPlayCount * EARNINGS_PER_PLAY;
+
+    const reservedWithdrawals = (withdrawalRows || []).reduce((total,item)=>{
+      const status=String(item.status || "pending").toLowerCase();
+      if(["pending","processing","paid"].includes(status)){
+        return total + Number(item.amount || 0);
+      }
+      return total;
+    },0);
+
+    const availableBalance = Math.max(
+      0,
+      currentBalance - reservedWithdrawals
+    );
+
+    if(currentBalanceElement){
+      currentBalanceElement.textContent =
+        "UGX " + formatNumber(Math.floor(currentBalance));
+    }
 
     balanceElement.textContent =
-      "UGX " +
-      formatNumber(
-        Math.floor(balance)
-      );
+      "UGX " + formatNumber(Math.floor(availableBalance));
 
   }catch(error){
 
-    console.error(
-      "Available balance error:",
-      error
-    );
+    console.error("Available balance error:",error);
 
-    balanceElement.textContent =
-      "UGX 0";
+    if(currentBalanceElement){
+      currentBalanceElement.textContent = "UGX 0";
+    }
+
+    balanceElement.textContent = "UGX 0";
   }
 }
 
@@ -7066,26 +7127,36 @@ async function requestWithdrawal(){
 
   try{
 
-    const {
-      data:wallet,
-      error:walletError
-    } = await sb
-      .from("artist_wallets")
-      .select("balance")
-      .eq(
-        "user_id",
-        currentUser.id
-      )
-      .maybeSingle();
+    const { data:artistSongs, error:songsError } = await sb
+      .from("songs")
+      .select("plays,approved")
+      .eq("artist_id",currentUser.id);
 
-    if(walletError){
-      throw walletError;
+    if(songsError){
+      throw songsError;
     }
 
-    const available =
-      Number(
-        wallet?.balance || 0
-      );
+    const totalEarnings = (artistSongs || []).reduce((total,song)=>{
+      return total + (song.approved === true ? Number(song.plays || 0) * EARNINGS_PER_PLAY : 0);
+    },0);
+
+    const { data:existingWithdrawals, error:withdrawalsError } = await sb
+      .from("withdrawal_requests")
+      .select("amount,status")
+      .eq("artist_id",currentUser.id);
+
+    if(withdrawalsError){
+      throw withdrawalsError;
+    }
+
+    const reserved = (existingWithdrawals || []).reduce((total,item)=>{
+      const status=String(item.status || "pending").toLowerCase();
+      return ["pending","processing","paid"].includes(status)
+        ? total + Number(item.amount || 0)
+        : total;
+    },0);
+
+    const available = Math.max(0,totalEarnings-reserved);
 
     if(amount > available){
 
@@ -7788,6 +7859,90 @@ async function startPlatformDeposit(){
     if(button){
       button.disabled=false;
       button.textContent="Deposit Money";
+    }
+  }
+}
+
+async function withdrawPlatformMoney(){
+  if(!currentUser || !await isCurrentUserAdmin()){
+    showMessage("platformWithdrawMessage","You are not authorized to withdraw platform money.","error");
+    return;
+  }
+
+  const amount=Number(document.getElementById("platformWithdrawAmount")?.value || 0);
+  const phone=(document.getElementById("platformWithdrawPhone")?.value || "").trim();
+  const network=(document.getElementById("platformWithdrawNetwork")?.value || "MTN").trim();
+  const button=document.getElementById("platformWithdrawButton");
+
+  if(!amount || amount < 1000){
+    showMessage("platformWithdrawMessage","Enter a platform withdrawal amount of at least UGX 1,000.","error");
+    return;
+  }
+
+  if(!/^\+?256\d{9}$|^0\d{9}$/.test(phone.replace(/\s+/g,""))){
+    showMessage("platformWithdrawMessage","Enter a valid Ugandan mobile-money number.","error");
+    return;
+  }
+
+  if(!window.supabase || !sb){
+    showMessage("platformWithdrawMessage","Supabase is not available. Please refresh the page and try again.","error");
+    return;
+  }
+
+  if(button){
+    button.disabled=true;
+    button.textContent="Sending withdrawal...";
+  }
+
+  try{
+    const { data, error } = await sb.functions.invoke("pesajet-disbursement",{
+      body:{
+        phone_number:phone,
+        amount:amount,
+        network:network,
+        type:"platform_withdrawal"
+      }
+    });
+
+    if(error){
+      let detail=error.message || "The payment backend returned an error.";
+      try{
+        if(error.context){
+          const responseBody=await error.context.json();
+          detail=responseBody?.error || responseBody?.message || detail;
+        }
+      }catch(_){}
+      throw new Error(detail);
+    }
+
+    if(!data){
+      throw new Error("The payment backend returned an empty response.");
+    }
+
+    if(data.success === false){
+      throw new Error(data.message || data.error || "PesaJet rejected the withdrawal request.");
+    }
+
+    const result=data.result || data;
+    const transactionId=result.transactionId || result.transaction_id || data.transactionId || data.transaction_id;
+    const status=String(result.status || data.status || "REQUESTED").toUpperCase();
+    const txText=transactionId ? ` Transaction ID: ${transactionId}` : "";
+
+    showMessage(
+      "platformWithdrawMessage",
+      `Platform withdrawal request submitted. Status: ${status}.${txText}`,
+      "success"
+    );
+
+    const amountInput=document.getElementById("platformWithdrawAmount");
+    if(amountInput) amountInput.value="";
+  }catch(error){
+    console.error("Platform withdrawal error:",error);
+    showMessage("platformWithdrawMessage",error.message || "Could not process platform withdrawal.","error");
+  }finally{
+    if(button){
+      button.disabled=false;
+      button.textContent="Withdraw Platform Money";
     }
   }
 }
