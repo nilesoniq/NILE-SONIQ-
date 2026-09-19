@@ -1,28 +1,239 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 
+  <!-- Main public pages -->
   <url>
     <loc>https://nilesoniq.com/</loc>
-    <changefreq>daily</changefreq>
-    <priority>1.0</priority>
   </url>
 
   <url>
     <loc>https://nilesoniq.com/artists</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
   </url>
 
   <url>
     <loc>https://nilesoniq.com/songs</loc>
-    <changefreq>daily</changefreq>
-    <priority>0.9</priority>
   </url>
 
   <url>
     <loc>https://nilesoniq.com/about</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.5</priority>
+  </url>
+
+  <!-- Artist pages -->
+  <url>
+    <loc>https://nilesoniq.com/artist/heavenz-man</loc>
+  </url>
+
+  <url>
+    <loc>https://nilesoniq.com/artist/vanovino</loc>
+  </url>
+
+  <url>
+    <loc>https://nilesoniq.com/artist/rolling-snake</loc>
+  </url>
+
+  <url>
+    <loc>https://nilesoniq.com/artist/dexy-giva</loc>
+  </url>
+
+  <url>
+    <loc>https://nilesoniq.com/artist/thotho-feiva</loc>
+  </url>
+
+  <url>
+    <loc>https://nilesoniq.com/artist/kaga-boy</loc>
+  </url>
+
+  <url>
+    <loc>https://nilesoniq.com/artist/new-kally</loc>
+  </url>
+
+  <url>
+    <loc>https://nilesoniq.com/artist/anko-vsdi</loc>
+  </url>
+
+  <url>
+    <loc>https://nilesoniq.com/artist/swagg-dee</loc>
+  </url>
+
+  <url>
+    <loc>https://nilesoniq.com/artist/smart-eddie</loc>
+  </url>
+
+  <url>
+    <loc>https://nilesoniq.com/artist/d-urban-shatta</loc>
+  </url>
+
+  <url>
+    <loc>https://nilesoniq.com/artist/rappa-blutit</loc>
+  </url>
+
+  <!-- Approved song pages -->
+  <url>
+    <loc>https://nilesoniq.com/song/kucha</loc>
+  </url>
+
+  <url>
+    <loc>https://nilesoniq.com/song/inside</loc>
+  </url>
+
+  <url>
+    <loc>https://nilesoniq.com/song/fever</loc>
+  </url>
+
+  <url>
+    <loc>https://nilesoniq.com/song/abila</loc>
+  </url>
+
+  <url>
+    <loc>https://nilesoniq.com/song/akelle</loc>
+  </url>
+
+  <url>
+    <loc>https://nilesoniq.com/song/wac-ira</loc>
+  </url>
+
+  <url>
+    <loc>https://nilesoniq.com/song/yii-kuda</loc>
+  </url>
+
+  <url>
+    <loc>https://nilesoniq.com/song/don-t-give-up</loc>
+  </url>
+
+  <url>
+    <loc>https://nilesoniq.com/song/don-t-go</loc>
+  </url>
+
+  <url>
+    <loc>https://nilesoniq.com/song/pi-mar-peri</loc>
+  </url>
+
+  <url>
+    <loc>https://nilesoniq.com/song/ay-ikona</loc>
+  </url>
+
+  <url>
+    <loc>https://nilesoniq.com/song/nok-nok</loc>
+  </url>
+
+  <url>
+    <loc>https://nilesoniq.com/song/paidha</loc>
+  </url>
+
+  <url>
+    <loc>https://nilesoniq.com/song/adwongu</loc>
+  </url>
+
+  <url>
+    <loc>https://nilesoniq.com/song/pokolembe</loc>
+  </url>
+
+  <url>
+    <loc>https://nilesoniq.com/song/kwona</loc>
+  </url>
+
+  <url>
+    <loc>https://nilesoniq.com/song/lega</loc>
+  </url>
+
+  <url>
+    <loc>https://nilesoniq.com/song/kwir-ni-phiona</loc>
+  </url>
+
+  <url>
+    <loc>https://nilesoniq.com/song/you-are-the-one</loc>
+  </url>
+
+  <url>
+    <loc>https://nilesoniq.com/song/poi-pira</loc>
+  </url>
+
+  <url>
+    <loc>https://nilesoniq.com/song/uda</loc>
+  </url>
+
+  <url>
+    <loc>https://nilesoniq.com/song/mutima</loc>
+  </url>
+
+  <url>
+    <loc>https://nilesoniq.com/song/sadamsa</loc>
+  </url>
+
+  <url>
+    <loc>https://nilesoniq.com/song/oroma</loc>
+  </url>
+
+  <url>
+    <loc>https://nilesoniq.com/song/mer</loc>
+  </url>
+
+  <url>
+    <loc>https://nilesoniq.com/song/lith-icwinya-remix</loc>
+  </url>
+
+  <url>
+    <loc>https://nilesoniq.com/song/happy-birthday-day-calvin-felix</loc>
+  </url>
+
+  <url>
+    <loc>https://nilesoniq.com/song/kakira</loc>
+  </url>
+
+  <url>
+    <loc>https://nilesoniq.com/song/banana</loc>
+  </url>
+
+  <url>
+    <loc>https://nilesoniq.com/song/efagada</loc>
+  </url>
+
+  <url>
+    <loc>https://nilesoniq.com/song/manyen</loc>
+  </url>
+
+  <url>
+    <loc>https://nilesoniq.com/song/bayuda</loc>
+  </url>
+
+  <url>
+    <loc>https://nilesoniq.com/song/ex-friend</loc>
+  </url>
+
+  <url>
+    <loc>https://nilesoniq.com/song/jubedu-wecu</loc>
+  </url>
+
+  <url>
+    <loc>https://nilesoniq.com/song/kur-makeca</loc>
+  </url>
+
+  <url>
+    <loc>https://nilesoniq.com/song/medicine</loc>
+  </url>
+
+  <url>
+    <loc>https://nilesoniq.com/song/adunde</loc>
+  </url>
+
+  <url>
+    <loc>https://nilesoniq.com/song/ateri</loc>
+  </url>
+
+  <url>
+    <loc>https://nilesoniq.com/song/honda</loc>
+  </url>
+
+  <url>
+    <loc>https://nilesoniq.com/song/sukutu-ft-rappa-blutit</loc>
+  </url>
+
+  <url>
+    <loc>https://nilesoniq.com/song/kelele</loc>
+  </url>
+
+  <url>
+    <loc>https://nilesoniq.com/song/sugar</loc>
   </url>
 
 </urlset>
