@@ -2074,6 +2074,109 @@ accept="image/*">
 
 </div>
 
+<div class="field">
+
+<label>About This Song</label>
+
+<textarea
+id="songDescription"
+rows="4"
+placeholder="Tell listeners about this song, its story, inspiration, or message"></textarea>
+
+</div>
+
+<div class="field">
+
+<label>Genre</label>
+
+<input
+id="songGenre"
+type="text"
+placeholder="e.g. Afrobeats, Hip-Hop, Gospel">
+
+</div>
+
+<div class="field">
+
+<label>Release Date</label>
+
+<input
+id="songReleaseDate"
+type="date">
+
+</div>
+
+<div class="field">
+
+<label>Producer</label>
+
+<input
+id="songProducer"
+type="text"
+placeholder="Producer name">
+
+</div>
+
+<div class="field">
+
+<label>Featured Artists</label>
+
+<input
+id="songFeaturedArtists"
+type="text"
+placeholder="Featured artist(s), if any">
+
+</div>
+
+<div class="field">
+
+<label>Record Label</label>
+
+<input
+id="songLabel"
+type="text"
+placeholder="Record label, if any">
+
+</div>
+
+<div class="field">
+
+<label>Location</label>
+
+<input
+id="songLocation"
+type="text"
+placeholder="Artist/song location">
+
+</div>
+
+<div class="field" style="grid-column:1/-1;">
+
+<label style="display:flex;gap:10px;align-items:flex-start;cursor:pointer;line-height:1.5;">
+
+<input
+id="songTermsAccepted"
+type="checkbox"
+style="margin-top:4px;width:18px;height:18px;flex:0 0 auto;">
+
+<span>
+I confirm that I have read and accepted the
+<a href="/terms"
+onclick="showTerms();return false;"
+style="color:var(--orange);text-decoration:underline;">
+NileSoniQ Terms &amp; Conditions
+</a>
+and that I have the necessary rights or permission to upload and publish this song.
+</span>
+
+</label>
+
+<p style="color:#777;font-size:12px;margin:8px 0 0 28px;">
+You can read the full Terms &amp; Conditions before checking this box.
+</p>
+
+</div>
+
 </div>
 
 <button id="uploadButton"
@@ -4214,6 +4317,52 @@ async function uploadSong(){
       .getElementById("coverFile")
       .files[0];
 
+  const songDescription =
+    document
+      .getElementById("songDescription")
+      .value
+      .trim();
+
+  const songGenre =
+    document
+      .getElementById("songGenre")
+      .value
+      .trim();
+
+  const songReleaseDate =
+    document
+      .getElementById("songReleaseDate")
+      .value;
+
+  const songProducer =
+    document
+      .getElementById("songProducer")
+      .value
+      .trim();
+
+  const songFeaturedArtists =
+    document
+      .getElementById("songFeaturedArtists")
+      .value
+      .trim();
+
+  const songLabel =
+    document
+      .getElementById("songLabel")
+      .value
+      .trim();
+
+  const songLocation =
+    document
+      .getElementById("songLocation")
+      .value
+      .trim();
+
+  const songTermsAccepted =
+    document
+      .getElementById("songTermsAccepted")
+      .checked;
+
 
   if(!artistName){
     artistName =
@@ -4252,6 +4401,18 @@ async function uploadSong(){
     showMessage(
       "uploadMessage",
       "Please select an audio file.",
+      "error"
+    );
+
+    return;
+
+  }
+
+  if(!songTermsAccepted){
+
+    showMessage(
+      "uploadMessage",
+      "Please read and accept the NileSoniQ Terms & Conditions before uploading.",
       "error"
     );
 
@@ -4374,6 +4535,24 @@ async function uploadSong(){
 
         cover_url:coverUrl,
 
+        description:songDescription || null,
+
+        genre:songGenre || null,
+
+        release_date:songReleaseDate || null,
+
+        producer:songProducer || null,
+
+        featured_artists:songFeaturedArtists || null,
+
+        label:songLabel || null,
+
+        location:songLocation || null,
+
+        terms_accepted:true,
+
+        terms_accepted_at:new Date().toISOString(),
+
         plays:0,
 
         likes:0,
@@ -4406,6 +4585,38 @@ async function uploadSong(){
     document.getElementById(
       "coverFile"
     ).value = "";
+
+    document.getElementById(
+      "songDescription"
+    ).value = "";
+
+    document.getElementById(
+      "songGenre"
+    ).value = "";
+
+    document.getElementById(
+      "songReleaseDate"
+    ).value = "";
+
+    document.getElementById(
+      "songProducer"
+    ).value = "";
+
+    document.getElementById(
+      "songFeaturedArtists"
+    ).value = "";
+
+    document.getElementById(
+      "songLabel"
+    ).value = "";
+
+    document.getElementById(
+      "songLocation"
+    ).value = "";
+
+    document.getElementById(
+      "songTermsAccepted"
+    ).checked = false;
 
 
     await loadMySongs();
