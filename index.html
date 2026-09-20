@@ -1491,6 +1491,51 @@ footer{
 
 
 
+
+/* RANKING BADGES */
+.chart-rank-badge{
+  position:absolute;
+  top:10px;
+  left:10px;
+  z-index:3;
+  min-width:32px;
+  height:32px;
+  padding:0 8px;
+  border-radius:999px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:rgba(0,0,0,.82);
+  border:1px solid rgba(255,255,255,.16);
+  color:#fff;
+  font-size:13px;
+  font-weight:900;
+}
+.artist-rank-number{
+  width:36px;
+  height:36px;
+  flex:0 0 36px;
+  border-radius:50%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:rgba(255,255,255,.08);
+  border:1px solid rgba(255,255,255,.12);
+  color:var(--orange);
+  font-size:14px;
+  font-weight:900;
+}
+.news-card{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  height:100%;
+}
+.news-card h3{margin:0;font-size:18px;line-height:1.3;}
+.news-card .news-date{color:#888;font-size:12px;}
+.news-card .news-excerpt{color:#aaa;line-height:1.6;font-size:14px;}
+.news-card .news-read{margin-top:auto;color:var(--orange);font-size:13px;font-weight:800;}
+.news-editor textarea{min-height:240px;resize:vertical;}
 </style>
 </head>
 
@@ -1782,11 +1827,7 @@ Loading artists...
 <p>Music stories, artist features, release updates, and news from the Ugandan music scene.</p>
 </div>
 <div id="newsPageContainer" class="song-grid">
-<div class="dashboard-card" style="grid-column:1 / -1;line-height:1.7;text-align:center;">
-<h2 style="margin-top:0;">The NileSoniq Newsroom</h2>
-<p>We are preparing original music stories and artist features for this section. New articles will be published here as they are written and reviewed by the NileSoniq team.</p>
-<p style="color:#aaa;margin-bottom:0;">Topics will include Ugandan music, artist spotlights, new releases, interviews, music events, and stories from the NileSoniq community.</p>
-</div>
+<div class="loading">Loading NileSoniq News...</div>
 </div>
 </div>
 </section>
@@ -2258,6 +2299,11 @@ onclick="showAdminTab('songs')">
 Songs
 </button>
 
+<button id="adminTabNews"
+onclick="showAdminTab('news')">
+News
+</button>
+
 <button id="adminTabWithdrawals"
 onclick="showAdminTab('withdrawals')">
 Withdrawals
@@ -2356,6 +2402,51 @@ class="message"></div>
 
 </table>
 
+</div>
+
+</div>
+
+<div id="adminNewsPanel"
+class="dashboard-card hidden news-editor">
+
+<h2>News Management</h2>
+<p style="color:#888;line-height:1.5;margin-top:6px;">Only active NileSoniq administrators can write, edit, publish, or remove News articles.</p>
+
+<div id="adminNewsMessage" class="message"></div>
+
+<input type="hidden" id="newsEditId">
+
+<div class="form-grid">
+  <div class="field">
+    <label>Headline</label>
+    <input id="newsTitle" type="text" maxlength="180" placeholder="News headline">
+  </div>
+  <div class="field">
+    <label>Featured Image URL (optional)</label>
+    <input id="newsImageUrl" type="url" placeholder="https://...">
+  </div>
+</div>
+
+<div class="field">
+  <label>Short Summary</label>
+  <textarea id="newsExcerpt" maxlength="500" style="min-height:100px;resize:vertical;" placeholder="A short summary shown on the News page."></textarea>
+</div>
+
+<div class="field">
+  <label>Article</label>
+  <textarea id="newsContent" placeholder="Write the full original news article here..."></textarea>
+</div>
+
+<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
+  <button class="btn btn-orange" onclick="saveNewsArticle()">Save &amp; Publish</button>
+  <button class="btn" onclick="clearNewsEditor()">Clear</button>
+</div>
+
+<div class="table-wrap" style="margin-top:25px;">
+<table>
+<thead><tr><th>Headline</th><th>Status</th><th>Updated</th><th>Action</th></tr></thead>
+<tbody id="adminNewsTable"></tbody>
+</table>
 </div>
 
 </div>
@@ -2878,9 +2969,12 @@ async () => {
 
   await loadArtists();
 
+  await loadNews();
+
   const path=window.location.pathname.replace(/\/+$/,"") || "/";
   if(["/about","/privacy","/terms","/contact","/dmca"].includes(path.toLowerCase())) await openPolicyRoute(path);
   else if(path === "/artists" || path === "/songs" || path === "/news") await showPage(path.slice(1),false);
+  else if(/^\/news\/[^/]+$/i.test(path)) await loadNewsArticleBySlug(path.split("/")[2]);
   else if(path === "/" || !isShortPublicRoute()) await showPage("home",false);
 });
 
@@ -3406,6 +3500,10 @@ async function updateUI(){
 
 async function showPage(page, updateUrl=true){
 
+  if(page === "news"){
+    await loadNews();
+  }
+
   const pages = ["home","artists","songs","news","about","dashboard","admin"];
   if(!pages.includes(page)) page="home";
 
@@ -3566,6 +3664,7 @@ function updateAdminTabs(){
   const superAdmin = isCurrentUserSuperAdmin();
   const analyticsTab = document.getElementById("adminTabAnalytics");
   const adminTab = document.getElementById("adminTabAdmins");
+  const newsTab = document.getElementById("adminTabNews");
   const walletTab = document.getElementById("adminTabWallet");
   const platformWithdrawPanel = document.getElementById("platformWithdrawPanel");
 
@@ -3585,15 +3684,18 @@ async function showAdminTab(tab){
   const withdrawalsPanel = document.getElementById("adminWithdrawalsPanel");
   const walletPanel = document.getElementById("adminWalletPanel");
   const managementPanel = document.getElementById("adminManagementPanel");
+  const newsPanel = document.getElementById("adminNewsPanel");
 
   const analyticsTab = document.getElementById("adminTabAnalytics");
   const songTab = document.getElementById("adminTabSongs");
   const withdrawalTab = document.getElementById("adminTabWithdrawals");
   const walletTab = document.getElementById("adminTabWallet");
   const adminTab = document.getElementById("adminTabAdmins");
+  const newsTab = document.getElementById("adminTabNews");
 
   [analyticsPanel,songsPanel,withdrawalsPanel,walletPanel,managementPanel].forEach(el=>{if(el)el.classList.add("hidden")});
-  [analyticsTab,songTab,withdrawalTab,walletTab,adminTab].forEach(el=>{if(el)el.classList.remove("active")});
+  [analyticsTab,songTab,newsTab,withdrawalTab,walletTab,adminTab].forEach(el=>{if(el)el.classList.remove("active")});
+  [analyticsPanel,songsPanel,newsPanel,withdrawalsPanel,walletPanel,managementPanel].forEach(el=>{if(el)el.classList.add("hidden")});
 
   if(tab === "analytics"){
     if(!isCurrentUserSuperAdmin()){
@@ -3613,6 +3715,24 @@ async function showAdminTab(tab){
 
     await loadAdminSongs();
 
+  }
+
+
+  if(tab === "news"){
+
+    if(!await isCurrentUserAdmin()){
+      alert("Only active administrators can manage News.");
+      return;
+    }
+
+    if(newsPanel){
+      newsPanel.classList.remove("hidden");
+    }
+    if(newsTab){
+      newsTab.classList.add("active");
+    }
+
+    await loadAdminNews();
   }
 
 
@@ -4650,6 +4770,13 @@ async function loadSongs(){
         true
       )
       .order(
+        "plays",
+        {
+          ascending:false,
+          nullsFirst:false
+        }
+      )
+      .order(
         "created_at",
         {
           ascending:false
@@ -4934,7 +5061,9 @@ function renderSongCards(
       return `
         <div class="song-card ${isPlaying ? "playing" : ""}">
 
-          <div class="cover">
+          <div class="cover" style="position:relative;">
+
+            ${Number(song.__rank) > 0 ? `<div class="chart-rank-badge">#${song.__rank}</div>` : ""}
 
             ${cover}
 
@@ -5002,7 +5131,8 @@ function renderSongs(songs){
     songs,
     "songsContainer",
     "No approved songs yet",
-    "New music will appear here after approval."
+    "New music will appear here after approval.",
+    true
   );
 
 }
@@ -5022,8 +5152,10 @@ function renderNewReleases(songs){
 
 function renderTopCharts(songs){
 
+  const rankedSongs = (songs || []).map((song,index) => ({...song,__rank:index+1}));
+
   renderSongCards(
-    songs,
+    rankedSongs,
     "topChartsContainer",
     "No chart data yet",
     "Songs will appear here as they receive plays."
@@ -5817,7 +5949,7 @@ function songPublicUrl(song){
 }
 
 function isShortPublicRoute(){
-  return /^\/(artist|user|song)\/[^/]+\/?$/i.test(window.location.pathname);
+  return /^\/(artist|user|song|news)\/[^/]+\/?$/i.test(window.location.pathname);
 }
 
 async function openArtistBySlug(slug){
@@ -6009,6 +6141,8 @@ async function handleShortPublicRoute(){
   const type = parts[0].toLowerCase();
   if(type === "song"){
     await openSongBySlug(parts[1]);
+  }else if(type === "news"){
+    await loadNewsArticleBySlug(parts[1]);
   }else{
     await openArtistBySlug(parts[1]);
   }
@@ -6808,97 +6942,66 @@ function safeDownloadName(name){
 
 async function loadArtists(){
 
-  const container =
-    document.getElementById("artistsContainer");
+  const container = document.getElementById("artistsContainer");
+  if(!container){ return; }
 
-  if(!container){
-    return;
-  }
-
-  container.innerHTML =
-    `<div class="loading">Loading artists...</div>`;
+  container.innerHTML = `<div class="loading">Loading artists...</div>`;
 
   try{
+    const [{data:artists,error:artistError},{data:songs,error:songError}] = await Promise.all([
+      sb.from("artists").select("*"),
+      sb.from("songs").select("artist_id,artist,plays").eq("approved",true)
+    ]);
 
-    const {data,error} = await sb
-      .from("artists")
-      .select("*")
-      .order("created_at",{ascending:false});
+    if(artistError) throw artistError;
+    if(songError) throw songError;
 
-    if(error){
-      throw error;
-    }
-
-    if(!data || data.length === 0){
-
-      container.innerHTML = `
-        <div class="empty">
-          No artists registered yet.
-        </div>
-      `;
-
+    if(!artists || artists.length === 0){
+      container.innerHTML = `<div class="empty">No artists registered yet.</div>`;
       return;
     }
 
-    container.innerHTML =
-      data.map(artist => {
+    const playsByArtistId = {};
+    const playsByName = {};
+    (songs || []).forEach(song => {
+      const plays = Number(song.plays || 0);
+      if(song.artist_id){ playsByArtistId[String(song.artist_id)] = (playsByArtistId[String(song.artist_id)] || 0) + plays; }
+      const name = normalizeSearchText(song.artist || "");
+      if(name){ playsByName[name] = (playsByName[name] || 0) + plays; }
+    });
 
-        const avatar =
-          artist.avatar_url
-          ? `
-            <img
-              src="${escapeAttribute(artist.avatar_url)}"
-              alt="${escapeAttribute(artist.name || "Artist")}"
-              loading="lazy">
-          `
-          : `
-            <div class="artist-avatar-placeholder">
-              ${getInitials(artist.name)}
-            </div>
-          `;
+    const rankedArtists = artists.map(artist => ({
+      ...artist,
+      __artistPlays: playsByArtistId[String(artist.user_id || artist.id)] || playsByName[normalizeSearchText(artist.name || "")] || 0
+    })).sort((a,b) => {
+      const playDiff = Number(b.__artistPlays || 0) - Number(a.__artistPlays || 0);
+      if(playDiff !== 0) return playDiff;
+      return String(a.name || "").localeCompare(String(b.name || ""));
+    });
 
-        return `
-          <div
-            class="artist-card"
-            role="button"
-            tabindex="0"
-            onclick="openArtistProfile('${escapeAttribute(artist.id)}')"
-            onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openArtistProfile('${escapeAttribute(artist.id)}');}"
-          >
+    container.innerHTML = rankedArtists.map((artist,index) => {
+      const avatar = artist.avatar_url
+        ? `<img src="${escapeAttribute(artist.avatar_url)}" alt="${escapeAttribute(artist.name || "Artist")}" loading="lazy">`
+        : `<div class="artist-avatar-placeholder">${getInitials(artist.name)}</div>`;
 
-            <div class="artist-avatar">
-              ${avatar}
-            </div>
-
-            <h3>
-              ${escapeHtml(artist.name || "Unknown Artist")}
-            </h3>
-
-            <p>
-              ${escapeHtml(artist.location || "Uganda")}
-            </p>
-
-            <div style="margin-top:10px;color:var(--orange);font-size:12px;font-weight:700;">
-              View Profile →
-            </div>
-
+      return `
+        <div class="artist-card" role="button" tabindex="0" onclick="openArtistProfile('${escapeAttribute(artist.id)}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openArtistProfile('${escapeAttribute(artist.id)}');}">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+            <div class="artist-rank-number">#${index+1}</div>
+            <div style="font-size:12px;color:#aaa;font-weight:700;">${formatNumber(artist.__artistPlays || 0)} views</div>
           </div>
-        `;
-
-      }).join("");
+          <div class="artist-avatar">${avatar}</div>
+          <h3>${escapeHtml(artist.name || "Unknown Artist")}</h3>
+          <p>${escapeHtml(artist.location || "Uganda")}</p>
+          <div style="margin-top:10px;color:var(--orange);font-size:12px;font-weight:700;">View Profile →</div>
+        </div>`;
+    }).join("");
 
   }catch(error){
-
-    console.error(error);
-
-    container.innerHTML = `
-      <div class="empty">
-        Could not load artists.
-      </div>
-    `;
+    console.error("Artists error:",error);
+    container.innerHTML = `<div class="empty"><h3>Could not load artists</h3><p style="margin-top:8px;">${escapeHtml(error.message || "Unknown error")}</p></div>`;
   }
 }
-
 
 /* =========================================================
    MY SONGS
@@ -8183,6 +8286,154 @@ async function withdrawPlatformMoney(){
  if(!/^\+?256\d{9}$|^0\d{9}$/.test(phone.replace(/\s+/g,""))){showMessage("platformWithdrawMessage","Enter a valid Ugandan mobile-money number.","error");return;}
  if(button){button.disabled=true;button.textContent="Sending withdrawal...";}
  try{const {data,error}=await sb.functions.invoke("pesajet-disbursement",{body:{phone_number:phone,amount,network,type:"platform_withdrawal"}});if(error)throw error;if(!data)throw new Error("The payment backend returned an empty response.");if(data.success===false)throw new Error(data.message||data.error||"PesaJet rejected the withdrawal request.");const r=data.result||data,tx=r.transactionId||r.transaction_id||data.transactionId||data.transaction_id,st=String(r.status||data.status||"REQUESTED").toUpperCase();showMessage("platformWithdrawMessage",`Platform withdrawal request submitted. Status: ${st}.${tx?` Transaction ID: ${tx}`:""}`,"success");document.getElementById("platformWithdrawAmount").value="";}catch(e){console.error("Platform withdrawal error:",e);showMessage("platformWithdrawMessage",e.message||"Could not process platform withdrawal.","error");}finally{if(button){button.disabled=false;button.textContent="Withdraw Platform Money";}}
+}
+
+/* =========================================================
+   NEWS
+========================================================= */
+
+function formatNewsDate(value){
+  if(!value) return "";
+  const date = new Date(value);
+  if(Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString(undefined,{year:"numeric",month:"long",day:"numeric"});
+}
+
+function newsSlugify(value){
+  return String(value || "news")
+    .toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+    .replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"")
+    .substring(0,100) || "news";
+}
+
+function renderNewsArticles(articles){
+  window.__nileNewsRegistry=window.__nileNewsRegistry||{};
+  (articles || []).forEach(article=>{ window.__nileNewsRegistry[String(article.slug)]=article; });
+  const container=document.getElementById("newsPageContainer");
+  if(!container) return;
+  if(!articles || !articles.length){
+    container.innerHTML=`<div class="dashboard-card" style="grid-column:1 / -1;line-height:1.7;text-align:center;"><h2 style="margin-top:0;">The NileSoniq Newsroom</h2><p>Original music stories, artist features, release updates, interviews, and Ugandan music news will appear here.</p></div>`;
+    return;
+  }
+  container.innerHTML=articles.map(article=>{
+    const image=article.image_url ? `<img src="${escapeAttribute(article.image_url)}" alt="${escapeAttribute(article.title || "NileSoniq News")}" loading="lazy" style="width:100%;height:190px;object-fit:cover;border-radius:12px;margin-bottom:2px;">` : "";
+    return `<article class="dashboard-card news-card"><a href="/news/${encodeURIComponent(article.slug)}" onclick="openNewsArticle('${escapeAttribute(article.slug)}');return false;" style="color:inherit;text-decoration:none;">${image}<div class="news-date">${escapeHtml(formatNewsDate(article.published_at || article.created_at))}</div><h3>${escapeHtml(article.title || "Untitled News")}</h3><div class="news-excerpt">${escapeHtml(article.excerpt || "")}</div><div class="news-read">Read article →</div></a></article>`;
+  }).join("");
+}
+
+async function loadNews(){
+  const container=document.getElementById("newsPageContainer");
+  if(!container) return;
+  container.innerHTML=`<div class="loading">Loading NileSoniq News...</div>`;
+  try{
+    const {data,error}=await sb.from("news").select("id,title,slug,excerpt,content,image_url,published,published_at,created_at,updated_at").eq("published",true).order("published_at",{ascending:false,nullsFirst:false}).order("created_at",{ascending:false});
+    if(error) throw error;
+    renderNewsArticles(data || []);
+  }catch(error){
+    console.error("News load error:",error);
+    container.innerHTML=`<div class="empty"><h3>News is not available yet</h3><p style="margin-top:8px;">${escapeHtml(error.message || "Could not load News.")}</p></div>`;
+  }
+}
+
+function openNewsArticle(slug){
+  const url=`/news/${encodeURIComponent(slug)}`;
+  history.pushState({newsSlug:slug},"",url);
+  const article=window.__nileNewsRegistry?.[String(slug)];
+  if(article) showNewsArticleModal(article);
+  else loadNewsArticleBySlug(slug);
+}
+
+function showNewsArticleModal(article){
+  const body=`<div style="line-height:1.8;"><div style="color:#888;font-size:12px;margin-bottom:10px;">${escapeHtml(formatNewsDate(article.published_at || article.created_at))}</div>${article.image_url ? `<img src="${escapeAttribute(article.image_url)}" alt="${escapeAttribute(article.title || "News")}" style="width:100%;max-height:420px;object-fit:cover;border-radius:14px;margin-bottom:18px;">` : ""}<h2 style="margin:0 0 12px;color:var(--orange);">${escapeHtml(article.title || "Untitled News")}</h2><div style="white-space:pre-wrap;">${escapeHtml(article.content || article.excerpt || "")}</div></div>`;
+  openPolicyModal(article.title || "NileSoniq News",body);
+}
+
+async function loadNewsArticleBySlug(slug){
+  try{
+    const {data,error}=await sb.from("news").select("id,title,slug,excerpt,content,image_url,published,published_at,created_at").eq("slug",slug).eq("published",true).maybeSingle();
+    if(error) throw error;
+    if(!data){ alert("News article not found."); history.pushState({},"","/news"); await loadNews(); return; }
+    window.__nileNewsRegistry=window.__nileNewsRegistry||{};
+    window.__nileNewsRegistry[String(slug)]=data;
+    showNewsArticleModal(data);
+  }catch(error){ console.error(error); alert("Could not load this News article."); }
+}
+
+async function loadAdminNews(){
+  if(!await isCurrentUserAdmin()) return;
+  const tbody=document.getElementById("adminNewsTable");
+  if(!tbody) return;
+  tbody.innerHTML=`<tr><td colspan="4"><div class="loading">Loading News...</div></td></tr>`;
+  try{
+    const {data,error}=await sb.from("news").select("id,title,slug,excerpt,content,image_url,published,published_at,created_at,updated_at").order("updated_at",{ascending:false});
+    if(error) throw error;
+    if(!data?.length){ tbody.innerHTML=`<tr><td colspan="4"><div class="empty">No News articles yet.</div></td></tr>`; return; }
+    tbody.innerHTML=data.map(article=>`<tr><td>${escapeHtml(article.title || "Untitled")}</td><td><span class="status ${article.published ? "approved" : "pending"}">${article.published ? "Published" : "Draft"}</span></td><td>${escapeHtml(formatNewsDate(article.updated_at || article.created_at))}</td><td><button class="btn btn-orange" onclick="editNewsArticle('${escapeAttribute(article.id)}')">Edit</button> <button class="btn btn-danger" style="margin-left:5px;" onclick="deleteNewsArticle('${escapeAttribute(article.id)}')">Delete</button></td></tr>`).join("");
+  }catch(error){
+    console.error("Admin News error:",error);
+    tbody.innerHTML=`<tr><td colspan="4"><div class="empty">${escapeHtml(error.message || "Could not load News.")}</div></td></tr>`;
+  }
+}
+
+function clearNewsEditor(){
+  ["newsEditId","newsTitle","newsImageUrl","newsExcerpt","newsContent"].forEach(id=>{const el=document.getElementById(id); if(el) el.value="";});
+  const button=document.querySelector('#adminNewsPanel button[onclick="saveNewsArticle()"]');
+  if(button) button.textContent="Save & Publish";
+  clearMessage("adminNewsMessage");
+}
+
+async function editNewsArticle(id){
+  if(!await isCurrentUserAdmin()) return;
+  const {data,error}=await sb.from("news").select("id,title,excerpt,content,image_url,published").eq("id",id).maybeSingle();
+  if(error){ showMessage("adminNewsMessage",error.message,"error"); return; }
+  if(!data){ showMessage("adminNewsMessage","News article not found.","error"); return; }
+  document.getElementById("newsEditId").value=data.id || "";
+  document.getElementById("newsTitle").value=data.title || "";
+  document.getElementById("newsImageUrl").value=data.image_url || "";
+  document.getElementById("newsExcerpt").value=data.excerpt || "";
+  document.getElementById("newsContent").value=data.content || "";
+  const button=document.querySelector('#adminNewsPanel button[onclick="saveNewsArticle()"]');
+  if(button) button.textContent=data.published ? "Update & Publish" : "Update Draft";
+  document.getElementById("adminNewsPanel")?.scrollIntoView({behavior:"smooth",block:"start"});
+}
+
+async function saveNewsArticle(){
+  if(!await isCurrentUserAdmin()){ alert("Only active administrators can manage News."); return; }
+  const id=document.getElementById("newsEditId")?.value.trim();
+  const title=document.getElementById("newsTitle")?.value.trim();
+  const imageUrl=document.getElementById("newsImageUrl")?.value.trim();
+  const excerpt=document.getElementById("newsExcerpt")?.value.trim();
+  const content=document.getElementById("newsContent")?.value.trim();
+  if(!title || !content){ showMessage("adminNewsMessage","Headline and article content are required.","error"); return; }
+  try{
+    let slug=newsSlugify(title);
+    if(!id){
+      const {data:existing}=await sb.from("news").select("id").eq("slug",slug).maybeSingle();
+      if(existing) slug=`${slug}-${Date.now().toString().slice(-6)}`;
+    }
+    const payload={title,slug,excerpt:excerpt || null,content,image_url:imageUrl || null,published:true,published_at:new Date().toISOString(),updated_at:new Date().toISOString()};
+    let result;
+    if(id) result=await sb.from("news").update(payload).eq("id",id).select().single();
+    else result=await sb.from("news").insert({...payload,author_id:currentUser.id}).select().single();
+    if(result.error) throw result.error;
+    showMessage("adminNewsMessage",id ? "News article updated and published." : "News article published successfully.","success");
+    clearNewsEditor();
+    await loadAdminNews();
+    await loadNews();
+  }catch(error){ console.error("Save News error:",error); showMessage("adminNewsMessage",error.message || "Could not save News article.","error"); }
+}
+
+async function deleteNewsArticle(id){
+  if(!await isCurrentUserAdmin()) return;
+  if(!confirm("Delete this News article? This cannot be undone.")) return;
+  try{
+    const {error}=await sb.from("news").delete().eq("id",id);
+    if(error) throw error;
+    showMessage("adminNewsMessage","News article deleted.","success");
+    clearNewsEditor();
+    await loadAdminNews();
+    await loadNews();
+  }catch(error){ console.error(error); showMessage("adminNewsMessage",error.message || "Could not delete News article.","error"); }
 }
 
 /* =========================================================
