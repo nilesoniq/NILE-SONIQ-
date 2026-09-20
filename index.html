@@ -7791,6 +7791,44 @@ async function updateWithdrawalStatus(
 
   try{
 
+    const { data: submittedSong, error: submittedSongError } = await sb
+      .from("songs")
+      .select("id,title,artist,file_url,audio_url,cover_url,description,genre,terms_accepted")
+      .eq("id",songId)
+      .maybeSingle();
+
+    if(submittedSongError) throw submittedSongError;
+
+    if(!submittedSong){
+      throw new Error("Song submission was not found.");
+    }
+
+    if(submittedSong.terms_accepted !== true){
+      throw new Error("This submission cannot be approved because the artist has not accepted the NileSoniQ Terms & Conditions.");
+    }
+
+    if(!String(submittedSong.title || "").trim() || !String(submittedSong.artist || "").trim()){
+      throw new Error("This submission needs a song title and artist name before approval.");
+    }
+
+    if(!String(submittedSong.file_url || submittedSong.audio_url || "").trim()){
+      throw new Error("This submission does not have an audio file.");
+    }
+
+    if(!String(submittedSong.cover_url || "").trim()){
+      throw new Error("This submission does not have cover artwork.");
+    }
+
+    if(!String(submittedSong.description || "").trim() || !String(submittedSong.genre || "").trim()){
+      throw new Error("Please require a meaningful song description and genre before approval.");
+    }
+
+    const confirmed = confirm("Approve this song for public display? Confirm that you reviewed the audio, artwork, song information, rights confirmation, and Terms acceptance.");
+    if(!confirmed){
+      return;
+    }
+
+
     const updateData = {
       status
     };
@@ -8274,7 +8312,14 @@ async function loadAdminSongs(){
             <td>
 
               <button
+                class="btn btn-orange"
+                onclick="previewAdminSong('${escapeAttribute(song.id)}')">
+                ▶ Preview
+              </button>
+
+              <button
                 class="btn btn-success"
+                style="margin-left:5px;"
                 onclick="approveSong('${escapeAttribute(song.id)}')">
                 Approve
               </button>
@@ -8320,81 +8365,126 @@ async function loadAdminSongs(){
 
 
 /* =========================================================
+   ADMIN SONG PREVIEW
+========================================================= */
+
+const adminPreviewedSongs = new Set();
+
+async function previewAdminSong(songId){
+
+  if(!currentUser){ alert("Please login first."); return; }
+  if(!await isCurrentUserAdmin()){ alert("You are not authorized."); return; }
+
+  try{
+    const { data: song, error } = await sb
+      .from("songs")
+      .select("id,title,artist,file_url,audio_url,cover_url,description,genre,release_date,producer,featured_artists,label,location,terms_accepted")
+      .eq("id", songId)
+      .maybeSingle();
+
+    if(error) throw error;
+    if(!song) throw new Error("Song submission could not be found.");
+
+    const audioUrl = song.audio_url || song.file_url || "";
+    if(!audioUrl) throw new Error("This submission has no audio file to preview.");
+
+    adminPreviewedSongs.add(songId);
+
+    const existing=document.getElementById("adminSongPreviewModal");
+    if(existing) existing.remove();
+
+    const modal=document.createElement("div");
+    modal.id="adminSongPreviewModal";
+    modal.style.cssText="position:fixed;inset:0;z-index:10001;display:flex;align-items:center;justify-content:center;padding:12px;background:rgba(0,0,0,.88);backdrop-filter:blur(8px);";
+
+    const cover=song.cover_url
+      ? `<img src="${escapeAttribute(song.cover_url)}" alt="" style="width:110px;height:110px;object-fit:cover;border-radius:14px;border:1px solid #333;">`
+      : `<div style="width:110px;height:110px;border-radius:14px;background:#191919;border:1px solid #333;display:flex;align-items:center;justify-content:center;color:#777;font-size:12px;text-align:center;">No artwork</div>`;
+
+    const meta=[
+      song.genre && ["Genre",song.genre],
+      song.release_date && ["Release date",formatDate(song.release_date)],
+      song.producer && ["Producer",song.producer],
+      song.featured_artists && ["Featured artists",song.featured_artists],
+      song.label && ["Record label",song.label],
+      song.location && ["Location",song.location]
+    ].filter(Boolean);
+
+    modal.innerHTML=`
+      <div style="position:relative;width:min(720px,100%);max-height:92vh;overflow-y:auto;background:#111;border:1px solid var(--border);border-radius:18px;box-shadow:0 25px 80px rgba(0,0,0,.7);padding:22px;">
+        <button onclick="closeAdminSongPreview()" aria-label="Close" style="position:absolute;right:12px;top:12px;width:38px;height:38px;border:0;border-radius:50%;background:#292929;color:#fff;font-size:24px;cursor:pointer;">×</button>
+        <div style="display:flex;gap:16px;align-items:center;padding-right:45px;">${cover}<div><div style="color:var(--orange);font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;">Admin preview</div><h2 style="margin:5px 0 4px;color:#fff;">${escapeHtml(song.title||"Untitled")}</h2><div style="color:#aaa;">${escapeHtml(song.artist||"Unknown artist")}</div></div></div>
+        <div style="margin-top:20px;padding:16px;border:1px solid #292929;border-radius:14px;background:#151515;">
+          <div style="font-size:13px;color:#aaa;margin-bottom:8px;">Listen before approving</div>
+          <audio id="adminPreviewAudio" controls preload="metadata" style="width:100%;"><source src="${escapeAttribute(audioUrl)}">Your browser cannot play this audio.</audio>
+          <p style="margin:10px 0 0;color:#888;font-size:12px;line-height:1.5;">Check the recording for unwanted advertisements, unrelated audio, copyrighted material, silence, poor quality, or other content that should not be published.</p>
+        </div>
+        ${song.description ? `<div style="margin-top:16px;"><strong style="color:#fff;">About this song</strong><p style="color:#aaa;line-height:1.6;margin:6px 0 0;">${escapeHtml(song.description)}</p></div>` : ""}
+        ${meta.length ? `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-top:16px;">${meta.map(item=>`<div style="padding:10px;border:1px solid #292929;border-radius:10px;"><div style="font-size:11px;color:#777;text-transform:uppercase;">${escapeHtml(item[0])}</div><div style="color:#ddd;margin-top:3px;">${escapeHtml(item[1])}</div></div>`).join("")}</div>` : ""}
+        <div style="margin-top:18px;padding:12px;border-radius:10px;background:${song.terms_accepted===true?"#142014":"#2a1515"};color:${song.terms_accepted===true?"#a8d5a8":"#ffb0b0"};">${song.terms_accepted===true?"✓ Artist has accepted the NileSoniQ Terms & Conditions.":"⚠ Terms & Conditions have not been accepted. This song cannot be approved."}</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:20px;"><button class="btn btn-success" ${song.terms_accepted===true?"":"disabled"} onclick="approveSong('${escapeAttribute(song.id)}')">✓ Approve after review</button><button class="btn btn-danger" onclick="rejectSong('${escapeAttribute(song.id)}');closeAdminSongPreview();">Reject</button><button class="btn" onclick="closeAdminSongPreview()">Close</button></div>
+      </div>`;
+
+    document.body.appendChild(modal);
+    document.body.style.overflow="hidden";
+    modal.onclick=function(event){if(event.target===modal)closeAdminSongPreview();};
+
+  }catch(error){
+    console.error("Admin preview error:",error);
+    alert(error.message||"Could not open the song preview.");
+  }
+}
+
+function closeAdminSongPreview(){
+  const modal=document.getElementById("adminSongPreviewModal");
+  if(modal) modal.remove();
+  document.body.style.overflow="";
+}
+
+/* =========================================================
    APPROVE SONG
 ========================================================= */
 
 async function approveSong(songId){
 
-  if(!currentUser){
-
-    alert(
-      "Please login first."
-    );
-
+  if(!currentUser){ alert("Please login first."); return; }
+  if(!await isCurrentUserAdmin()){ alert("You are not authorized."); return; }
+  if(!adminPreviewedSongs.has(songId)){
+    alert("Please preview and listen to this song before approving it.");
     return;
-
   }
-
-
-  if(!await isCurrentUserAdmin()){
-
-    alert(
-      "You are not authorized."
-    );
-
-    return;
-
-  }
-
 
   try{
+    const {data:submission,error:fetchError}=await sb.from("songs")
+      .select("id,title,artist,file_url,audio_url,cover_url,description,genre,terms_accepted")
+      .eq("id",songId).maybeSingle();
+    if(fetchError) throw fetchError;
+    if(!submission) throw new Error("Song submission could not be found.");
+    if(submission.terms_accepted!==true) throw new Error("This song cannot be approved because the artist has not accepted the Terms & Conditions.");
+    if(!String(submission.title||"").trim()) throw new Error("This song needs a title before approval.");
+    if(!String(submission.artist||"").trim()) throw new Error("This song needs an artist name before approval.");
+    if(!String(submission.audio_url||submission.file_url||"").trim()) throw new Error("This song has no audio file.");
+    if(!String(submission.cover_url||"").trim()) throw new Error("This song needs cover artwork before approval.");
+    if(!String(submission.description||"").trim()) throw new Error("This song needs an About This Song description before approval.");
+    if(!String(submission.genre||"").trim()) throw new Error("This song needs a genre before approval.");
 
-    const {
-      error
-    } = await sb
-      .from("songs")
-      .update({
-        approved:true
-      })
-      .eq(
-        "id",
-        songId
-      );
+    if(!confirm("Approve this song for public display?\n\nConfirm that you listened to the recording and reviewed the audio, artwork, song information, rights confirmation, and Terms acceptance.")) return;
 
+    const {error}=await sb.from("songs").update({approved:true}).eq("id",songId);
+    if(error) throw error;
 
-    if(error){
-      throw error;
-    }
-
-
-    showMessage(
-      "adminMessage",
-      "Song approved successfully.",
-      "success"
-    );
-
-
+    adminPreviewedSongs.delete(songId);
+    closeAdminSongPreview();
+    showMessage("adminMessage","Song approved successfully.","success");
     await loadAdminSongs();
-
     await loadSongs();
-
     await loadNewReleases();
-
     await loadTopCharts();
 
   }catch(error){
-
     console.error(error);
-
-    showMessage(
-      "adminMessage",
-      error.message ||
-      "Could not approve song.",
-      "error"
-    );
-
+    showMessage("adminMessage",error.message||"Could not approve song.","error");
   }
-
 }
 
 
@@ -9110,17 +9200,18 @@ function showAbout(){
 }
 
 function showPrivacy(){
-  openPolicyModal("Privacy Policy for NileSoniQ - nilesoniq.com", `<p><strong>Effective Date: September 18, 2026</strong></p>
-<p>At NileSoniQ, accessible from https://nilesoniq.com, your privacy is our top priority. This Privacy Policy explains what information we collect, how we use it, and your rights.</p>
-<h3>1. Information We Collect:</h3><p><strong>A. Personal Information You Provide:</strong></p><p>- When you contact us via email or WhatsApp, we collect your name and contact info to respond.<br>- When artists register, we collect artist name, email, and proof of ownership.</p><p><strong>B. Automatic Information:</strong></p><p>- Log Files: Like most websites, we collect IP addresses, browser type, ISP, date/time, referring pages. This is used to count plays (currently 4,000+ plays) and prevent fraud.<br>- Cookies: We use cookies to store preferences such as your favorite songs, and to improve streaming experience.<br>- Device Information: Screen size and device type to optimize music player.</p>
-<h3>2. How We Use Your Information:</h3><p>- To provide and improve our music streaming service<br>- To count plays fairly and prevent fake plays<br>- To respond to your inquiries within 24 hours<br>- To prevent fraud and abuse<br>- To comply with legal obligations</p>
-<h3>3. Google AdSense and Advertising:</h3><p>This website uses Google AdSense, a third-party advertising service provided by Google Inc.</p><p>- Google, as a third party vendor, uses cookies to serve ads on our site.<br>- Google's use of the DART cookie enables it to serve ads to our users based on their visit to our site and other sites on the Internet.<br>- Users may opt out of the use of the DART cookie by visiting https://policies.google.com/technologies/ads<br>- You can opt-out of personalized advertising by visiting https://www.google.com/settings/ads</p><p>We also may use other ad networks in the future. These networks may also use cookies.</p>
-<h3>4. Third-Party Privacy Policies:</h3><p>NileSoniQ's Privacy Policy does not apply to other advertisers or websites. We advise you to consult the respective Privacy Policies of these third-party ad servers.</p>
-<h3>5. What We Do NOT Do:</h3><p>- We do NOT sell your personal data to anyone<br>- We do NOT collect sensitive personal information like bank details (payments are handled by secure partners Flutterwave and CinetPay)<br>- We do NOT allow unauthorized MP3 downloads of artist content without permission<br>- We do NOT spam you</p>
-<h3>6. Data Protection Rights (GDPR):</h3><p>Every user is entitled to:<br>- The right to access - Request copies of your personal data<br>- The right to rectification - Request correction of inaccurate data<br>- The right to erasure - Request deletion of your personal data<br>- The right to restrict processing<br>- The right to object to processing</p><p>If you make a request, we have one month to respond.</p>
-<h3>7. Children's Information:</h3><p>NileSoniQ is for users 13 years and older. We do not knowingly collect information from children under 13. If you believe your child provided information, contact us immediately and we will delete it.</p>
-<h3>8. Consent:</h3><p>By using our website, you consent to our Privacy Policy.</p>
-<h3>9. Contact Us:</h3><p>If you have questions about this Privacy Policy, contact us at:<br>Email: nilesoniq@gmail.com<br>Location: Kampala, Uganda</p><p style="margin-bottom:0;">Last Updated: September 18, 2026</p>`);
+  openPolicyModal("Privacy Policy for NileSoniQ - nilesoniq.com", `<p><strong>Effective Date: September 20, 2026</strong></p>
+<p>At NileSoniQ, accessible from https://nilesoniq.com, your privacy is important to us. This Privacy Policy explains what information we collect, how we use it, and how you can contact us about your information.</p>
+<h3>1. Information We Collect:</h3><p><strong>A. Information You Provide:</strong></p><p>- When you create an account or artist profile, we may collect information such as your name or artist name, email address, and information you provide about your music.<br>- When artists submit music, we store the song information and the artist's confirmation that they accepted the NileSoniQ Terms &amp; Conditions and represented that they have the necessary rights to submit the music.<br>- When you contact us by email or WhatsApp, we may collect your name, contact information, and the details you provide so we can respond.</p><p><strong>B. Information Collected Automatically:</strong></p><p>- We may receive technical information such as IP address, browser type, device type, screen size, referring pages, and date/time information when you use the website.<br>- We may use cookies or similar technologies for essential site functions, preferences, security, analytics, and, if advertising is enabled, advertising.</p>
+<h3>2. How We Use Information:</h3><p>- To provide and improve NileSoniQ's music services<br>- To operate accounts, artist profiles, uploads, streaming, and other site features<br>- To review and moderate user-submitted music<br>- To prevent fraud, abuse, unauthorized uploads, and other security problems<br>- To respond to support and copyright requests<br>- To comply with legal obligations and enforce our Terms &amp; Conditions</p>
+<h3>3. Google Advertising and Cookies:</h3><p>NileSoniQ is not claiming that Google AdSense is currently active unless Google advertising code has actually been enabled on the site. If Google AdSense or another advertising service is enabled, third-party providers may use cookies, web beacons, IP addresses, or similar technologies to serve, measure, and personalize advertising as permitted by their policies and applicable law.</p><p>Google explains how it uses cookies for advertising and how users can manage ad personalization in its own policies and settings. You can learn more at <a href="https://policies.google.com/technologies/partner-sites" target="_blank" rel="noopener noreferrer">Google's partner-site data policy</a> and <a href="https://adssettings.google.com/" target="_blank" rel="noopener noreferrer">Google Ads Settings</a>.</p>
+<h3>4. Third-Party Services:</h3><p>NileSoniQ may use third-party services to provide hosting, database, authentication, analytics, payments, advertising, or other site functions. Those providers may process information according to their own privacy policies and applicable law.</p>
+<h3>5. Data Sharing:</h3><p>We do not sell personal information as a business practice. We may share information with service providers when necessary to operate the website, respond to legal requests, protect users and the service, or comply with applicable law.</p>
+<h3>6. Data Protection and Requests:</h3><p>We take reasonable steps to protect information under our control. If you want to request access, correction, or deletion of personal information that NileSoniQ controls, contact us using the details below. We will handle valid requests according to applicable law.</p>
+<h3>7. Children's Information:</h3><p>NileSoniQ is intended for users aged 13 and older. We do not knowingly collect personal information from children under 13. If you believe a child under 13 has provided personal information, contact us so we can review and take appropriate action.</p>
+<h3>8. Copyright and User-Submitted Content:</h3><p>Artists are responsible for ensuring they have the necessary rights to music and other material they submit. NileSoniQ manually reviews song submissions before they are approved for public display. If you believe content infringes your rights, please use our DMCA process.</p>
+<h3>9. Changes to This Policy:</h3><p>We may update this Privacy Policy when our services or legal requirements change. The effective date at the top of this policy will be updated when material changes are made.</p>
+<h3>10. Contact Us:</h3><p>If you have questions about this Privacy Policy or a data request, contact us at:<br>Email: nilesoniq@gmail.com<br>Location: Kampala, Uganda</p><p style="margin-bottom:0;">Last Updated: September 20, 2026</p>`);
 }
 
 function showTerms(){
@@ -9132,7 +9223,7 @@ function showContact(){
 }
 
 function showDMCA(){
-  openPolicyModal("DMCA Copyright Policy - NileSoniQ.com - 24 Hour Takedown Guarantee", `<p><strong>Effective Date: September 18, 2026</strong></p><p>NileSoniQ respects intellectual property rights of artists and copyright owners worldwide. We comply with the Digital Millennium Copyright Act (DMCA) and Uganda copyright laws.</p><h3>Our Content Model:</h3><p>- All 40+ songs on NileSoniQ are uploaded directly by 21+ verified artists who own their music.<br>- Every song is manually reviewed and approved by our team (40 approved, 0 pending).<br>- Artists must check a box confirming: "I own full rights to this song and authorize NileSoniQ to stream it."<br>- We do NOT allow users to upload copyrighted music they do not own.</p><h3>If You Believe Your Copyright is Infringed:</h3><p>If you are a copyright owner or authorized agent and believe content on NileSoniQ infringes your rights, please send a written DMCA takedown notice to:</p><p><strong>Email:</strong> nilesoniq@gmail.com<br><strong>Subject Line:</strong> DMCA Takedown Request</p><p><strong>Your notice MUST include:</strong></p><p>1. Your full name and contact information (email, phone, address)<br>2. Description of copyrighted work you claim is infringed (e.g., song title)<br>3. Exact URL of infringing material on NileSoniQ (e.g., https://nilesoniq.com/song/xyz)<br>4. A statement that you have good faith belief that use is not authorized by copyright owner<br>5. A statement under penalty of perjury that information in notice is accurate and you are copyright owner or authorized agent<br>6. Your physical or electronic signature</p><h3>What Happens Next:</h3><p>1. We receive your notice and review within 12 hours<br>2. If valid, we REMOVE the content within 24 hours guaranteed<br>3. We notify the uploader artist and suspend repeat offenders<br>4. We will notify you via email once removed</p><h3>Counter-Notification:</h3><p>If you are an artist and believe your song was removed by mistake, you may send counter-notification with proof of ownership. We will restore within 10 business days if no lawsuit is filed.</p><h3>Repeat Infringers:</h3><p>Artists who repeatedly upload infringing content will be banned and reported. We have zero tolerance.</p><h3>Prevention Measures:</h3><p>- Manual approval of all songs<br>- Artist verification system<br>- Play count fraud detection (1 play per 30 seconds per IP)<br>- No direct MP3 download without artist permission documentation</p><h3>Contact for DMCA Only:</h3><p>Email: nilesoniq@gmail.com<br>Location: Kampala, Uganda<br>Response Time: 24 hours maximum</p><p>We are committed to protecting Ugandan artists and international copyright.</p><p>Thank you for helping us keep NileSoniQ legal and artist-friendly.</p><p style="margin-bottom:0;">NileSoniQ Legal Team<br>Kampala, Uganda</p>`);
+  openPolicyModal("DMCA Copyright Policy - NileSoniQ.com", `<p><strong>Effective Date: September 20, 2026</strong></p><p>NileSoniQ respects intellectual property rights and maintains a process for responding to copyright complaints. User-submitted music is not automatically published: song submissions are placed into a pending state and are reviewed by an authorized NileSoniQ administrator before approval.</p><h3>Artist Rights Confirmation:</h3><p>When submitting a song, an artist must accept the NileSoniQ Terms &amp; Conditions and confirm that they have the necessary rights or authorization to submit the music for streaming on NileSoniQ. The submission records the acceptance time for our records.</p><h3>Copyright Takedown Requests:</h3><p>If you are a copyright owner or authorized agent and believe content on NileSoniQ infringes your rights, send a written notice to:</p><p><strong>Email:</strong> nilesoniq@gmail.com<br><strong>Subject:</strong> DMCA Takedown Request</p><p><strong>Please include:</strong></p><p>1. Your full name and contact information.<br>2. A description of the copyrighted work you believe has been infringed.<br>3. The exact URL of the material on NileSoniQ.<br>4. A statement that you have a good-faith belief that the use is not authorized by the copyright owner, its agent, or the law.<br>5. A statement that the information in your notice is accurate and, where applicable, that you are the copyright owner or authorized to act for the owner.<br>6. Your physical or electronic signature.</p><h3>How We Handle Reports:</h3><p>We review copyright complaints and may remove or restrict access to reported content while investigating. We will contact the uploader where appropriate and take action consistent with applicable law and our policies. Response and removal times can depend on the completeness of the complaint and the circumstances; we do not publish a guaranteed fixed takedown time.</p><h3>Repeat Infringement:</h3><p>Accounts that repeatedly submit infringing material may lose upload privileges or be suspended or terminated.</p><h3>Prevention Measures:</h3><p>- Manual review before a song is approved for public display<br>- Required artist Terms &amp; Conditions acceptance during upload<br>- Copyright reporting and takedown process<br>- Review of reported or suspicious content</p><h3>Current Statistics:</h3><p>We intentionally do not publish hard-coded song or artist totals in this policy because those numbers change as the platform grows. The current submission and approval status is maintained in the NileSoniQ administrative system.</p><h3>Contact for Copyright Matters:</h3><p>Email: nilesoniq@gmail.com<br>Location: Kampala, Uganda</p><p style="margin-bottom:0;">NileSoniQ<br>Kampala, Uganda</p>`);
 }
 
 
