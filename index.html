@@ -10,28 +10,6 @@
 content="NileSoniq — Uganda's music platform. Stream music, discover artists and support Ugandan music.">
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2">
-/* NILESONIQ BOOST - isolated test-mode UI; no wallet changes */
-let nilesoniqBoostDays=1;
-let nilesoniqBoostPrice=1000;
-function openBoostPage(){
- const modal=document.getElementById("boostModal"),select=document.getElementById("boostSongSelect"),status=document.getElementById("boostStatus");
- if(!modal||!select)return;
- select.innerHTML='<option value="">Select a song</option>';
- const songs=Array.isArray(window.nileSoniqArtistSongs)?window.nileSoniqArtistSongs:[];
- songs.filter(song=>song&&song.approved===true).forEach(song=>{const o=document.createElement("option");o.value=String(song.id||"");o.textContent=song.title||"Untitled";select.appendChild(o);});
- if(status)status.textContent=songs.some(song=>song&&song.approved===true)?"":"No approved songs are available for boosting yet.";
- modal.classList.add("open");modal.setAttribute("aria-hidden","false");
-}
-function closeBoostPage(){const modal=document.getElementById("boostModal");if(!modal)return;modal.classList.remove("open");modal.setAttribute("aria-hidden","true");}
-function selectBoostPackage(button){document.querySelectorAll(".boost-package").forEach(x=>x.classList.remove("active"));button.classList.add("active");nilesoniqBoostDays=Number(button.dataset.days||1);nilesoniqBoostPrice=Number(button.dataset.price||1000);}
-function startBoostTest(){
- const select=document.getElementById("boostSongSelect"),status=document.getElementById("boostStatus");if(!select||!status)return;
- if(!select.value){status.textContent="Please choose a song first.";return;}
- const songs=Array.isArray(window.nileSoniqArtistSongs)?window.nileSoniqArtistSongs:[];
- const song=songs.find(x=>String(x.id)===String(select.value));
- status.textContent="Boost test ready: "+(song&&song.title?song.title:"your song")+" • "+nilesoniqBoostDays+" day(s) • UGX "+nilesoniqBoostPrice.toLocaleString()+". No money was charged.";
-}
-
 </script>
 
 <style>
@@ -1512,17 +1490,6 @@ footer{
 @media(max-width:520px){.analytics-grid{grid-template-columns:1fr}.wallet-balance{font-size:28px}}
 
 
-/* NILESONIQ BOOST - added without changing wallet/payout code */
-.boost-card{border:1px solid rgba(255,106,0,.35);background:linear-gradient(135deg,rgba(255,106,0,.10),rgba(255,106,0,.03));}
-.boost-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
-.boost-modal{position:fixed;inset:0;z-index:9999;display:none;align-items:center;justify-content:center;padding:18px;background:rgba(0,0,0,.78)}
-.boost-modal.open{display:flex}
-.boost-panel{width:min(560px,100%);max-height:90vh;overflow:auto;background:#151515;border:1px solid #333;border-radius:18px;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
-.boost-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}.boost-head h2{margin:0}.boost-close{border:0;background:#242424;color:#fff;width:38px;height:38px;border-radius:50%;cursor:pointer;font-size:20px}
-.boost-field{margin:14px 0}.boost-field label{display:block;margin-bottom:7px;font-size:13px;color:#ccc}.boost-field select{width:100%;padding:12px;border-radius:10px;border:1px solid #3a3a3a;background:#0f0f0f;color:#fff}
-.boost-packages{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.boost-package{border:1px solid #3a3a3a;background:#101010;color:#fff;border-radius:12px;padding:14px 10px;cursor:pointer;text-align:center}.boost-package.active{border-color:var(--orange);box-shadow:0 0 0 1px var(--orange)}.boost-package strong{display:block}.boost-package span{display:block;color:#aaa;font-size:12px;margin-top:4px}
-.boost-note{margin-top:14px;padding:12px;border-radius:10px;background:#202020;color:#aaa;font-size:12px;line-height:1.5}.boost-status{margin-top:12px;min-height:20px;font-size:13px}
-@media(max-width:600px){.boost-packages{grid-template-columns:1fr}}
 
 </style>
 </head>
@@ -2222,21 +2189,6 @@ Uploaded songs are sent for admin approval before appearing publicly.
 </div>
 </section>
 
-
-<!-- NILESONIQ BOOST PAGE -->
-<div id="boostModal" class="boost-modal" aria-hidden="true">
-<div class="boost-panel">
-<div class="boost-head"><h2>🚀 Boost Your Song</h2><button class="boost-close" type="button" onclick="closeBoostPage()">×</button></div>
-<div class="boost-field"><label for="boostSongSelect">Choose your approved song</label><select id="boostSongSelect"><option value="">Select a song</option></select></div>
-<div class="boost-field"><label>Choose boost duration</label><div class="boost-packages">
-<button type="button" class="boost-package active" data-days="1" data-price="1000" onclick="selectBoostPackage(this)"><strong>1 Day</strong><span>UGX 1,000</span></button>
-<button type="button" class="boost-package" data-days="3" data-price="2500" onclick="selectBoostPackage(this)"><strong>3 Days</strong><span>UGX 2,500</span></button>
-<button type="button" class="boost-package" data-days="7" data-price="5000" onclick="selectBoostPackage(this)"><strong>7 Days</strong><span>UGX 5,000</span></button>
-</div></div>
-<div class="boost-note">Boost checkout is currently in <strong>test mode</strong>. This does not charge the artist or change the wallet.</div>
-<div id="boostStatus" class="boost-status"></div>
-<div class="boost-actions"><button class="btn btn-orange" type="button" onclick="startBoostTest()">Continue to Boost</button><button class="btn" type="button" onclick="closeBoostPage()">Cancel</button></div>
-</div></div>
 
 <!-- ADMIN -->
 
@@ -5893,73 +5845,6 @@ async function openSongBySlug(slug){
   }
 }
 
-async function openSongReport(songId){
-  const existing=document.getElementById("songReportModal");
-  if(existing) existing.remove();
-  const modal=document.createElement("div");
-  modal.id="songReportModal";
-  modal.style.cssText="position:fixed;inset:0;z-index:10002;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(0,0,0,.82);backdrop-filter:blur(8px);overflow-y:auto;";
-  modal.innerHTML=`
-    <div style="position:relative;width:min(560px,100%);background:#111;border:1px solid #333;border-radius:18px;padding:24px;box-shadow:0 25px 80px rgba(0,0,0,.6);">
-      <button onclick="closeSongReport()" aria-label="Close" style="position:absolute;right:12px;top:12px;width:36px;height:36px;border:0;border-radius:50%;background:#292929;color:#fff;font-size:22px;cursor:pointer;">×</button>
-      <h2 style="margin:0 42px 8px 0;">Report Song / Copyright Issue</h2>
-      <p style="color:#aaa;font-size:13px;line-height:1.5;margin-bottom:18px;">Use this form to report suspected copyright infringement, unauthorized uploads, harmful content, or another serious issue with this song.</p>
-      <label style="display:block;color:#ccc;font-size:13px;margin-bottom:6px;">Your name</label>
-      <input id="songReportName" type="text" maxlength="120" placeholder="Your full name" style="width:100%;background:#101010;color:#fff;border:1px solid #292929;border-radius:10px;padding:12px;margin-bottom:14px;outline:none;">
-      <label style="display:block;color:#ccc;font-size:13px;margin-bottom:6px;">Your email</label>
-      <input id="songReportEmail" type="email" maxlength="160" placeholder="you@example.com" style="width:100%;background:#101010;color:#fff;border:1px solid #292929;border-radius:10px;padding:12px;margin-bottom:14px;outline:none;">
-      <label style="display:block;color:#ccc;font-size:13px;margin-bottom:6px;">Reason for report</label>
-      <select id="songReportReason" style="width:100%;background:#101010;color:#fff;border:1px solid #292929;border-radius:10px;padding:12px;margin-bottom:14px;outline:none;">
-        <option value="Copyright infringement">Copyright infringement</option>
-        <option value="Unauthorized upload">Unauthorized upload</option>
-        <option value="Harmful or inappropriate content">Harmful or inappropriate content</option>
-        <option value="Other serious issue">Other serious issue</option>
-      </select>
-      <label style="display:block;color:#ccc;font-size:13px;margin-bottom:6px;">Details</label>
-      <textarea id="songReportDetails" rows="5" maxlength="3000" placeholder="Describe the issue and, for copyright claims, explain your connection to the copyrighted work." style="width:100%;background:#101010;color:#fff;border:1px solid #292929;border-radius:10px;padding:12px;margin-bottom:8px;outline:none;resize:vertical;"></textarea>
-      <p style="color:#777;font-size:11px;line-height:1.4;margin-bottom:16px;">For formal copyright takedown requests, you may also email nilesoniq@gmail.com with the information listed in our DMCA Copyright Policy.</p>
-      <div id="songReportStatus" style="min-height:20px;color:#aaa;font-size:12px;margin-bottom:10px;"></div>
-      <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;">
-        <button class="btn btn-dark" onclick="closeSongReport()">Cancel</button>
-        <button class="btn btn-orange" onclick="submitSongReport('${escapeAttribute(songId)}')">Submit Report</button>
-      </div>
-    </div>`;
-  document.body.appendChild(modal);
-  document.body.style.overflow="hidden";
-  modal.onclick=function(event){if(event.target===modal)closeSongReport();};
-}
-
-function closeSongReport(){
-  const modal=document.getElementById("songReportModal");
-  if(modal) modal.remove();
-  document.body.style.overflow="";
-}
-
-function submitSongReport(songId){
-  const name=document.getElementById("songReportName");
-  const email=document.getElementById("songReportEmail");
-  const reason=document.getElementById("songReportReason");
-  const details=document.getElementById("songReportDetails");
-  const status=document.getElementById("songReportStatus");
-  if(!name||!email||!reason||!details||!status)return;
-  const n=name.value.trim(), e=email.value.trim(), d=details.value.trim();
-  if(!n||!e||!d){status.textContent="Please complete your name, email, and report details.";status.style.color="#ff8f8f";return;}
-  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)){status.textContent="Please enter a valid email address.";status.style.color="#ff8f8f";return;}
-  const subject=reason.value+" - NileSoniQ song report";
-  const body=[
-    "NileSoniQ Song Report",
-    "Song ID: "+songId,
-    "Name: "+n,
-    "Email: "+e,
-    "Reason: "+reason.value,
-    "Details: "+d,
-    "Song URL: "+window.location.origin+window.location.pathname
-  ].join("\n");
-  window.location.href="mailto:nilesoniq@gmail.com?subject="+encodeURIComponent(subject)+"&body="+encodeURIComponent(body);
-  status.textContent="Your email app should now open with the report prepared. If it does not, email nilesoniq@gmail.com directly.";
-  status.style.color="#a8d5a8";
-}
-
 async function showPublicSongPage(song){
   let modal = document.getElementById("songPublicModal");
   if(!modal){
@@ -6048,15 +5933,24 @@ async function showPublicSongPage(song){
         <button class="btn btn-orange" onclick="playPublicSongFromPage('${escapeAttribute(song.id)}')">▶ Play Song</button>
         <button class="btn btn-dark" onclick="downloadSong('${escapeAttribute(song.id)}')">↓ Download</button>
         <button class="btn btn-dark" onclick="copyPublicSongUrl('${escapeAttribute(url)}')">🔗 Copy Link</button>
-      </div>
-      <div style="margin-top:14px;text-align:center;">
-        <button class="btn btn-dark" style="border-color:#4a2a2a;color:#ff9b9b;" onclick="openSongReport('${escapeAttribute(song.id)}')">⚠ Report Song / Copyright Issue</button>
+        <button class="btn btn-dark" onclick="reportPublicSong('${escapeAttribute(song.id)}')">⚑ Report Song / Copyright</button>
       </div>
       ${aboutHtml}
       ${detailsHtml}
       ${artistHtml}
       <div style="margin-top:20px;padding:10px;border-radius:10px;background:#191919;color:#999;font-size:12px;word-break:break-all;text-align:left;">Public song URL: ${escapeHtml(window.location.origin + url)}</div>
     </div>`;
+}
+
+
+function reportPublicSong(songId){
+  const song = findSongById(songId);
+  const title = song?.title || "this song";
+  const artist = song?.artist || "Unknown Artist";
+  const url = window.location.origin + songPublicUrl(song || {title:"song"});
+  const subject = `NileSoniQ Song Report - ${title}`;
+  const body = `Song: ${title}\nArtist: ${artist}\nURL: ${url}\n\nReason for report: \n\nYour name: \nYour email: \n\nPlease provide details of the issue, including any copyright ownership information or authorization concerns.`;
+  window.location.href = `mailto:nilesoniq@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
 
 async function playPublicSongFromPage(songId){
@@ -8382,14 +8276,7 @@ async function loadAdminSongs(){
             <td>
 
               <button
-                class="btn btn-orange"
-                onclick="previewAdminSong('${escapeAttribute(song.id)}')">
-                ▶ Preview
-              </button>
-
-              <button
                 class="btn btn-success"
-                style="margin-left:5px;"
                 onclick="approveSong('${escapeAttribute(song.id)}')">
                 Approve
               </button>
@@ -8435,126 +8322,81 @@ async function loadAdminSongs(){
 
 
 /* =========================================================
-   ADMIN SONG PREVIEW
-========================================================= */
-
-const adminPreviewedSongs = new Set();
-
-async function previewAdminSong(songId){
-
-  if(!currentUser){ alert("Please login first."); return; }
-  if(!await isCurrentUserAdmin()){ alert("You are not authorized."); return; }
-
-  try{
-    const { data: song, error } = await sb
-      .from("songs")
-      .select("id,title,artist,file_url,audio_url,cover_url,description,genre,release_date,producer,featured_artists,label,location,terms_accepted")
-      .eq("id", songId)
-      .maybeSingle();
-
-    if(error) throw error;
-    if(!song) throw new Error("Song submission could not be found.");
-
-    const audioUrl = song.audio_url || song.file_url || "";
-    if(!audioUrl) throw new Error("This submission has no audio file to preview.");
-
-    adminPreviewedSongs.add(songId);
-
-    const existing=document.getElementById("adminSongPreviewModal");
-    if(existing) existing.remove();
-
-    const modal=document.createElement("div");
-    modal.id="adminSongPreviewModal";
-    modal.style.cssText="position:fixed;inset:0;z-index:10001;display:flex;align-items:center;justify-content:center;padding:12px;background:rgba(0,0,0,.88);backdrop-filter:blur(8px);";
-
-    const cover=song.cover_url
-      ? `<img src="${escapeAttribute(song.cover_url)}" alt="" style="width:110px;height:110px;object-fit:cover;border-radius:14px;border:1px solid #333;">`
-      : `<div style="width:110px;height:110px;border-radius:14px;background:#191919;border:1px solid #333;display:flex;align-items:center;justify-content:center;color:#777;font-size:12px;text-align:center;">No artwork</div>`;
-
-    const meta=[
-      song.genre && ["Genre",song.genre],
-      song.release_date && ["Release date",formatDate(song.release_date)],
-      song.producer && ["Producer",song.producer],
-      song.featured_artists && ["Featured artists",song.featured_artists],
-      song.label && ["Record label",song.label],
-      song.location && ["Location",song.location]
-    ].filter(Boolean);
-
-    modal.innerHTML=`
-      <div style="position:relative;width:min(720px,100%);max-height:92vh;overflow-y:auto;background:#111;border:1px solid var(--border);border-radius:18px;box-shadow:0 25px 80px rgba(0,0,0,.7);padding:22px;">
-        <button onclick="closeAdminSongPreview()" aria-label="Close" style="position:absolute;right:12px;top:12px;width:38px;height:38px;border:0;border-radius:50%;background:#292929;color:#fff;font-size:24px;cursor:pointer;">×</button>
-        <div style="display:flex;gap:16px;align-items:center;padding-right:45px;">${cover}<div><div style="color:var(--orange);font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;">Admin preview</div><h2 style="margin:5px 0 4px;color:#fff;">${escapeHtml(song.title||"Untitled")}</h2><div style="color:#aaa;">${escapeHtml(song.artist||"Unknown artist")}</div></div></div>
-        <div style="margin-top:20px;padding:16px;border:1px solid #292929;border-radius:14px;background:#151515;">
-          <div style="font-size:13px;color:#aaa;margin-bottom:8px;">Listen before approving</div>
-          <audio id="adminPreviewAudio" controls preload="metadata" style="width:100%;"><source src="${escapeAttribute(audioUrl)}">Your browser cannot play this audio.</audio>
-          <p style="margin:10px 0 0;color:#888;font-size:12px;line-height:1.5;">Check the recording for unwanted advertisements, unrelated audio, copyrighted material, silence, poor quality, or other content that should not be published.</p>
-        </div>
-        ${song.description ? `<div style="margin-top:16px;"><strong style="color:#fff;">About this song</strong><p style="color:#aaa;line-height:1.6;margin:6px 0 0;">${escapeHtml(song.description)}</p></div>` : ""}
-        ${meta.length ? `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-top:16px;">${meta.map(item=>`<div style="padding:10px;border:1px solid #292929;border-radius:10px;"><div style="font-size:11px;color:#777;text-transform:uppercase;">${escapeHtml(item[0])}</div><div style="color:#ddd;margin-top:3px;">${escapeHtml(item[1])}</div></div>`).join("")}</div>` : ""}
-        <div style="margin-top:18px;padding:12px;border-radius:10px;background:${song.terms_accepted===true?"#142014":"#2a1515"};color:${song.terms_accepted===true?"#a8d5a8":"#ffb0b0"};">${song.terms_accepted===true?"✓ Artist has accepted the NileSoniQ Terms & Conditions.":"⚠ Terms & Conditions have not been accepted. This song cannot be approved."}</div>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:20px;"><button class="btn btn-success" ${song.terms_accepted===true?"":"disabled"} onclick="approveSong('${escapeAttribute(song.id)}')">✓ Approve after review</button><button class="btn btn-danger" onclick="rejectSong('${escapeAttribute(song.id)}');closeAdminSongPreview();">Reject</button><button class="btn" onclick="closeAdminSongPreview()">Close</button></div>
-      </div>`;
-
-    document.body.appendChild(modal);
-    document.body.style.overflow="hidden";
-    modal.onclick=function(event){if(event.target===modal)closeAdminSongPreview();};
-
-  }catch(error){
-    console.error("Admin preview error:",error);
-    alert(error.message||"Could not open the song preview.");
-  }
-}
-
-function closeAdminSongPreview(){
-  const modal=document.getElementById("adminSongPreviewModal");
-  if(modal) modal.remove();
-  document.body.style.overflow="";
-}
-
-/* =========================================================
    APPROVE SONG
 ========================================================= */
 
 async function approveSong(songId){
 
-  if(!currentUser){ alert("Please login first."); return; }
-  if(!await isCurrentUserAdmin()){ alert("You are not authorized."); return; }
-  if(!adminPreviewedSongs.has(songId)){
-    alert("Please preview and listen to this song before approving it.");
+  if(!currentUser){
+
+    alert(
+      "Please login first."
+    );
+
     return;
+
   }
 
+
+  if(!await isCurrentUserAdmin()){
+
+    alert(
+      "You are not authorized."
+    );
+
+    return;
+
+  }
+
+
   try{
-    const {data:submission,error:fetchError}=await sb.from("songs")
-      .select("id,title,artist,file_url,audio_url,cover_url,description,genre,terms_accepted")
-      .eq("id",songId).maybeSingle();
-    if(fetchError) throw fetchError;
-    if(!submission) throw new Error("Song submission could not be found.");
-    if(submission.terms_accepted!==true) throw new Error("This song cannot be approved because the artist has not accepted the Terms & Conditions.");
-    if(!String(submission.title||"").trim()) throw new Error("This song needs a title before approval.");
-    if(!String(submission.artist||"").trim()) throw new Error("This song needs an artist name before approval.");
-    if(!String(submission.audio_url||submission.file_url||"").trim()) throw new Error("This song has no audio file.");
-    if(!String(submission.cover_url||"").trim()) throw new Error("This song needs cover artwork before approval.");
-    if(!String(submission.description||"").trim()) throw new Error("This song needs an About This Song description before approval.");
-    if(!String(submission.genre||"").trim()) throw new Error("This song needs a genre before approval.");
 
-    if(!confirm("Approve this song for public display?\n\nConfirm that you listened to the recording and reviewed the audio, artwork, song information, rights confirmation, and Terms acceptance.")) return;
+    const {
+      error
+    } = await sb
+      .from("songs")
+      .update({
+        approved:true
+      })
+      .eq(
+        "id",
+        songId
+      );
 
-    const {error}=await sb.from("songs").update({approved:true}).eq("id",songId);
-    if(error) throw error;
 
-    adminPreviewedSongs.delete(songId);
-    closeAdminSongPreview();
-    showMessage("adminMessage","Song approved successfully.","success");
+    if(error){
+      throw error;
+    }
+
+
+    showMessage(
+      "adminMessage",
+      "Song approved successfully.",
+      "success"
+    );
+
+
     await loadAdminSongs();
+
     await loadSongs();
+
     await loadNewReleases();
+
     await loadTopCharts();
 
   }catch(error){
+
     console.error(error);
-    showMessage("adminMessage",error.message||"Could not approve song.","error");
+
+    showMessage(
+      "adminMessage",
+      error.message ||
+      "Could not approve song.",
+      "error"
+    );
+
   }
+
 }
 
 
@@ -9246,60 +9088,25 @@ function closePolicyModal(){
   document.body.style.overflow="";
 }
 
-async function showAbout(){
+function showAbout(){
   const modal=document.getElementById("aboutUsModal");
   if(modal) modal.remove();
-
-  let approvedSongs = [];
-  let songCount = 0;
-  let artistCount = 0;
-  let playCount = 0;
-
-  try{
-    const {data, error} = await sb
-      .from("songs")
-      .select("plays,artist_id")
-      .eq("approved", true);
-
-    if(error) throw error;
-
-    approvedSongs = data || [];
-    songCount = approvedSongs.length;
-    artistCount = new Set(
-      approvedSongs
-        .map(song => song.artist_id)
-        .filter(Boolean)
-    ).size;
-    playCount = approvedSongs.reduce(
-      (total, song) => total + (Number(song.plays) || 0),
-      0
-    );
-  }catch(error){
-    console.error("About page statistics error:", error);
-  }
-
-  const statsHtml = `
-    <strong style="color:var(--orange2);">${songCount}</strong> approved songs from
-    <strong style="color:var(--orange2);">${artistCount}</strong> artists, with
-    <strong style="color:var(--orange2);">${playCount.toLocaleString()}</strong> total plays and growing daily.
-  `;
-
   openPolicyModal("About Us - NileSoniQ | Uganda's Leading Artist-First Music Streaming Platform", `<h3 style="margin:0 0 10px;color:var(--orange);">Welcome to NileSoniQ - The Home of Ugandan Music</h3>
 <p>NileSoniQ is a premier music streaming platform proudly built in Kampala, Uganda, and launched in 2026. Our platform was created with a single mission: to empower Ugandan artists and give them 100% control over their music while connecting them directly to fans across Uganda and the world.</p>
 <h3 style="margin:20px 0 8px;color:#fff;">Who We Are:</h3>
 <p>We are a team of Ugandan music lovers, developers, and artists based in Kampala. We saw that many Ugandan artists struggle to earn from their music on foreign platforms. We built NileSoniQ to solve this problem.</p>
 <h3 style="margin:20px 0 8px;color:#fff;">Our Platform Today:</h3>
-<p>NileSoniQ currently has ${statsHtml} Every song shown publicly has passed our approval process, and artists are responsible for the rights to the music they submit.</p>
+<p>NileSoniQ hosts original music submitted by artists who represent that they have the necessary rights or authorization to submit their work. Public song submissions are reviewed and approved before they are displayed. Platform statistics change over time, so current totals are shown dynamically where available.</p>
 <h3 style="margin:20px 0 8px;color:#fff;">What Makes Us Different:</h3>
 <p><strong>1. Artist-First Model:</strong> Artists upload themselves and keep ownership. We never upload songs without permission.</p>
-<p><strong>2. Fair Play Counting:</strong> We count 1 play only after 30 seconds of listening to help keep play counts meaningful.</p>
-<p><strong>3. No Piracy:</strong> We do not intentionally publish unauthorized content. Every upload is reviewed and approved before public display.</p>
+<p><strong>2. Fair Play Counting:</strong> We count 1 play only after 30 seconds of listening to ensure real fans, not bots.</p>
+<p><strong>3. No Piracy:</strong> We have zero tolerance for unauthorized content. Every upload is reviewed and approved.</p>
 <p><strong>4. Supporting Local:</strong> We are 100% Ugandan owned and focused on promoting Ugandan talent from Kampala, Gulu, Mbarara, and beyond.</p>
 <p><strong>5. Community:</strong> We feature artist stories, interviews, and news about the Ugandan music industry.</p>
 <h3 style="margin:20px 0 8px;color:#fff;">Our Vision:</h3>
 <p>To become East Africa's largest platform for original African music where artists earn fairly and fans discover the best new music first.</p>
 <h3 style="margin:20px 0 8px;color:#fff;">Join Us:</h3>
-<p>Are you an artist? Contact us today to get verified and start uploading your music to fans around the world.</p>
+<p>Are you an artist? Contact us today to get verified and start uploading your music to thousands of fans.</p>
 <p>Thank you for supporting Ugandan music. Thank you for supporting NileSoniQ.</p>
 <p style="color:#aaa;margin-bottom:0;">NileSoniQ Team<br>Kampala, Uganda<br>2026</p>`);
 }
@@ -9320,11 +9127,11 @@ function showPrivacy(){
 }
 
 function showTerms(){
-  openPolicyModal("Terms and Conditions - NileSoniQ", `<p>By using NileSoniQ.com, you agree to these terms:</p><p>1. All songs are property of respective artists. We provide streaming only.</p><p>2. Artists by uploading confirm: "I am the original owner of this song and I give NileSoniQ permission to stream my song."</p><p>3. Users must be 13 years or older to use this site.</p><p>4. We reserve the right to remove any song if a valid copyright claim is received. Removal within 24 hours.</p><p>5. Play counts are counted fairly - 1 play per 30 seconds of listening to prevent fake plays.</p><p>6. You may not copy, redistribute or resell any content from this site.</p><p style="margin-bottom:0;">If you violate these terms, we may block your access.</p>`);
+  openPolicyModal("Terms and Conditions - NileSoniQ", `<p>By using NileSoniQ.com, you agree to these terms:</p><p>1. Songs and other user-submitted material remain the property of their respective rights holders. NileSoniQ provides streaming and related platform services.</p><p>2. By uploading music, an artist confirms that they have the necessary rights or authorization to submit the music and gives NileSoniQ permission to host, stream, display, and promote the submitted material as part of the service.</p><p>3. Users must be 13 years or older to use this site.</p><p>4. NileSoniQ may remove, restrict, or disable access to content when we receive a valid copyright complaint, when content violates these Terms, or when action is otherwise required by law or platform policy. Review and removal timing depends on the circumstances; no fixed takedown time is guaranteed.</p><p>5. Play counts are intended to reflect genuine listening activity and may be measured using platform rules designed to reduce artificial or fraudulent plays.</p><p>6. You may not copy, redistribute, resell, or otherwise exploit content from this site except where you have permission or a legal right to do so.</p><p>7. Artists are responsible for the legality and rights status of material they submit. NileSoniq may suspend upload privileges or accounts for repeated violations.</p><p style="margin-bottom:0;">If you violate these terms, we may restrict or terminate access to relevant features or the service.</p>`);
 }
 
 function showContact(){
-  openPolicyModal("Contact NileSoniQ - Kampala, Uganda", `<p>We are available 24/7 to help you.</p><p><strong>Address:</strong> Kampala, Uganda<br><strong>Email:</strong> nilesoniq@gmail.com<br><strong>Phone/WhatsApp:</strong> 0785 823496<br><strong>Response Time:</strong> Within 24 hours</p><h3>For Artists:</h3><p>Want to upload your music? Contact us on WhatsApp. We verify all artists.</p><h3>For Copyright Issues:</h3><p>If you believe any song violates your rights, email us. We remove within 24 hours.</p><p style="margin-bottom:0;">Thank you for supporting Ugandan music.</p>`);
+  openPolicyModal("Contact NileSoniQ - Kampala, Uganda", `<p>We are available to help with account, artist, music, technical, and copyright questions.</p><p><strong>Address:</strong> Kampala, Uganda<br><strong>Email:</strong> nilesoniq@gmail.com<br><strong>Phone/WhatsApp:</strong> 0785 823496</p><h3>For Artists:</h3><p>Contact us if you need help with artist profiles, music submissions, or platform features.</p><h3>For Copyright Issues:</h3><p>If you believe any song or other material infringes your rights, email us with the information requested in our <a href="/DMCA" onclick="history.pushState({},'','/DMCA');showDMCA();return false;">DMCA Copyright Policy</a>.</p><p style="margin-bottom:0;">Thank you for supporting Ugandan music.</p>`);
 }
 
 function showDMCA(){
