@@ -1526,6 +1526,11 @@ onclick="showPage('songs')">
 Songs
 </button>
 
+<button data-page="news"
+onclick="showPage('news')">
+News
+</button>
+
 <button data-page="about"
 onclick="showPage('about')">
 About
@@ -1766,6 +1771,23 @@ Loading artists...
 <div class="container">
 <div class="dashboard-header"><h1>NileSoniq Songs</h1><p>Discover approved music from NileSoniq artists.</p></div>
 <div id="songsPageContainer" class="song-grid"><div class="loading">Loading music...</div></div>
+</div>
+</section>
+
+<!-- NEWS -->
+<section id="newsPage" class="page">
+<div class="container">
+<div class="dashboard-header">
+<h1>NileSoniq News</h1>
+<p>Music stories, artist features, release updates, and news from the Ugandan music scene.</p>
+</div>
+<div id="newsPageContainer" class="song-grid">
+<div class="dashboard-card" style="grid-column:1 / -1;line-height:1.7;text-align:center;">
+<h2 style="margin-top:0;">The NileSoniq Newsroom</h2>
+<p>We are preparing original music stories and artist features for this section. New articles will be published here as they are written and reviewed by the NileSoniq team.</p>
+<p style="color:#aaa;margin-bottom:0;">Topics will include Ugandan music, artist spotlights, new releases, interviews, music events, and stories from the NileSoniq community.</p>
+</div>
+</div>
 </div>
 </section>
 
@@ -2858,7 +2880,7 @@ async () => {
 
   const path=window.location.pathname.replace(/\/+$/,"") || "/";
   if(["/about","/privacy","/terms","/contact","/dmca"].includes(path.toLowerCase())) await openPolicyRoute(path);
-  else if(path === "/artists" || path === "/songs") await showPage(path.slice(1),false);
+  else if(path === "/artists" || path === "/songs" || path === "/news") await showPage(path.slice(1),false);
   else if(path === "/" || !isShortPublicRoute()) await showPage("home",false);
 });
 
@@ -3384,10 +3406,10 @@ async function updateUI(){
 
 async function showPage(page, updateUrl=true){
 
-  const pages = ["home","artists","songs","about","dashboard","admin"];
+  const pages = ["home","artists","songs","news","about","dashboard","admin"];
   if(!pages.includes(page)) page="home";
 
-  if(updateUrl && ["home","artists","songs","about"].includes(page)){
+  if(updateUrl && ["home","artists","songs","news","about"].includes(page)){
     const target = page === "home" ? "/" : "/" + page;
     if(window.location.pathname !== target) window.history.pushState({page}, "", target);
   }
@@ -9177,7 +9199,7 @@ window.addEventListener("popstate", async () => {
   if(typeof closePublicSongPage === "function") closePublicSongPage();
   document.body.style.overflow="";
   const path=window.location.pathname.replace(/\/+$/,"") || "/";
-  if(path === "/artists" || path === "/songs" || path === "/about") await showPage(path.slice(1),false);
+  if(path === "/artists" || path === "/songs" || path === "/news" || path === "/about") await showPage(path.slice(1),false);
   else await showPage("home",false);
 });
 
