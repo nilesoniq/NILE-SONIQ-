@@ -33,6 +33,10 @@
       "destination": "/index.html"
     },
     {
+      "source": "/news/:path*",
+      "destination": "/index.html"
+    },
+    {
       "source": "/song/:path*",
       "destination": "/index.html"
     },
