@@ -2930,6 +2930,8 @@ let currentPlayingSong = null;
 let currentPlayingIndex = -1;
 
 let currentAdmin = null;
+const adminPreviewedSongs = new Set();
+let adminPreviewAudio = null;
 
 let countedPlaySongId = null;
 let playCountedForCurrentSong = false;
@@ -7877,6 +7879,14 @@ async function updateWithdrawalStatus(
 
   }
 
+  if(!adminPreviewedSongs.has(String(songId))){
+    showMessage(
+      "adminMessage",
+      "Preview and mark this song as reviewed before approving it.",
+      "error"
+    );
+    return;
+  }
 
   try{
 
@@ -8549,7 +8559,15 @@ async function loadAdminSongs(){
             <td>
 
               <button
+                class="btn btn-orange"
+                onclick="previewAdminSong('${escapeAttribute(song.id)}')">
+                Preview
+              </button>
+
+              <button
                 class="btn btn-success"
+                style="margin-left:5px;"
+                ${adminPreviewedSongs.has(String(song.id)) ? "" : "disabled"}
                 onclick="approveSong('${escapeAttribute(song.id)}')">
                 Approve
               </button>
@@ -8591,6 +8609,94 @@ async function loadAdminSongs(){
 
   }
 
+}
+
+
+/* =========================================================
+   ADMIN SONG PREVIEW
+========================================================= */
+
+function closeAdminSongPreview(){
+  if(adminPreviewAudio){
+    try{ adminPreviewAudio.pause(); }catch(e){}
+    adminPreviewAudio=null;
+  }
+  const modal=document.getElementById("adminSongPreviewModal");
+  if(modal) modal.remove();
+}
+
+async function previewAdminSong(songId){
+  if(!currentUser){ alert("Please login first."); return; }
+  if(!await isCurrentUserAdmin()){ alert("You are not authorized."); return; }
+
+  try{
+    const {data:song,error}=await sb.from("songs").select("*").eq("id",songId).maybeSingle();
+    if(error) throw error;
+    if(!song) throw new Error("Song submission not found.");
+
+    closeAdminSongPreview();
+
+    const modal=document.createElement("div");
+    modal.id="adminSongPreviewModal";
+    modal.className="modal";
+    modal.style.display="flex";
+    modal.innerHTML=`
+      <div class="modal-box" style="max-width:760px;max-height:90vh;overflow:auto;">
+        <div class="modal-header">
+          <h2>Admin Song Preview</h2>
+          <button class="close-btn" onclick="closeAdminSongPreview()">×</button>
+        </div>
+        <div style="display:grid;grid-template-columns:140px 1fr;gap:20px;align-items:start;">
+          <div style="width:140px;height:140px;border-radius:12px;overflow:hidden;background:#111;display:flex;align-items:center;justify-content:center;">
+            ${song.cover_url ? `<img src="${escapeAttribute(song.cover_url)}" alt="Song cover" style="width:100%;height:100%;object-fit:cover;">` : `<span style="color:#aaa;font-size:13px;">No cover</span>`}
+          </div>
+          <div>
+            <h3 style="margin:0 0 6px;">${escapeHtml(song.title || "Untitled")}</h3>
+            <p style="margin:0 0 14px;color:#888;">${escapeHtml(song.artist || "Unknown artist")}</p>
+            ${song.file_url || song.audio_url ? `<audio id="adminPreviewAudio" controls preload="metadata" style="width:100%;" src="${escapeAttribute(song.file_url || song.audio_url)}"></audio>` : `<div class="message error">No audio file is attached.</div>`}
+          </div>
+        </div>
+
+        <div style="margin-top:20px;">
+          <h3>Song Information</h3>
+          <div style="line-height:1.7;color:#ddd;">
+            ${song.description ? `<p><strong>About this song:</strong><br>${escapeHtml(song.description)}</p>` : `<p><strong>About this song:</strong> Not provided.</p>`}
+            <p><strong>Genre:</strong> ${escapeHtml(song.genre || "Not provided")}</p>
+            <p><strong>Release date:</strong> ${escapeHtml(song.release_date || "Not provided")}</p>
+            <p><strong>Producer:</strong> ${escapeHtml(song.producer || "Not provided")}</p>
+            <p><strong>Featured artists:</strong> ${escapeHtml(song.featured_artists || "None listed")}</p>
+            <p><strong>Record label:</strong> ${escapeHtml(song.label || "Not provided")}</p>
+            <p><strong>Location:</strong> ${escapeHtml(song.location || "Not provided")}</p>
+            <p><strong>Terms accepted:</strong> ${song.terms_accepted === true ? "Yes" : "No"}</p>
+            <p><strong>Status:</strong> ${song.approved === true ? "Approved" : "Pending review"}</p>
+          </div>
+        </div>
+
+        <div style="margin-top:18px;padding:14px;border-radius:10px;background:rgba(255,106,0,.08);border:1px solid rgba(255,106,0,.25);">
+          <strong>Admin review checklist</strong>
+          <p style="margin:8px 0 0;color:#aaa;line-height:1.5;">Listen to the audio and check the artwork, title, artist name, description, genre, and rights/Terms confirmation. Do not approve content that appears unrelated, unauthorized, corrupted, silent, or otherwise unsuitable for public display.</p>
+        </div>
+
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:20px;">
+          <button class="btn btn-success" onclick="confirmAdminSongPreview('${escapeAttribute(song.id)}')">Mark Reviewed</button>
+          <button class="btn btn-danger" onclick="closeAdminSongPreview()">Close</button>
+        </div>
+      </div>`;
+
+    modal.addEventListener("click",e=>{ if(e.target===modal) closeAdminSongPreview(); });
+    document.body.appendChild(modal);
+    adminPreviewAudio=document.getElementById("adminPreviewAudio") || null;
+  }catch(error){
+    console.error("Admin song preview error:",error);
+    showMessage("adminMessage",error.message || "Could not preview song.","error");
+  }
+}
+
+function confirmAdminSongPreview(songId){
+  adminPreviewedSongs.add(String(songId));
+  closeAdminSongPreview();
+  showMessage("adminMessage","Song preview marked as reviewed. You can now approve it.","success");
+  loadAdminSongs();
 }
 
 
@@ -8648,6 +8754,8 @@ async function approveSong(songId){
       "success"
     );
 
+
+    adminPreviewedSongs.delete(String(songId));
 
     await loadAdminSongs();
 
