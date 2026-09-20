@@ -4,10 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>NileSoniq — Uganda's Music, Free to Stream</title>
+<title>NileSoniq — Ugandan Music Platform</title>
 
 <meta name="description"
-content="NileSoniq — Uganda's music platform. Stream music, discover artists and support Ugandan music.">
+content="NileSoniq is an artist-first Ugandan music platform where listeners can stream approved songs, discover artists, explore releases, and read original music stories.">
+<link rel="canonical" href="https://nilesoniq.com/">
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2">
 </script>
@@ -1620,12 +1621,12 @@ Logout
 <div class="hero-box">
 
 <div class="badge">
-● FREE FOREVER • MTN MOMO READY
+● ORIGINAL UGANDAN MUSIC
 </div>
 
 <h1>
 Uganda's music,
-<span>free to stream.</span>
+<span>all in one place.</span>
 </h1>
 
 <p>
@@ -1794,10 +1795,15 @@ Loading music...
 
 <h1>NileSoniq Artists</h1>
 
-<p>
-Discover artists and their music.
-</p>
+<p>Discover Ugandan artists, their stories, and the music they have published on NileSoniq.</p>
 
+</div>
+
+<div class="dashboard-card" style="line-height:1.7;margin-bottom:22px;">
+<h2 style="margin-top:0;">Discover Artists on NileSoniq</h2>
+<p>Explore artists from Uganda and discover the songs they have submitted to NileSoniq. Each public artist profile is built around the artist's own information and approved music, so listeners can learn who created a release as well as listen to it.</p>
+<p>Artist profiles may include genre, musical style, years active, website and social links where the artist has provided them. Public music submissions are reviewed before they are displayed.</p>
+<p style="margin-bottom:0;">If you are an artist, you can create a profile, submit original music, provide accurate release information, and use NileSoniq to connect with listeners.</p>
 </div>
 
 <div id="artistsContainer"
@@ -1815,6 +1821,12 @@ Loading artists...
 <section id="songsPage" class="page">
 <div class="container">
 <div class="dashboard-header"><h1>NileSoniq Songs</h1><p>Discover approved music from NileSoniq artists.</p></div>
+<div class="dashboard-card" style="line-height:1.7;margin-bottom:22px;">
+<h2 style="margin-top:0;">Browse Original Music</h2>
+<p>NileSoniq is a place to discover music submitted by artists and approved for public listening. Browse releases, listen to songs, view artist information, and learn more about each track through its available description and release details.</p>
+<p>Song pages can include information such as genre, release date, producer, featured artists, record label, location, and the artist's own description. Play counts are used to help listeners discover popular music through the site's charts.</p>
+<p style="margin-bottom:0;">Music submitted by artists is reviewed before it becomes publicly available. If you believe a published song infringes your copyright or violates our rules, you can report it or use the DMCA process.</p>
+</div>
 <div id="songsPageContainer" class="song-grid"><div class="loading">Loading music...</div></div>
 </div>
 </section>
@@ -1824,7 +1836,13 @@ Loading artists...
 <div class="container">
 <div class="dashboard-header">
 <h1>NileSoniq News</h1>
-<p>Music stories, artist features, release updates, and news from the Ugandan music scene.</p>
+<p>Original music stories, artist features, release updates, interviews, community stories, and reporting about the Ugandan music scene.</p>
+</div>
+<div class="dashboard-card" style="line-height:1.7;margin-bottom:22px;">
+<h2 style="margin-top:0;">The NileSoniq Newsroom</h2>
+<p>The NileSoniq newsroom is intended for original editorial content about music and the people who make it. Articles may cover artist spotlights, interviews, new releases, music events, community stories, and developments in Uganda's music scene.</p>
+<p>News articles are written and published by authorized NileSoniq administrators. We do not promise that every article will cover every event, and we do not publish placeholder stories simply to increase the number of pages on the site.</p>
+<p style="margin-bottom:0;">When available, an article includes a publication date, a summary, and the full story so readers can understand the subject without leaving NileSoniq.</p>
 </div>
 <div id="newsPageContainer" class="song-grid">
 <div class="loading">Loading NileSoniq News...</div>
@@ -1837,8 +1855,8 @@ Loading artists...
 <div class="container">
 <div class="dashboard-header"><h1>About NileSoniq</h1><p>Learn more about NileSoniq and our mission.</p></div>
 <div class="dashboard-card" style="line-height:1.7;">
-<h2>Welcome to NileSoniq - The Home of Ugandan Music</h2>
-<p>NileSoniq is a music streaming platform proudly built in Kampala, Uganda, and launched in 2026. Our mission is to empower Ugandan artists and connect them directly with fans across Uganda and the world.</p>
+<h2>Welcome to NileSoniq - An Artist-First Ugandan Music Platform</h2>
+<p>NileSoniq is a music streaming platform built in Kampala, Uganda, and launched in 2026. Our mission is to give Ugandan artists a place to share original music, provide useful release information, and connect with listeners in Uganda and beyond.</p>
 <h3>Who We Are</h3><p>We are a team of Ugandan music lovers, developers, and artists based in Kampala. We built NileSoniq to help local artists share their music and reach more listeners.</p>
 <h3>Our Platform</h3><p>NileSoniq hosts original music uploaded directly by artists who own the rights to their work.</p>
 <h3>What Makes Us Different</h3><p><strong>Artist-First:</strong> Artists upload their music and keep ownership.</p><p><strong>Fair Play Counting:</strong> A play is counted after 30 seconds of listening.</p><p><strong>No Piracy:</strong> Uploaded content is reviewed and approved.</p><p><strong>Supporting Local:</strong> We focus on promoting Ugandan talent.</p>
@@ -2631,7 +2649,7 @@ NILE SONIQ
 </div>
 
 <div style="font-size:12px;margin-top:5px;">
-Uganda's music, free to stream.
+Ugandan music, all in one place.
 </div>
 
 </div>
@@ -9472,22 +9490,22 @@ function closePolicyModal(){
 function showAbout(){
   const modal=document.getElementById("aboutUsModal");
   if(modal) modal.remove();
-  openPolicyModal("About Us - NileSoniQ | Uganda's Leading Artist-First Music Streaming Platform", `<h3 style="margin:0 0 10px;color:var(--orange);">Welcome to NileSoniQ - The Home of Ugandan Music</h3>
-<p>NileSoniQ is a premier music streaming platform proudly built in Kampala, Uganda, and launched in 2026. Our platform was created with a single mission: to empower Ugandan artists and give them 100% control over their music while connecting them directly to fans across Uganda and the world.</p>
+  openPolicyModal("About Us - NileSoniQ | Artist-First Ugandan Music Platform", `<h3 style="margin:0 0 10px;color:var(--orange);">Welcome to NileSoniQ - The Home of Ugandan Music</h3>
+<p>NileSoniQ is a music platform built in Kampala, Uganda, and launched in 2026. Our mission is to give Ugandan artists a place to share original music, provide useful release information, and connect with listeners in Uganda and beyond.</p>
 <h3 style="margin:20px 0 8px;color:#fff;">Who We Are:</h3>
-<p>We are a team of Ugandan music lovers, developers, and artists based in Kampala. We saw that many Ugandan artists struggle to earn from their music on foreign platforms. We built NileSoniQ to solve this problem.</p>
+<p>We are building NileSoniQ around Ugandan music, artist profiles, approved releases, and original music stories. Our goal is to make it easier for listeners to discover artists and learn more about the music they publish.</p>
 <h3 style="margin:20px 0 8px;color:#fff;">Our Platform Today:</h3>
 <p>NileSoniQ hosts original music submitted by artists who represent that they have the necessary rights or authorization to submit their work. Public song submissions are reviewed and approved before they are displayed. Platform statistics change over time, so current totals are shown dynamically where available.</p>
 <h3 style="margin:20px 0 8px;color:#fff;">What Makes Us Different:</h3>
 <p><strong>1. Artist-First Model:</strong> Artists upload themselves and keep ownership. We never upload songs without permission.</p>
 <p><strong>2. Fair Play Counting:</strong> We count 1 play only after 30 seconds of listening to ensure real fans, not bots.</p>
 <p><strong>3. No Piracy:</strong> We have zero tolerance for unauthorized content. Every upload is reviewed and approved.</p>
-<p><strong>4. Supporting Local:</strong> We are 100% Ugandan owned and focused on promoting Ugandan talent from Kampala, Gulu, Mbarara, and beyond.</p>
+<p><strong>4. Supporting Local:</strong> We focus on promoting Ugandan talent and helping listeners discover artists from across Uganda.</p>
 <p><strong>5. Community:</strong> We feature artist stories, interviews, and news about the Ugandan music industry.</p>
 <h3 style="margin:20px 0 8px;color:#fff;">Our Vision:</h3>
-<p>To become East Africa's largest platform for original African music where artists earn fairly and fans discover the best new music first.</p>
+<p>To grow into a trusted platform for original African music where artists can reach listeners and build their audiences.</p>
 <h3 style="margin:20px 0 8px;color:#fff;">Join Us:</h3>
-<p>Are you an artist? Contact us today to get verified and start uploading your music to thousands of fans.</p>
+<p>Are you an artist? Create your profile, provide accurate release information, and submit your music for review.</p>
 <p>Thank you for supporting Ugandan music. Thank you for supporting NileSoniQ.</p>
 <p style="color:#aaa;margin-bottom:0;">NileSoniQ Team<br>Kampala, Uganda<br>2026</p>`);
 }
