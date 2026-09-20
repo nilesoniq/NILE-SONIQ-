@@ -2459,28 +2459,23 @@ Uganda's music, free to stream.
 
 <div class="footer-links">
 
-<a href="#"
-onclick="showAbout();return false;">
+<a href="/about">
 About Us
 </a>
 
-<a href="#"
-onclick="showPrivacy();return false;">
+<a href="/privacy">
 Privacy Policy
 </a>
 
-<a href="#"
-onclick="showTerms();return false;">
+<a href="/terms">
 Terms &amp; Conditions
 </a>
 
-<a href="#"
-onclick="showContact();return false;">
+<a href="/contact">
 Contact
 </a>
 
-<a href="#"
-onclick="showDMCA();return false;">
+<a href="/DMCA">
 DMCA
 </a>
 
@@ -2796,8 +2791,23 @@ async () => {
   await loadArtists();
 
   const path=window.location.pathname.replace(/\/+$/,"") || "/";
-  if(path === "/artists" || path === "/songs" || path === "/about") await showPage(path.slice(1),false);
-  else if(path === "/" || !isShortPublicRoute()) await showPage("home",false);
+  if(path === "/artists" || path === "/songs" || path === "/about"){
+    await showPage(path.slice(1),false);
+  }else if(path === "/privacy"){
+    await showPage("home",false);
+    showPrivacy();
+  }else if(path === "/terms"){
+    await showPage("home",false);
+    showTerms();
+  }else if(path === "/contact"){
+    await showPage("home",false);
+    showContact();
+  }else if(path.toLowerCase() === "/dmca"){
+    await showPage("home",false);
+    showDMCA();
+  }else if(path === "/" || !isShortPublicRoute()){
+    await showPage("home",false);
+  }
 });
 
 
@@ -8853,8 +8863,23 @@ window.addEventListener("popstate", async () => {
   if(typeof closePublicSongPage === "function") closePublicSongPage();
   document.body.style.overflow="";
   const path=window.location.pathname.replace(/\/+$/,"") || "/";
-  if(path === "/artists" || path === "/songs" || path === "/about") await showPage(path.slice(1),false);
-  else await showPage("home",false);
+  if(path === "/artists" || path === "/songs" || path === "/about"){
+    await showPage(path.slice(1),false);
+  }else if(path === "/privacy"){
+    await showPage("home",false);
+    showPrivacy();
+  }else if(path === "/terms"){
+    await showPage("home",false);
+    showTerms();
+  }else if(path === "/contact"){
+    await showPage("home",false);
+    showContact();
+  }else if(path.toLowerCase() === "/dmca"){
+    await showPage("home",false);
+    showDMCA();
+  }else{
+    await showPage("home",false);
+  }
 });
 
 document.addEventListener("DOMContentLoaded", async () => {
