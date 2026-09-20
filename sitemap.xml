@@ -18,6 +18,22 @@
     <loc>https://nilesoniq.com/about</loc>
   </url>
 
+  <url>
+    <loc>https://nilesoniq.com/privacy</loc>
+  </url>
+
+  <url>
+    <loc>https://nilesoniq.com/terms</loc>
+  </url>
+
+  <url>
+    <loc>https://nilesoniq.com/contact</loc>
+  </url>
+
+  <url>
+    <loc>https://nilesoniq.com/DMCA</loc>
+  </url>
+
   <!-- Artist pages -->
   <url>
     <loc>https://nilesoniq.com/artist/heavenz-man</loc>
