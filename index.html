@@ -5893,6 +5893,73 @@ async function openSongBySlug(slug){
   }
 }
 
+async function openSongReport(songId){
+  const existing=document.getElementById("songReportModal");
+  if(existing) existing.remove();
+  const modal=document.createElement("div");
+  modal.id="songReportModal";
+  modal.style.cssText="position:fixed;inset:0;z-index:10002;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(0,0,0,.82);backdrop-filter:blur(8px);overflow-y:auto;";
+  modal.innerHTML=`
+    <div style="position:relative;width:min(560px,100%);background:#111;border:1px solid #333;border-radius:18px;padding:24px;box-shadow:0 25px 80px rgba(0,0,0,.6);">
+      <button onclick="closeSongReport()" aria-label="Close" style="position:absolute;right:12px;top:12px;width:36px;height:36px;border:0;border-radius:50%;background:#292929;color:#fff;font-size:22px;cursor:pointer;">×</button>
+      <h2 style="margin:0 42px 8px 0;">Report Song / Copyright Issue</h2>
+      <p style="color:#aaa;font-size:13px;line-height:1.5;margin-bottom:18px;">Use this form to report suspected copyright infringement, unauthorized uploads, harmful content, or another serious issue with this song.</p>
+      <label style="display:block;color:#ccc;font-size:13px;margin-bottom:6px;">Your name</label>
+      <input id="songReportName" type="text" maxlength="120" placeholder="Your full name" style="width:100%;background:#101010;color:#fff;border:1px solid #292929;border-radius:10px;padding:12px;margin-bottom:14px;outline:none;">
+      <label style="display:block;color:#ccc;font-size:13px;margin-bottom:6px;">Your email</label>
+      <input id="songReportEmail" type="email" maxlength="160" placeholder="you@example.com" style="width:100%;background:#101010;color:#fff;border:1px solid #292929;border-radius:10px;padding:12px;margin-bottom:14px;outline:none;">
+      <label style="display:block;color:#ccc;font-size:13px;margin-bottom:6px;">Reason for report</label>
+      <select id="songReportReason" style="width:100%;background:#101010;color:#fff;border:1px solid #292929;border-radius:10px;padding:12px;margin-bottom:14px;outline:none;">
+        <option value="Copyright infringement">Copyright infringement</option>
+        <option value="Unauthorized upload">Unauthorized upload</option>
+        <option value="Harmful or inappropriate content">Harmful or inappropriate content</option>
+        <option value="Other serious issue">Other serious issue</option>
+      </select>
+      <label style="display:block;color:#ccc;font-size:13px;margin-bottom:6px;">Details</label>
+      <textarea id="songReportDetails" rows="5" maxlength="3000" placeholder="Describe the issue and, for copyright claims, explain your connection to the copyrighted work." style="width:100%;background:#101010;color:#fff;border:1px solid #292929;border-radius:10px;padding:12px;margin-bottom:8px;outline:none;resize:vertical;"></textarea>
+      <p style="color:#777;font-size:11px;line-height:1.4;margin-bottom:16px;">For formal copyright takedown requests, you may also email nilesoniq@gmail.com with the information listed in our DMCA Copyright Policy.</p>
+      <div id="songReportStatus" style="min-height:20px;color:#aaa;font-size:12px;margin-bottom:10px;"></div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;">
+        <button class="btn btn-dark" onclick="closeSongReport()">Cancel</button>
+        <button class="btn btn-orange" onclick="submitSongReport('${escapeAttribute(songId)}')">Submit Report</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  document.body.style.overflow="hidden";
+  modal.onclick=function(event){if(event.target===modal)closeSongReport();};
+}
+
+function closeSongReport(){
+  const modal=document.getElementById("songReportModal");
+  if(modal) modal.remove();
+  document.body.style.overflow="";
+}
+
+function submitSongReport(songId){
+  const name=document.getElementById("songReportName");
+  const email=document.getElementById("songReportEmail");
+  const reason=document.getElementById("songReportReason");
+  const details=document.getElementById("songReportDetails");
+  const status=document.getElementById("songReportStatus");
+  if(!name||!email||!reason||!details||!status)return;
+  const n=name.value.trim(), e=email.value.trim(), d=details.value.trim();
+  if(!n||!e||!d){status.textContent="Please complete your name, email, and report details.";status.style.color="#ff8f8f";return;}
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)){status.textContent="Please enter a valid email address.";status.style.color="#ff8f8f";return;}
+  const subject=reason.value+" - NileSoniQ song report";
+  const body=[
+    "NileSoniQ Song Report",
+    "Song ID: "+songId,
+    "Name: "+n,
+    "Email: "+e,
+    "Reason: "+reason.value,
+    "Details: "+d,
+    "Song URL: "+window.location.origin+window.location.pathname
+  ].join("\n");
+  window.location.href="mailto:nilesoniq@gmail.com?subject="+encodeURIComponent(subject)+"&body="+encodeURIComponent(body);
+  status.textContent="Your email app should now open with the report prepared. If it does not, email nilesoniq@gmail.com directly.";
+  status.style.color="#a8d5a8";
+}
+
 async function showPublicSongPage(song){
   let modal = document.getElementById("songPublicModal");
   if(!modal){
@@ -5981,6 +6048,9 @@ async function showPublicSongPage(song){
         <button class="btn btn-orange" onclick="playPublicSongFromPage('${escapeAttribute(song.id)}')">▶ Play Song</button>
         <button class="btn btn-dark" onclick="downloadSong('${escapeAttribute(song.id)}')">↓ Download</button>
         <button class="btn btn-dark" onclick="copyPublicSongUrl('${escapeAttribute(url)}')">🔗 Copy Link</button>
+      </div>
+      <div style="margin-top:14px;text-align:center;">
+        <button class="btn btn-dark" style="border-color:#4a2a2a;color:#ff9b9b;" onclick="openSongReport('${escapeAttribute(song.id)}')">⚠ Report Song / Copyright Issue</button>
       </div>
       ${aboutHtml}
       ${detailsHtml}
