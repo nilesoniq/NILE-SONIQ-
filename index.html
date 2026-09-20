@@ -9176,25 +9176,60 @@ function closePolicyModal(){
   document.body.style.overflow="";
 }
 
-function showAbout(){
+async function showAbout(){
   const modal=document.getElementById("aboutUsModal");
   if(modal) modal.remove();
+
+  let approvedSongs = [];
+  let songCount = 0;
+  let artistCount = 0;
+  let playCount = 0;
+
+  try{
+    const {data, error} = await sb
+      .from("songs")
+      .select("plays,artist_id")
+      .eq("approved", true);
+
+    if(error) throw error;
+
+    approvedSongs = data || [];
+    songCount = approvedSongs.length;
+    artistCount = new Set(
+      approvedSongs
+        .map(song => song.artist_id)
+        .filter(Boolean)
+    ).size;
+    playCount = approvedSongs.reduce(
+      (total, song) => total + (Number(song.plays) || 0),
+      0
+    );
+  }catch(error){
+    console.error("About page statistics error:", error);
+  }
+
+  const statsHtml = `
+    <strong style="color:var(--orange2);">${songCount}</strong> approved songs from
+    <strong style="color:var(--orange2);">${artistCount}</strong> artists, with
+    <strong style="color:var(--orange2);">${playCount.toLocaleString()}</strong> total plays and growing daily.
+  `;
+
   openPolicyModal("About Us - NileSoniQ | Uganda's Leading Artist-First Music Streaming Platform", `<h3 style="margin:0 0 10px;color:var(--orange);">Welcome to NileSoniQ - The Home of Ugandan Music</h3>
 <p>NileSoniQ is a premier music streaming platform proudly built in Kampala, Uganda, and launched in 2026. Our platform was created with a single mission: to empower Ugandan artists and give them 100% control over their music while connecting them directly to fans across Uganda and the world.</p>
 <h3 style="margin:20px 0 8px;color:#fff;">Who We Are:</h3>
 <p>We are a team of Ugandan music lovers, developers, and artists based in Kampala. We saw that many Ugandan artists struggle to earn from their music on foreign platforms. We built NileSoniQ to solve this problem.</p>
 <h3 style="margin:20px 0 8px;color:#fff;">Our Platform Today:</h3>
-<p>NileSoniQ hosts over <strong style="color:var(--orange2);">40</strong> original songs from <strong style="color:var(--orange2);">21+</strong> verified Ugandan artists, with over <strong style="color:var(--orange2);">4,000</strong> organic plays and growing daily. Every song on our platform is uploaded directly by the artist who owns full rights.</p>
+<p>NileSoniQ currently has ${statsHtml} Every song shown publicly has passed our approval process, and artists are responsible for the rights to the music they submit.</p>
 <h3 style="margin:20px 0 8px;color:#fff;">What Makes Us Different:</h3>
 <p><strong>1. Artist-First Model:</strong> Artists upload themselves and keep ownership. We never upload songs without permission.</p>
-<p><strong>2. Fair Play Counting:</strong> We count 1 play only after 30 seconds of listening to ensure real fans, not bots.</p>
-<p><strong>3. No Piracy:</strong> We have zero tolerance for unauthorized content. Every upload is reviewed and approved.</p>
+<p><strong>2. Fair Play Counting:</strong> We count 1 play only after 30 seconds of listening to help keep play counts meaningful.</p>
+<p><strong>3. No Piracy:</strong> We do not intentionally publish unauthorized content. Every upload is reviewed and approved before public display.</p>
 <p><strong>4. Supporting Local:</strong> We are 100% Ugandan owned and focused on promoting Ugandan talent from Kampala, Gulu, Mbarara, and beyond.</p>
 <p><strong>5. Community:</strong> We feature artist stories, interviews, and news about the Ugandan music industry.</p>
 <h3 style="margin:20px 0 8px;color:#fff;">Our Vision:</h3>
 <p>To become East Africa's largest platform for original African music where artists earn fairly and fans discover the best new music first.</p>
 <h3 style="margin:20px 0 8px;color:#fff;">Join Us:</h3>
-<p>Are you an artist? Contact us today to get verified and start uploading your music to thousands of fans.</p>
+<p>Are you an artist? Contact us today to get verified and start uploading your music to fans around the world.</p>
 <p>Thank you for supporting Ugandan music. Thank you for supporting NileSoniQ.</p>
 <p style="color:#aaa;margin-bottom:0;">NileSoniQ Team<br>Kampala, Uganda<br>2026</p>`);
 }
