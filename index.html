@@ -8309,27 +8309,54 @@ async function startPlatformDeposit(){
 
 async function withdrawPlatformMoney(){
   if(!currentUser || !await isCurrentUserSuperAdmin()){
-    showMessage("platformWithdrawMessage","Only the Super Admin can withdraw platform money.","error");
+    showMessage(
+      "platformWithdrawMessage",
+      "Only the Super Admin can withdraw platform money.",
+      "error"
+    );
     return;
   }
 
-  const amount = Number(document.getElementById("platformWithdrawAmount")?.value || 0);
-  const phone = (document.getElementById("platformWithdrawPhone")?.value || "").trim();
-  const network = (document.getElementById("platformWithdrawNetwork")?.value || "MTN").trim().toUpperCase();
+  const amount = Number(
+    document.getElementById("platformWithdrawAmount")?.value || 0
+  );
+
+  const phone = (
+    document.getElementById("platformWithdrawPhone")?.value || ""
+  ).trim();
+
+  const network = (
+    document.getElementById("platformWithdrawNetwork")?.value || "MTN"
+  ).trim().toUpperCase();
+
   const button = document.getElementById("platformWithdrawButton");
 
   if(amount < 1000){
-    showMessage("platformWithdrawMessage","Enter an amount of at least UGX 1,000.","error");
+    showMessage(
+      "platformWithdrawMessage",
+      "Enter an amount of at least UGX 1,000.",
+      "error"
+    );
     return;
   }
 
-  if(!/^\+?256\d{9}$|^0\d{9}$/.test(phone.replace(/\s+/g,""))){
-    showMessage("platformWithdrawMessage","Enter a valid Ugandan mobile-money number.","error");
+  const cleanPhone = phone.replace(/\s+/g,"");
+
+  if(!/^\+?256\d{9}$|^0\d{9}$/.test(cleanPhone)){
+    showMessage(
+      "platformWithdrawMessage",
+      "Enter a valid Ugandan mobile-money number.",
+      "error"
+    );
     return;
   }
 
   if(network !== "MTN" && network !== "AIRTEL"){
-    showMessage("platformWithdrawMessage","Select MTN or Airtel.","error");
+    showMessage(
+      "platformWithdrawMessage",
+      "Select MTN or Airtel.",
+      "error"
+    );
     return;
   }
 
@@ -8339,66 +8366,131 @@ async function withdrawPlatformMoney(){
   }
 
   try{
-    const provider = network === "AIRTEL" ? "airtel" : "mtn";
-    const reference = `PLATFORM-PAYOUT-${Date.now()}`;
+    const provider =
+      network === "AIRTEL"
+        ? "airtel"
+        : "mtn";
 
-    const { data: sessionData, error: sessionError } = await sb.auth.getSession();
+    const reference =
+      `PLATFORM-PAYOUT-${Date.now()}`;
+
+    const {
+      data: sessionData,
+      error: sessionError
+    } = await sb.auth.getSession();
+
     if(sessionError){
-      throw new Error(sessionError.message || "Could not verify your login session.");
+      throw new Error(
+        sessionError.message ||
+        "Could not verify your login session."
+      );
     }
 
-    const accessToken = sessionData?.session?.access_token;
+    const accessToken =
+      sessionData?.session?.access_token;
+
     if(!accessToken){
-      throw new Error("Your Super Admin session has expired. Please log out and log in again.");
+      throw new Error(
+        "Your Super Admin session has expired. Please log out and log in again."
+      );
     }
 
-    const { data, error } = await sb.functions.invoke("pesajet-disbursement",{
-      body:{
-        phone_number: phone,
+    /*
+     * Call the deployed disbursement Edge Function directly.
+     * Safe Test Mode is controlled by the Edge Function and
+     * defaults to TRUE, so this request does not send money
+     * while testing.
+     */
+    const functionUrl =
+      "https://nxiygxnzlusasgzdknft.supabase.co/functions/v1/pesajet-disbursement";
+
+    const response = await fetch(functionUrl,{
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${accessToken}`,
+        "apikey": sb.supabaseKey,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        phone_number: cleanPhone,
         amount: amount,
         provider: provider,
         reference: reference,
         description: "NileSoniq platform withdrawal"
-      },
-      headers:{
-        Authorization: `Bearer ${accessToken}`
-      }
+      })
     });
 
-    if(error){
-      let detail = error.message || "The payment backend returned an error.";
-      try{
-        if(error.context){
-          const responseBody = await error.context.json();
-          detail = responseBody?.error || responseBody?.message || detail;
-        }
-      }catch(_){ }
-      throw new Error(detail);
+    let data = null;
+
+    try{
+      data = await response.json();
+    }catch(_){
+      data = null;
+    }
+
+    if(!response.ok){
+      throw new Error(
+        data?.error ||
+        data?.message ||
+        `Edge Function returned HTTP ${response.status}.`
+      );
     }
 
     if(!data){
-      throw new Error("The payment backend returned an empty response.");
+      throw new Error(
+        "The payment backend returned an empty response."
+      );
     }
 
     if(data.success === false){
-      throw new Error(data.error || data.message || "PesaJet rejected the withdrawal request.");
+      throw new Error(
+        data.error ||
+        data.message ||
+        "PesaJet rejected the withdrawal request."
+      );
     }
 
-    const status = String(data.status || "PENDING").toUpperCase();
-    const transactionId = data.pesajet_transaction_id || "";
+    if(data.test_mode === true){
+      showMessage(
+        "platformWithdrawMessage",
+        data.message ||
+        "Platform payout validation successful. No money was sent.",
+        "success"
+      );
+    }else{
+      const status =
+        String(data.status || "PENDING").toUpperCase();
+
+      const transactionId =
+        data.pesajet_transaction_id ||
+        "";
+
+      showMessage(
+        "platformWithdrawMessage",
+        `Platform withdrawal submitted. Status: ${status}.${transactionId ? ` Transaction ID: ${transactionId}` : ""}`,
+        "success"
+      );
+    }
+
+    const amountInput =
+      document.getElementById("platformWithdrawAmount");
+
+    if(amountInput){
+      amountInput.value = "";
+    }
+
+  }catch(error){
+    console.error(
+      "Platform withdrawal error:",
+      error
+    );
 
     showMessage(
       "platformWithdrawMessage",
-      `Platform withdrawal submitted. Status: ${status}.${transactionId ? ` Transaction ID: ${transactionId}` : ""}`,
-      "success"
+      error?.message ||
+      "Could not process platform withdrawal.",
+      "error"
     );
-
-    const amountInput = document.getElementById("platformWithdrawAmount");
-    if(amountInput) amountInput.value = "";
-
-  }catch(error){
-    console.error("Platform withdrawal error:",error);
-    showMessage("platformWithdrawMessage",error.message || "Could not process platform withdrawal.","error");
   }finally{
     if(button){
       button.disabled = false;
