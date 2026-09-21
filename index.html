@@ -3007,6 +3007,101 @@ function restoreDefaultSeo(){
 
 
 /* =========================================================
+   LAZY PUBLIC CONTENT LOADING
+========================================================= */
+
+let publicSongsLoaded = false;
+let publicReleasesLoaded = false;
+let publicChartsLoaded = false;
+let publicArtistsLoaded = false;
+let publicNewsLoaded = false;
+let publicLazyObserver = null;
+
+async function loadPublicSongsOnce(){
+  if(publicSongsLoaded) return;
+  publicSongsLoaded = true;
+  await loadSongs();
+}
+
+async function loadPublicReleasesOnce(){
+  if(publicReleasesLoaded) return;
+  publicReleasesLoaded = true;
+  await loadNewReleases();
+}
+
+async function loadPublicChartsOnce(){
+  if(publicChartsLoaded) return;
+  publicChartsLoaded = true;
+  await loadTopCharts();
+}
+
+async function loadPublicArtistsOnce(){
+  if(publicArtistsLoaded) return;
+  publicArtistsLoaded = true;
+  await loadArtists();
+}
+
+async function loadPublicNewsOnce(){
+  if(publicNewsLoaded) return;
+  publicNewsLoaded = true;
+  await loadNews();
+}
+
+function setupLazyPublicContent(){
+  if(publicLazyObserver){
+    publicLazyObserver.disconnect();
+  }
+
+  if(!("IntersectionObserver" in window)){
+    setTimeout(() => {
+      loadPublicSongsOnce();
+      loadPublicReleasesOnce();
+      loadPublicChartsOnce();
+    }, 0);
+    return;
+  }
+
+  publicLazyObserver = new IntersectionObserver((entries, observer) => {
+    entries.forEach(entry => {
+      if(!entry.isIntersecting) return;
+
+      const id = entry.target.id;
+
+      if(id === "songsContainer"){
+        loadPublicSongsOnce();
+      }else if(id === "newReleasesContainer"){
+        loadPublicReleasesOnce();
+      }else if(id === "topChartsContainer"){
+        loadPublicChartsOnce();
+      }else if(id === "artistsContainer"){
+        loadPublicArtistsOnce();
+      }else if(id === "newsPageContainer"){
+        loadPublicNewsOnce();
+      }
+
+      observer.unobserve(entry.target);
+    });
+  }, {
+    rootMargin: "500px 0px",
+    threshold: 0.01
+  });
+
+  [
+    "songsContainer",
+    "newReleasesContainer",
+    "topChartsContainer",
+    "artistsContainer",
+    "newsPageContainer"
+  ].forEach(id => {
+    const element = document.getElementById(id);
+    if(element){
+      publicLazyObserver.observe(element);
+    }
+  });
+}
+
+
+/* =========================================================
    STARTUP
 ========================================================= */
 
@@ -3020,19 +3115,11 @@ async () => {
 
   await checkUser();
 
-  await loadSongs();
-
-  await loadNewReleases();
-
-  await loadTopCharts();
-
-  await loadArtists();
-
-  await loadNews();
-
   const path=normalizedSeoPath(window.location.pathname);
   updateCanonicalUrl(path);
 
+  // Render the page shell first. Public music/news/artist data
+  // is fetched only when its section/page is actually needed.
   if(["/about","/privacy","/terms","/contact","/dmca"].includes(path.toLowerCase())){
     await openPolicyRoute(path);
   }else if(path === "/artists" || path === "/songs" || path === "/news" || path === "/about"){
@@ -3042,6 +3129,9 @@ async () => {
   }else{
     await showPage("home",false);
   }
+
+  // Begin lazy observation after the initial page has rendered.
+  setupLazyPublicContent();
 });
 
 
@@ -3567,7 +3657,7 @@ async function updateUI(){
 async function showPage(page, updateUrl=true){
 
   if(page === "news"){
-    await loadNews();
+    await loadPublicNewsOnce();
   }
 
   const pages = ["home","artists","songs","news","about","dashboard","admin"];
@@ -3634,14 +3724,14 @@ async function showPage(page, updateUrl=true){
 
   if(page === "artists"){
 
-    await loadArtists();
+    await loadPublicArtistsOnce();
 
   }
   if(page === "songs"){
     const container=document.getElementById("songsPageContainer");
     if(container){
       if(!currentSongs || !currentSongs.length){
-        await loadSongs();
+        await loadPublicSongsOnce();
       }
       renderSongCards(
         currentSongs || [],
