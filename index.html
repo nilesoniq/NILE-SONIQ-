@@ -985,6 +985,15 @@ footer{
   flex-wrap:wrap;
 }
 
+.footer-copyright{
+  width:100%;
+  margin-top:14px;
+  padding-top:14px;
+  border-top:1px solid var(--border);
+  color:#777;
+  font-size:12px;
+}
+
 /* MODAL */
 
 .modal{
@@ -1694,8 +1703,14 @@ Upload Your Music
 
 <input
 id="searchInput"
+name="site-search"
 type="search"
-autocomplete="off"
+autocomplete="new-password"
+autocorrect="off"
+autocapitalize="none"
+spellcheck="false"
+readonly
+onfocus="this.removeAttribute('readonly')"
 placeholder="Search songs or artists...">
 
 <div id="searchStatus"
@@ -2693,10 +2708,6 @@ NILE SONIQ
 <div style="font-size:12px;margin-top:5px;">
 Ugandan music, all in one place.
 </div>
-<div style="font-size:12px;margin-top:7px;color:#777;">
-Copyright © 2026 NileSoniq Media. Powered by NileSoniq Ltd
-</div>
-
 </div>
 
 <div class="footer-links">
@@ -2739,6 +2750,10 @@ onclick="showPage('admin')">
 Admin
 </button>
 
+</div>
+
+<div class="footer-copyright">
+Copyright © 2026 NileSoniq Media. Powered by NileSoniq Ltd
 </div>
 
 </div>
@@ -3063,6 +3078,12 @@ document.addEventListener(
 "DOMContentLoaded",
 () => {
 
+  if("scrollRestoration" in history){
+    history.scrollRestoration = "manual";
+  }
+
+  window.scrollTo(0, 0);
+
   setupAudioEvents();
 
   setupSearch();
@@ -3085,10 +3106,17 @@ document.addEventListener(
   const path =
     window.location.pathname.replace(/\/+$/, "") || "/";
 
+  /* A stale #news/#artists fragment can make the browser jump to a
+     section before the SPA finishes routing. The homepage has no
+     section-fragment routes, so clear it when opening the root page. */
+  if(path === "/" && window.location.hash){
+    history.replaceState({}, "", "/");
+  }
+
   const renderInitialPage = async () => {
 
     if(
-      ["/about","/privacy","/terms","/contact","/dmca"]
+      ["/about","/privacy","/terms","/contact","/dmca","/music-rights"]
         .includes(path.toLowerCase())
     ){
       await openPolicyRoute(path);
@@ -3109,7 +3137,13 @@ document.addEventListener(
       return;
     }
 
-    if(path === "/" || !isShortPublicRoute()){
+    if(path === "/"){
+      await showPage("home", false);
+      window.scrollTo({top:0,left:0,behavior:"auto"});
+      return;
+    }
+
+    if(!isShortPublicRoute()){
       await showPage("home", false);
     }
   };
@@ -3125,6 +3159,18 @@ document.addEventListener(
       checkUser().catch(error => {
         console.error("User check failed:", error);
       });
+
+      /* Some browsers apply saved email autofill after page startup.
+         Never leave the signed-in user's email in the public search box. */
+      const clearEmailAutofill = () => {
+        const searchInput = document.getElementById("searchInput");
+        if(searchInput && currentUser?.email && searchInput.value.trim() === currentUser.email.trim()){
+          searchInput.value = "";
+          if(typeof performSearch === "function") performSearch();
+        }
+      };
+      setTimeout(clearEmailAutofill, 250);
+      setTimeout(clearEmailAutofill, 1000);
 
       /*
         Preserve the original homepage behavior:
@@ -3466,6 +3512,12 @@ async (_event, session) => {
   currentUser =
     session?.user || null;
 
+  const searchInput = document.getElementById("searchInput");
+  if(searchInput && currentUser?.email && searchInput.value.trim() === currentUser.email.trim()){
+    searchInput.value = "";
+    if(typeof performSearch === "function") performSearch();
+  }
+
   await updateUI();
 
 });
@@ -3493,6 +3545,12 @@ async function checkUser(){
 
     currentUser =
       data.session?.user || null;
+
+    const searchInput = document.getElementById("searchInput");
+    if(searchInput && currentUser?.email && searchInput.value.trim() === currentUser.email.trim()){
+      searchInput.value = "";
+      if(typeof performSearch === "function") performSearch();
+    }
 
     await updateUI();
 
@@ -10104,6 +10162,7 @@ async function openPolicyRoute(path){
   if(normalized === "/terms"){ await showPage("home",false); showTerms(); updateCanonicalUrl("/terms"); return true; }
   if(normalized === "/contact"){ await showPage("home",false); showContact(); updateCanonicalUrl("/contact"); return true; }
   if(normalized === "/dmca"){ await showPage("home",false); showDMCA(); updateCanonicalUrl("/dmca"); return true; }
+  if(normalized === "/music-rights"){ await showPage("home",false); showMusicRightsPolicy(); updateCanonicalUrl("/music-rights"); return true; }
   return false;
 }
 
@@ -10111,7 +10170,7 @@ window.addEventListener("popstate", async () => {
   const currentPath=normalizedSeoPath(window.location.pathname);
   updateCanonicalUrl(currentPath);
 
-  if(["/about","/privacy","/terms","/contact","/dmca"].includes(currentPath.toLowerCase())){
+  if(["/about","/privacy","/terms","/contact","/dmca","/music-rights"].includes(currentPath.toLowerCase())){
     await openPolicyRoute(currentPath);
     return;
   }
