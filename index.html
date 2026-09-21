@@ -8,7 +8,7 @@
 
 <meta name="description"
 content="NileSoniq is an artist-first Ugandan music platform where listeners can stream approved songs, discover artists, explore releases, and read original music stories.">
-<link rel="canonical" href="https://nilesoniq.com/">
+<link id="canonicalUrl" rel="canonical" href="https://nilesoniq.com/">
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2">
 </script>
@@ -2656,23 +2656,23 @@ Ugandan music, all in one place.
 
 <div class="footer-links">
 
-<a href="/about" onclick="history.pushState({},'', '/about');showAbout();return false;">
+<a href="/about" onclick="showPage('about');return false;">
 About Us
 </a>
 
-<a href="/privacy" onclick="history.pushState({},'', '/privacy');showPrivacy();return false;">
+<a href="/privacy" onclick="history.pushState({},'', '/privacy');showPrivacy();updateCanonicalUrl('/privacy');return false;">
 Privacy Policy
 </a>
 
-<a href="/terms" onclick="history.pushState({},'', '/terms');showTerms();return false;">
+<a href="/terms" onclick="history.pushState({},'', '/terms');showTerms();updateCanonicalUrl('/terms');return false;">
 Terms &amp; Conditions
 </a>
 
-<a href="/contact" onclick="history.pushState({},'', '/contact');showContact();return false;">
+<a href="/contact" onclick="history.pushState({},'', '/contact');showContact();updateCanonicalUrl('/contact');return false;">
 Contact
 </a>
 
-<a href="/DMCA" onclick="history.pushState({},'', '/DMCA');showDMCA();return false;">
+<a href="/DMCA" onclick="history.pushState({},'', '/DMCA');showDMCA();updateCanonicalUrl('/dmca');return false;">
 DMCA
 </a>
 
@@ -2968,6 +2968,45 @@ let searchTimer = null;
 
 
 /* =========================================================
+   SEO / CANONICAL ROUTING
+========================================================= */
+
+function normalizedSeoPath(path){
+  const value = String(path || "/").split("#")[0].split("?")[0];
+  return value.replace(/\/+$/, "") || "/";
+}
+
+function updateCanonicalUrl(path){
+  const canonical = document.getElementById("canonicalUrl");
+  if(!canonical) return;
+
+  const normalized = normalizedSeoPath(path || window.location.pathname);
+  canonical.href = "https://nilesoniq.com" + normalized;
+}
+
+function updateMetaDescription(description){
+  const meta = document.querySelector('meta[name="description"]');
+  if(meta && description){
+    meta.setAttribute("content", String(description).trim().substring(0, 300));
+  }
+}
+
+function updateSeoForRoute(path, title, description){
+  updateCanonicalUrl(path);
+  if(title) document.title = title;
+  if(description) updateMetaDescription(description);
+}
+
+function restoreDefaultSeo(){
+  updateSeoForRoute(
+    window.location.pathname,
+    "NileSoniq — Ugandan Music Platform",
+    "NileSoniq is an artist-first Ugandan music platform where listeners can stream approved songs, discover artists, explore releases, and read original music stories."
+  );
+}
+
+
+/* =========================================================
    STARTUP
 ========================================================= */
 
@@ -2991,11 +3030,18 @@ async () => {
 
   await loadNews();
 
-  const path=window.location.pathname.replace(/\/+$/,"") || "/";
-  if(["/about","/privacy","/terms","/contact","/dmca"].includes(path.toLowerCase())) await openPolicyRoute(path);
-  else if(path === "/artists" || path === "/songs" || path === "/news") await showPage(path.slice(1),false);
-  else if(/^\/news\/[^/]+$/i.test(path)) await loadNewsArticleBySlug(path.split("/")[2]);
-  else if(path === "/" || !isShortPublicRoute()) await showPage("home",false);
+  const path=normalizedSeoPath(window.location.pathname);
+  updateCanonicalUrl(path);
+
+  if(["/about","/privacy","/terms","/contact","/dmca"].includes(path.toLowerCase())){
+    await openPolicyRoute(path);
+  }else if(path === "/artists" || path === "/songs" || path === "/news" || path === "/about"){
+    await showPage(path.slice(1),false);
+  }else if(isShortPublicRoute()){
+    await handleShortPublicRoute();
+  }else{
+    await showPage("home",false);
+  }
 });
 
 
@@ -3531,6 +3577,15 @@ async function showPage(page, updateUrl=true){
     const target = page === "home" ? "/" : "/" + page;
     if(window.location.pathname !== target) window.history.pushState({page}, "", target);
   }
+
+  const pageSeo = {
+    home: ["NileSoniq — Ugandan Music Platform", "NileSoniq is an artist-first Ugandan music platform where listeners can stream approved songs, discover artists, explore releases, and read original music stories."],
+    artists: ["Ugandan Artists — NileSoniq", "Discover Ugandan artists, their profiles, genres, styles, releases, and approved music on NileSoniq."],
+    songs: ["Ugandan Songs — NileSoniq", "Stream approved Ugandan songs on NileSoniq and explore song details, artists, releases, and charts."],
+    news: ["Ugandan Music News — NileSoniq", "Read NileSoniq original music stories, artist features, release updates, interviews, and Ugandan music news."],
+    about: ["About NileSoniq — Ugandan Music Platform", "Learn about NileSoniq, an artist-first Ugandan music platform built in Kampala, Uganda."]
+  };
+  if(pageSeo[page]) updateSeoForRoute(window.location.pathname, pageSeo[page][0], pageSeo[page][1]);
 
 
   pages.forEach(name => {
@@ -6042,6 +6097,12 @@ async function showPublicSongPage(song){
 
   const url = songPublicUrl(song);
   const description = String(song.description || song.about || song.song_description || "").trim();
+
+  updateSeoForRoute(
+    url,
+    `${song.title || "Song"} — NileSoniq`,
+    description || `Listen to ${song.title || "this song"} on NileSoniq, a Ugandan music platform for approved music and artists.`
+  );
   const genre = String(song.genre || song.category || "").trim();
   const releaseDate = song.release_date || song.released_at || song.releaseDate || "";
   const producer = String(song.producer || song.produced_by || "").trim();
@@ -6090,12 +6151,11 @@ async function showPublicSongPage(song){
       </div>
     </div>` : "";
 
-  document.title = `${song.title || "Song"} by ${song.artist || "Unknown Artist"} | NileSoniq`;
-  let canonical = document.querySelector('link[rel="canonical"]');
-  if(!canonical){ canonical=document.createElement("link"); canonical.rel="canonical"; document.head.appendChild(canonical); }
-  canonical.href = window.location.origin + url;
-  const descMeta=document.querySelector('meta[name="description"]');
-  if(descMeta){ descMeta.content = description ? description.slice(0,155) : `Listen to ${song.title || "this song"} by ${song.artist || "this artist"} on NileSoniq, Uganda's music platform.`; }
+  updateSeoForRoute(
+    url,
+    `${song.title || "Song"} by ${song.artist || "Unknown Artist"} | NileSoniq`,
+    description || `Listen to ${song.title || "this song"} by ${song.artist || "this artist"} on NileSoniq, Uganda's music platform.`
+  );
 
   modal.innerHTML = `
     <div style="position:relative;width:min(620px,100%);margin:20px 0;background:#111;border:1px solid var(--border);border-radius:22px;padding:28px;text-align:center;box-shadow:0 25px 80px rgba(0,0,0,.5);">
@@ -6174,6 +6234,7 @@ function navigateToArtistSlug(artist){
   if(window.location.pathname !== url){
     window.history.pushState({nilesoniqPublic:true},"",url);
   }
+  updateSeoForRoute(url, `${artist.name || "Artist"} — NileSoniq`, `Discover ${artist.name || "this artist"} on NileSoniq, including their profile, approved music, genre, and releases.`);
 }
 
 function navigateToSongSlug(song){
@@ -6182,6 +6243,7 @@ function navigateToSongSlug(song){
   if(window.location.pathname !== url){
     window.history.pushState({nilesoniqPublic:true},"",url);
   }
+  updateSeoForRoute(url, `${song.title || "Song"} — NileSoniq`, `Listen to ${song.title || "this song"} on NileSoniq, a Ugandan music platform for approved music and artists.`);
 }
 
 function openSongLink(song){
@@ -6264,6 +6326,13 @@ async function openArtistProfile(artistId, fromPublicRoute=false){
 
       return;
     }
+
+    const artistUrl = artistPublicUrl(artist);
+    updateSeoForRoute(
+      artistUrl,
+      `${artist.name || "Artist"} — NileSoniq`,
+      `Discover ${artist.name || "this artist"} on NileSoniq, including their profile, approved music, genre, and releases.`
+    );
 
     if(!fromPublicRoute){
       navigateToArtistSlug(artist);
@@ -6507,7 +6576,8 @@ function closeArtistProfile(){
 
   if(isShortPublicRoute()){
     window.history.pushState({},"", "/");
-    showPage("home");
+    updateSeoForRoute("/", "NileSoniq — Ugandan Music Platform", "NileSoniq is an artist-first Ugandan music platform where listeners can stream approved songs, discover artists, explore releases, and read original music stories.");
+    showPage("home",false);
   }
 }
 
@@ -8550,8 +8620,14 @@ function openNewsArticle(slug){
   const url=`/news/${encodeURIComponent(slug)}`;
   history.pushState({newsSlug:slug},"",url);
   const article=window.__nileNewsRegistry?.[String(slug)];
-  if(article) showNewsArticleModal(article);
-  else loadNewsArticleBySlug(slug);
+  if(article){
+    updateSeoForRoute(
+      url,
+      `${article.title || "Ugandan Music News"} — NileSoniq`,
+      article.excerpt || `Read ${article.title || "this NileSoniq news article"} on NileSoniq.`
+    );
+    showNewsArticleModal(article);
+  }else loadNewsArticleBySlug(slug);
 }
 
 function showNewsArticleModal(article){
@@ -8566,6 +8642,11 @@ async function loadNewsArticleBySlug(slug){
     if(!data){ alert("News article not found."); history.pushState({},"","/news"); await loadNews(); return; }
     window.__nileNewsRegistry=window.__nileNewsRegistry||{};
     window.__nileNewsRegistry[String(slug)]=data;
+    updateSeoForRoute(
+      `/news/${encodeURIComponent(slug)}`,
+      `${data.title || "Ugandan Music News"} — NileSoniq`,
+      data.excerpt || `Read ${data.title || "this NileSoniq news article"} on NileSoniq.`
+    );
     showNewsArticleModal(data);
   }catch(error){ console.error(error); alert("Could not load this News article."); }
 }
@@ -9743,23 +9824,34 @@ document
 /* PUBLIC URL ROUTING */
 async function openPolicyRoute(path){
   const normalized=String(path || "").toLowerCase();
-  if(normalized === "/about"){ await showPage("home",false); showAbout(); return true; }
-  if(normalized === "/privacy"){ await showPage("home",false); showPrivacy(); return true; }
-  if(normalized === "/terms"){ await showPage("home",false); showTerms(); return true; }
-  if(normalized === "/contact"){ await showPage("home",false); showContact(); return true; }
-  if(normalized === "/dmca"){ await showPage("home",false); showDMCA(); return true; }
+  if(normalized === "/about"){ await showPage("about",false); return true; }
+  if(normalized === "/privacy"){ await showPage("home",false); showPrivacy(); updateCanonicalUrl("/privacy"); return true; }
+  if(normalized === "/terms"){ await showPage("home",false); showTerms(); updateCanonicalUrl("/terms"); return true; }
+  if(normalized === "/contact"){ await showPage("home",false); showContact(); updateCanonicalUrl("/contact"); return true; }
+  if(normalized === "/dmca"){ await showPage("home",false); showDMCA(); updateCanonicalUrl("/dmca"); return true; }
   return false;
 }
 
 window.addEventListener("popstate", async () => {
-  const currentPath=window.location.pathname.replace(/\/+$/,"") || "/";
-  if(["/about","/privacy","/terms","/contact","/dmca"].includes(currentPath.toLowerCase())){ await openPolicyRoute(currentPath); return; }
-  if(isShortPublicRoute()){ await handleShortPublicRoute(); return; }
-  const modal=document.getElementById("artistProfileModal"); if(modal) modal.classList.remove("show");
+  const currentPath=normalizedSeoPath(window.location.pathname);
+  updateCanonicalUrl(currentPath);
+
+  if(["/about","/privacy","/terms","/contact","/dmca"].includes(currentPath.toLowerCase())){
+    await openPolicyRoute(currentPath);
+    return;
+  }
+
+  if(isShortPublicRoute()){
+    await handleShortPublicRoute();
+    return;
+  }
+
+  const modal=document.getElementById("artistProfileModal");
+  if(modal) modal.classList.remove("show");
   if(typeof closePublicSongPage === "function") closePublicSongPage();
   document.body.style.overflow="";
-  const path=window.location.pathname.replace(/\/+$/,"") || "/";
-  if(path === "/artists" || path === "/songs" || path === "/news" || path === "/about") await showPage(path.slice(1),false);
+
+  if(currentPath === "/artists" || currentPath === "/songs" || currentPath === "/news" || currentPath === "/about") await showPage(currentPath.slice(1),false);
   else await showPage("home",false);
 });
 
