@@ -1485,7 +1485,9 @@ footer{
 .public-link:hover{border-color:var(--orange);color:var(--orange2)}
 @media(max-width:650px){.public-meta-grid{grid-template-columns:1fr}}
 .artist-profile-songs{display:flex;flex-direction:column}
-.artist-profile-song{display:flex;align-items:center;gap:13px;padding:13px 0;border-top:1px solid var(--border)}
+.artist-profile-song{display:flex;align-items:center;gap:13px;padding:13px 0;border-top:1px solid var(--border);cursor:pointer;transition:background .2s ease,border-color .2s ease;padding-left:8px;padding-right:8px;border-radius:10px}
+.artist-profile-song:hover{background:#171717;border-color:#3a3a3a}
+.artist-profile-song-info{cursor:pointer}
 .artist-profile-song-cover{width:62px;height:62px;flex:none;border-radius:10px;overflow:hidden;background:#222;display:flex;align-items:center;justify-content:center}
 .artist-profile-song-cover img{width:100%;height:100%;object-fit:cover}
 .artist-song-placeholder{color:var(--orange);font-size:25px}
@@ -2403,6 +2405,12 @@ onclick="showAdminTab('admins')">
 Administrators
 </button>
 
+<button id="adminTabCopyright"
+class="hidden"
+onclick="showAdminTab('copyright')">
+Copyright Removal
+</button>
+
 </div>
 
 <div id="adminAnalyticsPanel"
@@ -2641,6 +2649,37 @@ class="dashboard-card hidden">
 </div>
 <button id="platformWithdrawButton" class="btn btn-orange" onclick="withdrawPlatformMoney()">Withdraw Platform Money</button>
 <div id="platformWithdrawMessage" class="message" style="margin-top:15px;"></div>
+</div>
+
+<div id="adminCopyrightPanel" class="dashboard-card hidden">
+
+<h2>Copyright / Content Removal</h2>
+<p style="color:#aaa;line-height:1.6;margin:8px 0 18px;">
+Super Admin only. Use this area when a copyright complaint has been reviewed and a song or artist profile must be removed from public display. Deletions are permanent.
+</p>
+
+<div id="adminCopyrightMessage" class="message"></div>
+
+<div class="dashboard-card" style="margin:0 0 18px;">
+<h3>Approved / Submitted Songs</h3>
+<div class="table-wrap">
+<table>
+<thead><tr><th>Song</th><th>Artist</th><th>Status</th><th>Action</th></tr></thead>
+<tbody id="adminCopyrightSongsTable"><tr><td colspan="4"><div class="loading">Loading songs...</div></td></tr></tbody>
+</table>
+</div>
+</div>
+
+<div class="dashboard-card" style="margin:0;">
+<h3>Artist Profiles</h3>
+<div class="table-wrap">
+<table>
+<thead><tr><th>Artist</th><th>Location</th><th>Action</th></tr></thead>
+<tbody id="adminCopyrightArtistsTable"><tr><td colspan="3"><div class="loading">Loading artists...</div></td></tr></tbody>
+</table>
+</div>
+</div>
+
 </div>
 
 <div id="adminManagementPanel"
@@ -3953,12 +3992,14 @@ function updateAdminTabs(){
   const newsTab = document.getElementById("adminTabNews");
   const commentsTab = document.getElementById("adminTabComments");
   const walletTab = document.getElementById("adminTabWallet");
+  const copyrightTab = document.getElementById("adminTabCopyright");
   const platformWithdrawPanel = document.getElementById("platformWithdrawPanel");
 
   // Regular admins may manage artist songs and artist withdrawals only.
   if(analyticsTab) analyticsTab.classList.toggle("hidden", !superAdmin);
   if(adminTab) adminTab.classList.toggle("hidden", !superAdmin);
   if(walletTab) walletTab.classList.toggle("hidden", !superAdmin);
+  if(copyrightTab) copyrightTab.classList.toggle("hidden", !superAdmin);
   if(platformWithdrawPanel) platformWithdrawPanel.classList.toggle("hidden", !superAdmin);
 
 }
@@ -3973,18 +4014,19 @@ async function showAdminTab(tab){
   const managementPanel = document.getElementById("adminManagementPanel");
   const newsPanel = document.getElementById("adminNewsPanel");
   const commentsPanel = document.getElementById("adminCommentsPanel");
+  const copyrightPanel = document.getElementById("adminCopyrightPanel");
 
   const analyticsTab = document.getElementById("adminTabAnalytics");
   const songTab = document.getElementById("adminTabSongs");
   const withdrawalTab = document.getElementById("adminTabWithdrawals");
   const walletTab = document.getElementById("adminTabWallet");
   const adminTab = document.getElementById("adminTabAdmins");
+  const copyrightTab = document.getElementById("adminTabCopyright");
   const newsTab = document.getElementById("adminTabNews");
   const commentsTab = document.getElementById("adminTabComments");
 
-  [analyticsPanel,songsPanel,withdrawalsPanel,walletPanel,managementPanel,newsPanel,commentsPanel].forEach(el=>{if(el)el.classList.add("hidden")});
-  [analyticsTab,songTab,newsTab,commentsTab,withdrawalTab,walletTab,adminTab].forEach(el=>{if(el)el.classList.remove("active")});
-  [analyticsPanel,songsPanel,newsPanel,withdrawalsPanel,walletPanel,managementPanel].forEach(el=>{if(el)el.classList.add("hidden")});
+  [analyticsPanel,songsPanel,withdrawalsPanel,walletPanel,managementPanel,newsPanel,commentsPanel,copyrightPanel].forEach(el=>{if(el)el.classList.add("hidden")});
+  [analyticsTab,songTab,newsTab,commentsTab,withdrawalTab,walletTab,adminTab,copyrightTab].forEach(el=>{if(el)el.classList.remove("active")});
 
   if(tab === "analytics"){
     if(!isCurrentUserSuperAdmin()){
@@ -4078,6 +4120,16 @@ async function showAdminTab(tab){
 
     await loadAdministrators();
 
+  }
+
+  if(tab === "copyright"){
+    if(!isCurrentUserSuperAdmin()){
+      alert("Only the Super Admin can remove content for copyright complaints.");
+      return;
+    }
+    if(copyrightPanel) copyrightPanel.classList.remove("hidden");
+    if(copyrightTab) copyrightTab.classList.add("active");
+    await loadCopyrightRemovalPanel();
   }
 
 }
@@ -6708,7 +6760,7 @@ async function openArtistProfile(artistId, fromPublicRoute=false){
 
                 return `
 
-                  <div class="artist-profile-song">
+                  <div class="artist-profile-song" onclick="openArtistProfileSongDetails('${escapeAttribute(song.id)}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openArtistProfileSongDetails('${escapeAttribute(song.id)}')}">
 
                     <div class="artist-profile-song-cover">
                       ${cover}
@@ -6733,14 +6785,14 @@ async function openArtistProfile(artistId, fromPublicRoute=false){
 
                       <button
                         class="btn btn-orange"
-                        onclick="playArtistProfileSong('${escapeAttribute(song.id)}')"
+                        onclick="event.stopPropagation();playArtistProfileSong('${escapeAttribute(song.id)}')"
                       >
                         ▶ Play
                       </button>
 
                       <button
                         class="btn btn-dark"
-                        onclick="downloadArtistProfileSong('${escapeAttribute(song.id)}')"
+                        onclick="event.stopPropagation();downloadArtistProfileSong('${escapeAttribute(song.id)}')"
                       >
                         ↓ MP3
                       </button>
@@ -6804,6 +6856,25 @@ function closeArtistProfile(){
     updateSeoForRoute("/", "NileSoniq — Ugandan Music Platform", "NileSoniq is an artist-first Ugandan music platform where listeners can stream approved songs, discover artists, explore releases, and read original music stories.");
     showPage("home",false);
   }
+}
+
+
+async function openArtistProfileSongDetails(songId){
+
+  const song = (window.artistProfileSongs || []).find(item => String(item.id) === String(songId));
+
+  if(!song){
+    alert("Song not found.");
+    return;
+  }
+
+  try{
+    history.pushState({}, "", songPublicUrl(song));
+  }catch(e){
+    console.warn("Could not update song URL:", e);
+  }
+
+  await showPublicSongPage(song);
 }
 
 
@@ -9508,6 +9579,98 @@ async function rejectSong(songId){
 
   }
 
+}
+
+
+/* =========================================================
+   SUPER ADMIN COPYRIGHT / CONTENT REMOVAL
+========================================================= */
+
+async function loadCopyrightRemovalPanel(){
+  if(!isCurrentUserSuperAdmin()) return;
+
+  const songsBody=document.getElementById("adminCopyrightSongsTable");
+  const artistsBody=document.getElementById("adminCopyrightArtistsTable");
+  if(!songsBody || !artistsBody) return;
+
+  songsBody.innerHTML='<tr><td colspan="4"><div class="loading">Loading songs...</div></td></tr>';
+  artistsBody.innerHTML='<tr><td colspan="3"><div class="loading">Loading artists...</div></td></tr>';
+
+  try{
+    const [{data:songs,error:songError},{data:artists,error:artistError}]=await Promise.all([
+      sb.from("songs").select("id,title,artist,approved,artist_id").order("created_at",{ascending:false}),
+      sb.from("artists").select("id,name,location").order("created_at",{ascending:false})
+    ]);
+    if(songError) throw songError;
+    if(artistError) throw artistError;
+
+    songsBody.innerHTML=(songs||[]).length ? (songs||[]).map(song=>`
+      <tr>
+        <td>${escapeHtml(song.title||"Untitled")}</td>
+        <td>${escapeHtml(song.artist||"Unknown")}</td>
+        <td><span class="status ${song.approved===true?'approved':'pending'}">${song.approved===true?'Approved':'Pending'}</span></td>
+        <td><button class="btn btn-danger" onclick="removeCopyrightSong('${escapeAttribute(song.id)}')">Delete for copyright</button></td>
+      </tr>`).join("") : '<tr><td colspan="4"><div class="empty">No songs found.</div></td></tr>';
+
+    artistsBody.innerHTML=(artists||[]).length ? (artists||[]).map(artist=>`
+      <tr>
+        <td>${escapeHtml(artist.name||"Unnamed artist")}</td>
+        <td>${escapeHtml(artist.location||"Not provided")}</td>
+        <td><button class="btn btn-danger" onclick="removeCopyrightArtist('${escapeAttribute(artist.id)}')">Delete profile</button></td>
+      </tr>`).join("") : '<tr><td colspan="3"><div class="empty">No artist profiles found.</div></td></tr>';
+  }catch(error){
+    console.error("Copyright removal panel error:",error);
+    showMessage("adminCopyrightMessage",error.message||"Could not load copyright removal tools.","error");
+  }
+}
+
+async function removeCopyrightSong(songId){
+  if(!isCurrentUserSuperAdmin()){ alert("Only the Super Admin can remove songs for copyright complaints."); return; }
+  const song=(await sb.from("songs").select("id,title,artist").eq("id",songId).maybeSingle()).data;
+  if(!song) return;
+  const reason=prompt(`Enter the copyright-removal reason for “${song.title||"this song"}”.\n\nThis action permanently deletes the song.`,"Copyright complaint");
+  if(reason===null) return;
+  if(!reason.trim()){ alert("A removal reason is required."); return; }
+  if(!confirm(`Permanently delete “${song.title||"this song"}” by ${song.artist||"this artist"}?\n\nThis cannot be undone.`)) return;
+  try{
+    const {error}=await sb.rpc("remove_copyright_song",{
+      p_song_id:songId,
+      p_reason:reason.trim()
+    });
+    if(error) throw error;
+    showMessage("adminCopyrightMessage","Song removed after copyright complaint review.","success");
+    await loadCopyrightRemovalPanel();
+    await loadSongs();
+    await loadNewReleases();
+    await loadTopCharts();
+  }catch(error){
+    console.error(error);
+    showMessage("adminCopyrightMessage",error.message||"Could not delete song.","error");
+  }
+}
+
+async function removeCopyrightArtist(artistId){
+  if(!isCurrentUserSuperAdmin()){ alert("Only the Super Admin can remove artist profiles for copyright complaints."); return; }
+  const artist=(await sb.from("artists").select("id,name").eq("id",artistId).maybeSingle()).data;
+  if(!artist) return;
+  const reason=prompt(`Enter the copyright-removal reason for the profile “${artist.name||"this artist"}”.\n\nDeleting the profile will also attempt to remove its songs first.`,"Copyright complaint");
+  if(reason===null) return;
+  if(!reason.trim()){ alert("A removal reason is required."); return; }
+  if(!confirm(`Permanently delete the artist profile “${artist.name||"this artist"}” and its associated songs?\n\nThis cannot be undone.`)) return;
+  try{
+    const {error}=await sb.rpc("remove_copyright_artist",{
+      p_artist_id:artistId,
+      p_reason:reason.trim()
+    });
+    if(error) throw error;
+    showMessage("adminCopyrightMessage","Artist profile and associated songs removed after copyright complaint review.","success");
+    await loadCopyrightRemovalPanel();
+    await loadArtists();
+    await loadSongs();
+  }catch(error){
+    console.error(error);
+    showMessage("adminCopyrightMessage",error.message||"Could not delete artist profile.","error");
+  }
 }
 
 
