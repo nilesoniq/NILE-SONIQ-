@@ -1537,15 +1537,6 @@ footer{
 .news-card .news-excerpt{color:#aaa;line-height:1.6;font-size:14px;}
 .news-card .news-read{margin-top:auto;color:var(--orange);font-size:13px;font-weight:800;}
 .news-editor textarea{min-height:240px;resize:vertical;}
-
-.music-placeholder{
-  padding:18px;
-  text-align:center;
-  color:var(--muted);
-  border:1px dashed var(--border);
-  border-radius:14px;
-  background:rgba(255,255,255,.02);
-}
 </style>
 </head>
 
@@ -1729,8 +1720,8 @@ The latest approved music on NileSoniq.
 <div id="newReleasesContainer"
 class="song-grid">
 
-<div class="music-placeholder">
-Scroll down or tap “Start Listening” to load new releases.
+<div class="loading">
+Loading new releases...
 </div>
 
 </div>
@@ -1756,8 +1747,8 @@ The most-played songs on NileSoniq.
 <div id="topChartsContainer"
 class="song-grid">
 
-<div class="music-placeholder">
-Scroll down to load the current top charts.
+<div class="loading">
+Loading top charts...
 </div>
 
 </div>
@@ -1783,8 +1774,8 @@ Fresh music from NileSoniq artists.
 <div id="songsContainer"
 class="song-grid">
 
-<div class="music-placeholder">
-Scroll down to load trending music.
+<div class="loading">
+Loading music...
 </div>
 
 </div>
@@ -3016,148 +3007,108 @@ function restoreDefaultSeo(){
 
 
 /* =========================================================
-   LAZY PUBLIC CONTENT LOADING
-========================================================= */
-
-let publicSongsLoaded = false;
-let publicReleasesLoaded = false;
-let publicChartsLoaded = false;
-let publicArtistsLoaded = false;
-let publicNewsLoaded = false;
-let publicHomeLoadTriggered = false;
-
-async function loadPublicSongsOnce(){
-  if(publicSongsLoaded) return;
-  publicSongsLoaded = true;
-  await loadSongs();
-}
-
-async function loadPublicReleasesOnce(){
-  if(publicReleasesLoaded) return;
-  publicReleasesLoaded = true;
-  await loadNewReleases();
-}
-
-async function loadPublicChartsOnce(){
-  if(publicChartsLoaded) return;
-  publicChartsLoaded = true;
-  await loadTopCharts();
-}
-
-async function loadPublicArtistsOnce(){
-  if(publicArtistsLoaded) return;
-  publicArtistsLoaded = true;
-  await loadArtists();
-}
-
-async function loadPublicNewsOnce(){
-  if(publicNewsLoaded) return;
-  publicNewsLoaded = true;
-  await loadNews();
-}
-
-async function loadPublicHomeMusic(){
-  if(publicHomeLoadTriggered) return;
-  publicHomeLoadTriggered = true;
-
-  // Load the homepage music only after the visitor has explicitly
-  // interacted with the music area (Start Listening or scrolling).
-  await Promise.allSettled([
-    loadPublicReleasesOnce(),
-    loadPublicChartsOnce(),
-    loadPublicSongsOnce()
-  ]);
-}
-
-function sectionIsNearViewport(element, distance=250){
-  if(!element) return false;
-  const rect = element.getBoundingClientRect();
-  return rect.top <= window.innerHeight + distance &&
-         rect.bottom >= -distance;
-}
-
-function setupUserTriggeredMusicLoading(){
-  let scrollTimer = null;
-
-  const onUserScroll = () => {
-    if(publicHomeLoadTriggered) return;
-
-    clearTimeout(scrollTimer);
-    scrollTimer = setTimeout(() => {
-      // Important: this function is called from a real scroll event.
-      // We intentionally do NOT run this check during page startup.
-      const releaseSection = document.getElementById("newReleases");
-      const chartSection = document.getElementById("topCharts");
-      const songsSection = document.getElementById("trending");
-
-      if(
-        sectionIsNearViewport(releaseSection) ||
-        sectionIsNearViewport(chartSection) ||
-        sectionIsNearViewport(songsSection)
-      ){
-        loadPublicHomeMusic();
-        window.removeEventListener("scroll", onUserScroll);
-      }
-    }, 80);
-  };
-
-  window.addEventListener("scroll", onUserScroll, {passive:true});
-
-  // Start Listening is the explicit, immediate way to request the music.
-  const startButton = document.querySelector(
-    ".hero-actions .btn.btn-orange"
-  );
-
-  if(startButton){
-    startButton.onclick = async () => {
-      await loadPublicHomeMusic();
-
-      const target = document.getElementById("newReleases");
-      if(target){
-        target.scrollIntoView({
-          behavior:"smooth",
-          block:"start"
-        });
-      }
-    };
-  }
-}
-
-
-/* =========================================================
    STARTUP
 ========================================================= */
 
-
 document.addEventListener(
 "DOMContentLoaded",
-async () => {
+() => {
 
   setupAudioEvents();
 
   setupSearch();
 
-  await checkUser();
+  /*
+    Render the requested page FIRST.
 
-  const path=normalizedSeoPath(window.location.pathname);
-  updateCanonicalUrl(path);
+    The original startup waited for songs, releases, charts, artists
+    and news before the page could finish initializing. This version
+    keeps those automatic requests, but starts them only AFTER the
+    browser has had a chance to paint the page.
 
-  // Render the page shell immediately. No public song/release/chart
-  // queries happen here.
-  if(["/about","/privacy","/terms","/contact","/dmca"].includes(path.toLowerCase())){
-    await openPolicyRoute(path);
-  }else if(path === "/artists" || path === "/songs" || path === "/news" || path === "/about"){
-    await showPage(path.slice(1),false);
-  }else if(isShortPublicRoute()){
-    await handleShortPublicRoute();
-  }else{
-    await showPage("home",false);
-  }
+    There is intentionally:
+      - no IntersectionObserver
+      - no scroll-triggered loading
+      - no Start Listening dependency
+      - no removal of the existing music sections
+  */
 
-  // Do not trigger any music request merely because the page opened.
-  // Music starts loading only after scrolling into the music area or
-  // pressing Start Listening.
-  setupUserTriggeredMusicLoading();
+  const path =
+    window.location.pathname.replace(/\/+$/, "") || "/";
+
+  const renderInitialPage = async () => {
+
+    if(
+      ["/about","/privacy","/terms","/contact","/dmca"]
+        .includes(path.toLowerCase())
+    ){
+      await openPolicyRoute(path);
+      return;
+    }
+
+    if(
+      path === "/artists" ||
+      path === "/songs" ||
+      path === "/news"
+    ){
+      await showPage(path.slice(1), false);
+      return;
+    }
+
+    if(/^\/news\/[^/]+$/i.test(path)){
+      await loadNewsArticleBySlug(path.split("/")[2]);
+      return;
+    }
+
+    if(path === "/" || !isShortPublicRoute()){
+      await showPage("home", false);
+    }
+  };
+
+  renderInitialPage().then(() => {
+
+    /*
+      Two animation frames give the browser time to paint the actual
+      NileSoniq interface before Supabase requests begin.
+    */
+    const startBackgroundLoading = () => {
+
+      checkUser().catch(error => {
+        console.error("User check failed:", error);
+      });
+
+      /*
+        Preserve the original homepage behavior:
+        all public data still loads automatically.
+      */
+      if(path === "/" || !isShortPublicRoute()){
+
+        Promise.allSettled([
+          loadSongs(),
+          loadNewReleases(),
+          loadTopCharts(),
+          loadArtists(),
+          loadNews()
+        ]);
+
+      }
+
+    };
+
+    if("requestAnimationFrame" in window){
+      requestAnimationFrame(() => {
+        requestAnimationFrame(startBackgroundLoading);
+      });
+    }else{
+      setTimeout(startBackgroundLoading, 50);
+    }
+
+  }).catch(error => {
+    console.error("Initial page render failed:", error);
+
+    checkUser().catch(() => {});
+  });
+
 });
 
 
@@ -3683,7 +3634,7 @@ async function updateUI(){
 async function showPage(page, updateUrl=true){
 
   if(page === "news"){
-    await loadPublicNewsOnce();
+    await loadNews();
   }
 
   const pages = ["home","artists","songs","news","about","dashboard","admin"];
@@ -3750,14 +3701,14 @@ async function showPage(page, updateUrl=true){
 
   if(page === "artists"){
 
-    await loadPublicArtistsOnce();
+    await loadArtists();
 
   }
   if(page === "songs"){
     const container=document.getElementById("songsPageContainer");
     if(container){
       if(!currentSongs || !currentSongs.length){
-        await loadPublicSongsOnce();
+        await loadSongs();
       }
       renderSongCards(
         currentSongs || [],
