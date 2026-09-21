@@ -3954,9 +3954,9 @@ async function showPage(page, updateUrl=true){
 
       content.classList.remove("hidden");
 
-      updateAdminTabs();
+      const superAdmin = await updateAdminTabs();
 
-      await showAdminTab(isCurrentUserSuperAdmin() ? "analytics" : "songs");
+      await showAdminTab(superAdmin ? "analytics" : "songs");
 
     }else{
 
@@ -3984,24 +3984,30 @@ function toggleMenu(){
    ADMIN TABS
 ========================================================= */
 
-function updateAdminTabs(){
+async function updateAdminTabs(){
 
-  const superAdmin = isCurrentUserSuperAdmin();
+  // Always refresh the admin record before deciding which Super Admin tabs
+  // should be visible. This prevents the Copyright Removal tab from staying
+  // hidden when the dashboard is opened before currentAdmin has been loaded.
+  let superAdmin = false;
+  if(currentUser){
+    await isCurrentUserAdmin();
+    superAdmin = isCurrentUserSuperAdmin();
+  }
+
   const analyticsTab = document.getElementById("adminTabAnalytics");
   const adminTab = document.getElementById("adminTabAdmins");
-  const newsTab = document.getElementById("adminTabNews");
-  const commentsTab = document.getElementById("adminTabComments");
   const walletTab = document.getElementById("adminTabWallet");
   const copyrightTab = document.getElementById("adminTabCopyright");
   const platformWithdrawPanel = document.getElementById("platformWithdrawPanel");
 
-  // Regular admins may manage artist songs and artist withdrawals only.
   if(analyticsTab) analyticsTab.classList.toggle("hidden", !superAdmin);
   if(adminTab) adminTab.classList.toggle("hidden", !superAdmin);
   if(walletTab) walletTab.classList.toggle("hidden", !superAdmin);
   if(copyrightTab) copyrightTab.classList.toggle("hidden", !superAdmin);
   if(platformWithdrawPanel) platformWithdrawPanel.classList.toggle("hidden", !superAdmin);
 
+  return superAdmin;
 }
 
 
