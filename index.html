@@ -941,6 +941,15 @@ td{
 .news-comment-meta{color:#888;font-size:11px;margin-bottom:5px;}
 .news-comment-text{color:#ddd;font-size:13px;white-space:pre-wrap;line-height:1.6;}
 
+/* PUBLIC POLICY PAGES */
+.policy-page{padding:45px 0 70px;}
+.policy-page .policy-card{background:var(--card);border:1px solid var(--border);border-radius:18px;padding:30px;line-height:1.75;}
+.policy-page h1{font-size:34px;margin-bottom:20px;color:var(--orange2);}
+.policy-page h2,.policy-page h3{margin:24px 0 10px;color:#fff;}
+.policy-page p{color:#ccc;margin-bottom:14px;}
+.policy-page a{color:var(--orange2);text-decoration:underline;}
+.policy-back{margin-bottom:16px;}
+
 /* FOOTER */
 
 .footer-admin,
@@ -2373,6 +2382,11 @@ onclick="showAdminTab('news')">
 News
 </button>
 
+<button id="adminTabComments"
+onclick="showAdminTab('comments')">
+Comments
+</button>
+
 <button id="adminTabWithdrawals"
 onclick="showAdminTab('withdrawals')">
 Withdrawals
@@ -2524,6 +2538,18 @@ class="dashboard-card hidden news-editor">
 </table>
 </div>
 
+</div>
+
+<div id="adminCommentsPanel" class="dashboard-card hidden">
+<h2>News Comment Moderation</h2>
+<p style="color:#888;line-height:1.5;margin-top:6px;">Review comments before they become visible on public News articles.</p>
+<div id="adminCommentsMessage" class="message"></div>
+<div class="table-wrap">
+<table>
+<thead><tr><th>Comment</th><th>News ID</th><th>Date</th><th>Status</th><th>Action</th></tr></thead>
+<tbody id="adminCommentsTable"></tbody>
+</table>
+</div>
 </div>
 
 <div id="adminWithdrawalsPanel"
@@ -2690,6 +2716,17 @@ class="table-wrap">
 </section>
 
 </main>
+
+<!-- PUBLIC POLICY PAGE -->
+<section id="policyPage" class="page">
+  <div class="container policy-page">
+    <div class="policy-back"><button class="btn btn-dark" onclick="showPage('home')">← Back to NileSoniq</button></div>
+    <div class="policy-card">
+      <h1 id="policyPageTitle">NileSoniq Policy</h1>
+      <div id="policyPageContent"></div>
+    </div>
+  </div>
+</section>
 
 <!-- FOOTER -->
 
@@ -3744,7 +3781,7 @@ async function showPage(page, updateUrl=true){
     await loadNews();
   }
 
-  const pages = ["home","artists","songs","news","about","dashboard","admin"];
+  const pages = ["home","artists","songs","news","about","dashboard","admin","policy"];
   if(!pages.includes(page)) page="home";
 
   if(updateUrl && ["home","artists","songs","news","about"].includes(page)){
@@ -3914,6 +3951,7 @@ function updateAdminTabs(){
   const analyticsTab = document.getElementById("adminTabAnalytics");
   const adminTab = document.getElementById("adminTabAdmins");
   const newsTab = document.getElementById("adminTabNews");
+  const commentsTab = document.getElementById("adminTabComments");
   const walletTab = document.getElementById("adminTabWallet");
   const platformWithdrawPanel = document.getElementById("platformWithdrawPanel");
 
@@ -3934,6 +3972,7 @@ async function showAdminTab(tab){
   const walletPanel = document.getElementById("adminWalletPanel");
   const managementPanel = document.getElementById("adminManagementPanel");
   const newsPanel = document.getElementById("adminNewsPanel");
+  const commentsPanel = document.getElementById("adminCommentsPanel");
 
   const analyticsTab = document.getElementById("adminTabAnalytics");
   const songTab = document.getElementById("adminTabSongs");
@@ -3942,8 +3981,8 @@ async function showAdminTab(tab){
   const adminTab = document.getElementById("adminTabAdmins");
   const newsTab = document.getElementById("adminTabNews");
 
-  [analyticsPanel,songsPanel,withdrawalsPanel,walletPanel,managementPanel].forEach(el=>{if(el)el.classList.add("hidden")});
-  [analyticsTab,songTab,newsTab,withdrawalTab,walletTab,adminTab].forEach(el=>{if(el)el.classList.remove("active")});
+  [analyticsPanel,songsPanel,withdrawalsPanel,walletPanel,managementPanel,newsPanel,commentsPanel].forEach(el=>{if(el)el.classList.add("hidden")});
+  [analyticsTab,songTab,newsTab,commentsTab,withdrawalTab,walletTab,adminTab].forEach(el=>{if(el)el.classList.remove("active")});
   [analyticsPanel,songsPanel,newsPanel,withdrawalsPanel,walletPanel,managementPanel].forEach(el=>{if(el)el.classList.add("hidden")});
 
   if(tab === "analytics"){
@@ -3982,6 +4021,17 @@ async function showAdminTab(tab){
     }
 
     await loadAdminNews();
+  }
+
+
+  if(tab === "comments"){
+    if(!await isCurrentUserAdmin()){
+      alert("Only active administrators can moderate comments.");
+      return;
+    }
+    if(commentsPanel) commentsPanel.classList.remove("hidden");
+    if(commentsTab) commentsTab.classList.add("active");
+    await loadAdminNewsComments();
   }
 
 
@@ -8833,10 +8883,10 @@ async function submitNewsComment(newsId){
   const comment=input?.value.trim();
   if(!comment){ showMessage("newsCommentMessage","Write a comment first.","error"); return; }
   try{
-    const {error}=await sb.from("news_comments").insert({news_id:newsId,user_id:currentUser.id,comment,approved:true});
+    const {error}=await sb.from("news_comments").insert({news_id:newsId,user_id:currentUser.id,comment,approved:false});
     if(error) throw error;
     input.value="";
-    showMessage("newsCommentMessage","Comment posted.","success");
+    showMessage("newsCommentMessage","Comment submitted for moderation.","success");
     await loadNewsEngagement(newsId);
   }catch(error){ showMessage("newsCommentMessage",error.message || "Could not post your comment.","error"); }
 }
@@ -8889,6 +8939,39 @@ async function loadNewsArticleBySlug(slug){
     );
     showNewsArticleModal(data);
   }catch(error){ console.error(error); alert("Could not load this News article."); }
+}
+
+async function loadAdminNewsComments(){
+  if(!await isCurrentUserAdmin()) return;
+  const tbody=document.getElementById("adminCommentsTable");
+  if(!tbody) return;
+  tbody.innerHTML=`<tr><td colspan="5"><div class="loading">Loading comments...</div></td></tr>`;
+  try{
+    const {data,error}=await sb.from("news_comments").select("id,news_id,comment,user_id,approved,created_at").order("created_at",{ascending:false});
+    if(error) throw error;
+    if(!data?.length){ tbody.innerHTML=`<tr><td colspan="5"><div class="empty">No comments yet.</div></td></tr>`; return; }
+    tbody.innerHTML=data.map(item=>`<tr><td style="max-width:360px;white-space:pre-wrap;">${escapeHtml(item.comment || "")}</td><td>${escapeHtml(String(item.news_id || "").slice(0,8))}…</td><td>${escapeHtml(formatNewsDate(item.created_at))}</td><td><span class="status ${item.approved ? "approved" : "pending"}">${item.approved ? "Approved" : "Pending"}</span></td><td>${item.approved ? `<button class="btn btn-danger" onclick="setNewsCommentApproval('${escapeAttribute(item.id)}',false)">Hide</button>` : `<button class="btn btn-success" onclick="setNewsCommentApproval('${escapeAttribute(item.id)}',true)">Approve</button>`} <button class="btn btn-danger" style="margin-left:5px;" onclick="deleteNewsComment('${escapeAttribute(item.id)}')">Delete</button></td></tr>`).join("");
+  }catch(error){
+    console.error("Admin comments error:",error);
+    tbody.innerHTML=`<tr><td colspan="5"><div class="empty">${escapeHtml(error.message || "Could not load comments.")}</div></td></tr>`;
+  }
+}
+
+async function setNewsCommentApproval(id, approved){
+  if(!await isCurrentUserAdmin()) return;
+  const {error}=await sb.from("news_comments").update({approved}).eq("id",id);
+  if(error){ showMessage("adminCommentsMessage",error.message,"error"); return; }
+  showMessage("adminCommentsMessage",approved ? "Comment approved." : "Comment hidden.","success");
+  await loadAdminNewsComments();
+}
+
+async function deleteNewsComment(id){
+  if(!await isCurrentUserAdmin()) return;
+  if(!confirm("Delete this comment permanently?")) return;
+  const {error}=await sb.from("news_comments").delete().eq("id",id);
+  if(error){ showMessage("adminCommentsMessage",error.message,"error"); return; }
+  showMessage("adminCommentsMessage","Comment deleted.","success");
+  await loadAdminNewsComments();
 }
 
 async function loadAdminNews(){
@@ -10058,8 +10141,23 @@ function showAbout(){
 <p style="color:#aaa;margin-bottom:0;">NileSoniQ Team<br>Kampala, Uganda<br>2026</p>`);
 }
 
+function showPublicPolicyPage(title, body, path){
+  const policyPage=document.getElementById("policyPage");
+  const titleEl=document.getElementById("policyPageTitle");
+  const contentEl=document.getElementById("policyPageContent");
+  if(!policyPage || !titleEl || !contentEl) return;
+  document.querySelectorAll(".page").forEach(el=>el.classList.remove("active"));
+  policyPage.classList.add("active");
+  titleEl.textContent=title || "NileSoniq Policy";
+  contentEl.innerHTML=body || "";
+  updateSeoForRoute(path, title, "NileSoniq policy and information for visitors, artists and rights holders.");
+  document.querySelectorAll("nav button[data-page]").forEach(button=>button.classList.remove("active"));
+  document.getElementById("mainNav")?.classList.remove("open");
+  window.scrollTo({top:0,left:0,behavior:"auto"});
+}
+
 function showPrivacy(){
-  openPolicyModal("Privacy Policy for NileSoniQ - nilesoniq.com", `<p><strong>Effective Date: September 20, 2026</strong></p>
+  showPublicPolicyPage("Privacy Policy for NileSoniQ - nilesoniq.com", `<p><strong>Effective Date: September 20, 2026</strong></p>
 <p>At NileSoniQ, accessible from https://nilesoniq.com, your privacy is important to us. This Privacy Policy explains what information we collect, how we use it, and how you can contact us about your information.</p>
 <h3>1. Information We Collect:</h3><p><strong>A. Information You Provide:</strong></p><p>- When you create an account or artist profile, we may collect information such as your name or artist name, email address, and information you provide about your music.<br>- When artists submit music, we store the song information and the artist's confirmation that they accepted the NileSoniQ Terms &amp; Conditions and represented that they have the necessary rights to submit the music.<br>- When you contact us by email or WhatsApp, we may collect your name, contact information, and the details you provide so we can respond.</p><p><strong>B. Information Collected Automatically:</strong></p><p>- We may receive technical information such as IP address, browser type, device type, screen size, referring pages, and date/time information when you use the website.<br>- We may use cookies or similar technologies for essential site functions, preferences, security, analytics, and, if advertising is enabled, advertising.</p>
 <h3>2. How We Use Information:</h3><p>- To provide and improve NileSoniQ's music services<br>- To operate accounts, artist profiles, uploads, streaming, and other site features<br>- To review and moderate user-submitted music<br>- To prevent fraud, abuse, unauthorized uploads, and other security problems<br>- To respond to support and copyright requests<br>- To comply with legal obligations and enforce our Terms &amp; Conditions</p>
@@ -10070,22 +10168,20 @@ function showPrivacy(){
 <h3>7. Children's Information:</h3><p>NileSoniQ is intended for users aged 13 and older. We do not knowingly collect personal information from children under 13. If you believe a child under 13 has provided personal information, contact us so we can review and take appropriate action.</p>
 <h3>8. Copyright and User-Submitted Content:</h3><p>Artists are responsible for ensuring they have the necessary rights to music and other material they submit. NileSoniQ manually reviews song submissions before they are approved for public display. If you believe content infringes your rights, please use our DMCA process.</p>
 <h3>9. Changes to This Policy:</h3><p>We may update this Privacy Policy when our services or legal requirements change. The effective date at the top of this policy will be updated when material changes are made.</p>
-<h3>10. Contact Us:</h3><p>If you have questions about this Privacy Policy or a data request, contact us at:<br>Email: nilesoniq@gmail.com<br>Location: Kampala, Uganda</p><p style="margin-bottom:0;">Last Updated: September 20, 2026</p>`);
+<h3>10. Contact Us:</h3><p>If you have questions about this Privacy Policy or a data request, contact us at:<br>Email: nilesoniq@gmail.com<br>Location: Kampala, Uganda</p><p style="margin-bottom:0;">Last Updated: September 20, 2026</p>`, "/privacy");
 }
 
 function showTerms(){
-  openPolicyModal("Terms and Conditions - NileSoniQ", `<p>By using NileSoniQ.com, you agree to these terms:</p><p>1. Songs and other user-submitted material remain the property of their respective rights holders. NileSoniQ provides streaming and related platform services.</p><p>2. By uploading music, an artist confirms that they have the necessary rights or authorization to submit the music and gives NileSoniQ permission to host, stream, display, and promote the submitted material as part of the service.</p><p>3. Users must be 13 years or older to use this site.</p><p>4. NileSoniQ may remove, restrict, or disable access to content when we receive a valid copyright complaint, when content violates these Terms, or when action is otherwise required by law or platform policy. Review and removal timing depends on the circumstances; no fixed takedown time is guaranteed.</p><p>5. Play counts are intended to reflect genuine listening activity and may be measured using platform rules designed to reduce artificial or fraudulent plays.</p><p>6. You may not copy, redistribute, resell, or otherwise exploit content from this site except where you have permission or a legal right to do so.</p><p>7. Artists are responsible for the legality and rights status of material they submit. NileSoniq may suspend upload privileges or accounts for repeated violations.</p><p style="margin-bottom:0;">If you violate these terms, we may restrict or terminate access to relevant features or the service.</p>`);
+  showPublicPolicyPage("Terms and Conditions - NileSoniQ", `<p>By using NileSoniQ.com, you agree to these terms:</p><p>1. Songs and other user-submitted material remain the property of their respective rights holders. NileSoniQ provides streaming and related platform services.</p><p>2. By uploading music, an artist confirms that they have the necessary rights or authorization to submit the music and gives NileSoniQ permission to host, stream, display, and promote the submitted material as part of the service.</p><p>3. Users must be 13 years or older to use this site.</p><p>4. NileSoniQ may remove, restrict, or disable access to content when we receive a valid copyright complaint, when content violates these Terms, or when action is otherwise required by law or platform policy. Review and removal timing depends on the circumstances; no fixed takedown time is guaranteed.</p><p>5. Play counts are intended to reflect genuine listening activity and may be measured using platform rules designed to reduce artificial or fraudulent plays.</p><p>6. You may not copy, redistribute, resell, or otherwise exploit content from this site except where you have permission or a legal right to do so.</p><p>7. Artists are responsible for the legality and rights status of material they submit. NileSoniq may suspend upload privileges or accounts for repeated violations.</p><p style="margin-bottom:0;">If you violate these terms, we may restrict or terminate access to relevant features or the service.</p>`, "/terms");
 }
 
 function showContact(){
-  openPolicyModal("Contact NileSoniQ - Kampala, Uganda", `<p>We are available to help with account, artist, music, technical, and copyright questions.</p><p><strong>Address:</strong> Kampala, Uganda<br><strong>Email:</strong> nilesoniq@gmail.com<br><strong>Phone/WhatsApp:</strong> 0785 823496</p><h3>For Artists:</h3><p>Contact us if you need help with artist profiles, music submissions, or platform features.</p><h3>For Copyright Issues:</h3><p>If you believe any song or other material infringes your rights, email us with the information requested in our <a href="/DMCA" onclick="history.pushState({},'','/DMCA');showDMCA();return false;">DMCA Copyright Policy</a>.</p><p style="margin-bottom:0;">Thank you for supporting Ugandan music.</p>`);
+  showPublicPolicyPage("Contact NileSoniQ - Kampala, Uganda", `<p>We are available to help with account, artist, music, technical, and copyright questions.</p><p><strong>Address:</strong> Kampala, Uganda<br><strong>Email:</strong> nilesoniq@gmail.com<br><strong>Phone/WhatsApp:</strong> 0785 823496</p><h3>For Artists:</h3><p>Contact us if you need help with artist profiles, music submissions, or platform features.</p><h3>For Copyright Issues:</h3><p>If you believe any song or other material infringes your rights, email us with the information requested in our <a href="/DMCA" onclick="history.pushState({},'','/DMCA');showDMCA();return false;">DMCA Copyright Policy</a>.</p><p style="margin-bottom:0;">Thank you for supporting Ugandan music.</p>`, "/contact");
 }
 
 
 function showMusicRightsPolicy(){
-  openPolicyModal(
-    "Music Rights & Content Policy - NileSoniQ",
-    `<p><strong>Effective Date: September 21, 2026</strong></p>
+  showPublicPolicyPage("Music Rights & Content Policy - NileSoniQ", `<p><strong>Effective Date: September 21, 2026</strong></p>
 
 <p>NileSoniQ is an artist-first Ugandan music platform. We want artists to share their music while respecting the rights of artists, producers, labels, composers, publishers, photographers, and other rights holders.</p>
 
@@ -10126,12 +10222,11 @@ function showMusicRightsPolicy(){
 <p><strong>Email:</strong> nilesoniq@gmail.com<br>
 <strong>Location:</strong> Kampala, Uganda</p>
 
-<p style="margin-bottom:0;">NileSoniQ<br>Kampala, Uganda<br>2026</p>`
-  );
+<p style="margin-bottom:0;">NileSoniQ<br>Kampala, Uganda<br>2026</p>`, "/music-rights");
 }
 
 function showDMCA(){
-  openPolicyModal("DMCA Copyright Policy - NileSoniQ.com", `<p><strong>Effective Date: September 20, 2026</strong></p><p>NileSoniQ respects intellectual property rights and maintains a process for responding to copyright complaints. User-submitted music is not automatically published: song submissions are placed into a pending state and are reviewed by an authorized NileSoniQ administrator before approval.</p><h3>Artist Rights Confirmation:</h3><p>When submitting a song, an artist must accept the NileSoniQ Terms &amp; Conditions and confirm that they have the necessary rights or authorization to submit the music for streaming on NileSoniQ. The submission records the acceptance time for our records.</p><h3>Copyright Takedown Requests:</h3><p>If you are a copyright owner or authorized agent and believe content on NileSoniQ infringes your rights, send a written notice to:</p><p><strong>Email:</strong> nilesoniq@gmail.com<br><strong>Subject:</strong> DMCA Takedown Request</p><p><strong>Please include:</strong></p><p>1. Your full name and contact information.<br>2. A description of the copyrighted work you believe has been infringed.<br>3. The exact URL of the material on NileSoniQ.<br>4. A statement that you have a good-faith belief that the use is not authorized by the copyright owner, its agent, or the law.<br>5. A statement that the information in your notice is accurate and, where applicable, that you are the copyright owner or authorized to act for the owner.<br>6. Your physical or electronic signature.</p><h3>How We Handle Reports:</h3><p>We review copyright complaints and may remove or restrict access to reported content while investigating. We will contact the uploader where appropriate and take action consistent with applicable law and our policies. Response and removal times can depend on the completeness of the complaint and the circumstances; we do not publish a guaranteed fixed takedown time.</p><h3>Repeat Infringement:</h3><p>Accounts that repeatedly submit infringing material may lose upload privileges or be suspended or terminated.</p><h3>Prevention Measures:</h3><p>- Manual review before a song is approved for public display<br>- Required artist Terms &amp; Conditions acceptance during upload<br>- Copyright reporting and takedown process<br>- Review of reported or suspicious content</p><h3>Current Statistics:</h3><p>We intentionally do not publish hard-coded song or artist totals in this policy because those numbers change as the platform grows. The current submission and approval status is maintained in the NileSoniQ administrative system.</p><h3>Contact for Copyright Matters:</h3><p>Email: nilesoniq@gmail.com<br>Location: Kampala, Uganda</p><p style="margin-bottom:0;">NileSoniQ<br>Kampala, Uganda</p>`);
+  showPublicPolicyPage("DMCA Copyright Policy - NileSoniQ.com", `<p><strong>Effective Date: September 20, 2026</strong></p><p>NileSoniQ respects intellectual property rights and maintains a process for responding to copyright complaints. User-submitted music is not automatically published: song submissions are placed into a pending state and are reviewed by an authorized NileSoniQ administrator before approval.</p><h3>Artist Rights Confirmation:</h3><p>When submitting a song, an artist must accept the NileSoniQ Terms &amp; Conditions and confirm that they have the necessary rights or authorization to submit the music for streaming on NileSoniQ. The submission records the acceptance time for our records.</p><h3>Copyright Takedown Requests:</h3><p>If you are a copyright owner or authorized agent and believe content on NileSoniQ infringes your rights, send a written notice to:</p><p><strong>Email:</strong> nilesoniq@gmail.com<br><strong>Subject:</strong> DMCA Takedown Request</p><p><strong>Please include:</strong></p><p>1. Your full name and contact information.<br>2. A description of the copyrighted work you believe has been infringed.<br>3. The exact URL of the material on NileSoniQ.<br>4. A statement that you have a good-faith belief that the use is not authorized by the copyright owner, its agent, or the law.<br>5. A statement that the information in your notice is accurate and, where applicable, that you are the copyright owner or authorized to act for the owner.<br>6. Your physical or electronic signature.</p><h3>How We Handle Reports:</h3><p>We review copyright complaints and may remove or restrict access to reported content while investigating. We will contact the uploader where appropriate and take action consistent with applicable law and our policies. Response and removal times can depend on the completeness of the complaint and the circumstances; we do not publish a guaranteed fixed takedown time.</p><h3>Repeat Infringement:</h3><p>Accounts that repeatedly submit infringing material may lose upload privileges or be suspended or terminated.</p><h3>Prevention Measures:</h3><p>- Manual review before a song is approved for public display<br>- Required artist Terms &amp; Conditions acceptance during upload<br>- Copyright reporting and takedown process<br>- Review of reported or suspicious content</p><h3>Current Statistics:</h3><p>We intentionally do not publish hard-coded song or artist totals in this policy because those numbers change as the platform grows. The current submission and approval status is maintained in the NileSoniQ administrative system.</p><h3>Contact for Copyright Matters:</h3><p>Email: nilesoniq@gmail.com<br>Location: Kampala, Uganda</p><p style="margin-bottom:0;">NileSoniQ<br>Kampala, Uganda</p>`, "/dmca");
 }
 
 
@@ -10158,11 +10253,11 @@ document
 async function openPolicyRoute(path){
   const normalized=String(path || "").toLowerCase();
   if(normalized === "/about"){ await showPage("about",false); return true; }
-  if(normalized === "/privacy"){ await showPage("home",false); showPrivacy(); updateCanonicalUrl("/privacy"); return true; }
-  if(normalized === "/terms"){ await showPage("home",false); showTerms(); updateCanonicalUrl("/terms"); return true; }
-  if(normalized === "/contact"){ await showPage("home",false); showContact(); updateCanonicalUrl("/contact"); return true; }
-  if(normalized === "/dmca"){ await showPage("home",false); showDMCA(); updateCanonicalUrl("/dmca"); return true; }
-  if(normalized === "/music-rights"){ await showPage("home",false); showMusicRightsPolicy(); updateCanonicalUrl("/music-rights"); return true; }
+  if(normalized === "/privacy"){ showPrivacy(); return true; }
+  if(normalized === "/terms"){ showTerms(); return true; }
+  if(normalized === "/contact"){ showContact(); return true; }
+  if(normalized === "/dmca"){ showDMCA(); return true; }
+  if(normalized === "/music-rights"){ showMusicRightsPolicy(); return true; }
   return false;
 }
 
