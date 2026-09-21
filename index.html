@@ -9,6 +9,14 @@
 <meta name="description"
 content="NileSoniq is an artist-first Ugandan music platform where listeners can stream approved songs, discover artists, explore releases, and read original music stories.">
 <link id="canonicalUrl" rel="canonical" href="https://nilesoniq.com/">
+<meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="NileSoniq">
+<meta property="og:title" content="NileSoniq — Ugandan Music Platform">
+<meta property="og:description" content="NileSoniq is an artist-first Ugandan music platform where listeners can stream approved songs, discover artists, explore releases, and read original music stories.">
+<meta property="og:url" content="https://nilesoniq.com/">
+<meta name="twitter:card" content="summary_large_image">
+
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2">
 </script>
@@ -1538,6 +1546,15 @@ footer{
 .news-card .news-read{margin-top:auto;color:var(--orange);font-size:13px;font-weight:800;}
 .news-editor textarea{min-height:240px;resize:vertical;}
 </style>
+<script type="application/ld+json" id="nilesoniqStructuredData">
+{
+  "@context":"https://schema.org",
+  "@type":"WebSite",
+  "name":"NileSoniq",
+  "url":"https://nilesoniq.com/",
+  "description":"NileSoniq is an artist-first Ugandan music platform where listeners can stream approved songs, discover artists, explore releases, and read original music stories."
+}
+</script>
 </head>
 
 <body>
@@ -2972,8 +2989,10 @@ let searchTimer = null;
 ========================================================= */
 
 function normalizedSeoPath(path){
-  const value = String(path || "/").split("#")[0].split("?")[0];
-  return value.replace(/\/+$/, "") || "/";
+  let value = String(path || "/").split("#")[0].split("?")[0];
+  if(!value.startsWith("/")) value = "/" + value;
+  value = value.replace(/\/{2,}/g, "/");
+  return value === "/" ? "/" : value.replace(/\/+$/, "");
 }
 
 function updateCanonicalUrl(path){
@@ -2991,15 +3010,41 @@ function updateMetaDescription(description){
   }
 }
 
+function updateSocialMeta(title, description, path){
+  const normalized = normalizedSeoPath(path || window.location.pathname);
+  const url = "https://nilesoniq.com" + normalized;
+
+  const values = {
+    "og:title": title,
+    "og:description": description,
+    "og:url": url
+  };
+
+  Object.entries(values).forEach(([property, content]) => {
+    const node = document.querySelector(`meta[property="${property}"]`);
+    if(node && content) node.setAttribute("content", content);
+  });
+
+  const twitterTitle = document.querySelector('meta[name="twitter:title"]');
+  const twitterDescription = document.querySelector('meta[name="twitter:description"]');
+  if(twitterTitle && title) twitterTitle.setAttribute("content", title);
+  if(twitterDescription && description) twitterDescription.setAttribute("content", description);
+}
+
 function updateSeoForRoute(path, title, description){
-  updateCanonicalUrl(path);
-  if(title) document.title = title;
-  if(description) updateMetaDescription(description);
+  const normalized = normalizedSeoPath(path);
+  updateCanonicalUrl(normalized);
+
+  if(title) document.title = String(title).trim();
+  if(description){
+    updateMetaDescription(description);
+    updateSocialMeta(String(title || document.title).trim(), String(description).trim(), normalized);
+  }
 }
 
 function restoreDefaultSeo(){
   updateSeoForRoute(
-    window.location.pathname,
+    "/",
     "NileSoniq — Ugandan Music Platform",
     "NileSoniq is an artist-first Ugandan music platform where listeners can stream approved songs, discover artists, explore releases, and read original music stories."
   );
@@ -3052,6 +3097,16 @@ document.addEventListener(
       path === "/news"
     ){
       await showPage(path.slice(1), false);
+      return;
+    }
+
+    if(/^\/artist\/[^/]+$/i.test(path)){
+      await openArtistBySlug(path.split("/")[2]);
+      return;
+    }
+
+    if(/^\/song\/[^/]+$/i.test(path)){
+      await openSongBySlug(path.split("/")[2]);
       return;
     }
 
@@ -3109,6 +3164,52 @@ document.addEventListener(
     checkUser().catch(() => {});
   });
 
+});
+
+
+/* Keep the canonical/meta state aligned when browser history changes. */
+window.addEventListener("popstate", () => {
+  const currentPath = normalizedSeoPath(window.location.pathname);
+
+  if(currentPath === "/"){
+    restoreDefaultSeo();
+    return;
+  }
+
+  if(currentPath === "/artists"){
+    updateSeoForRoute(
+      currentPath,
+      "Ugandan Artists — NileSoniq",
+      "Discover Ugandan artists, their profiles, genres, styles, releases, and approved music on NileSoniq."
+    );
+    return;
+  }
+
+  if(currentPath === "/songs"){
+    updateSeoForRoute(
+      currentPath,
+      "Ugandan Songs — NileSoniq",
+      "Stream approved Ugandan songs on NileSoniq and explore song details, artists, releases, and charts."
+    );
+    return;
+  }
+
+  if(currentPath === "/news"){
+    updateSeoForRoute(
+      currentPath,
+      "Ugandan Music News — NileSoniq",
+      "Read NileSoniq original music stories, artist features, release updates, interviews, and Ugandan music news."
+    );
+    return;
+  }
+
+  if(currentPath === "/about"){
+    updateSeoForRoute(
+      currentPath,
+      "About NileSoniq — Ugandan Music Platform",
+      "Learn about NileSoniq, an artist-first Ugandan music platform built in Kampala, Uganda."
+    );
+  }
 });
 
 
