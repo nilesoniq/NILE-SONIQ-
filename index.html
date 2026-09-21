@@ -9611,12 +9611,28 @@ async function loadCopyrightRemovalPanel(){
   artistsBody.innerHTML='<tr><td colspan="5"><div class="loading">Loading artist profiles...</div></td></tr>';
 
   try{
-    const [{data:songs,error:songError},{data:artists,error:artistError}]=await Promise.all([
-      sb.from("songs").select("id,title,artist,approved,artist_id,cover_url,created_at,release_date,genre,producer,label,location").order("created_at",{ascending:false}),
-      sb.from("artists").select("id,name,location,avatar_url,genre,years_active,website,created_at,user_id").order("created_at",{ascending:false})
+    // Load songs and artists independently so one schema/RLS problem cannot
+    // leave both Copyright Removal tables stuck on "Loading...".
+    const [songsResult,artistsResult]=await Promise.all([
+      sb.from("songs").select("*").order("created_at",{ascending:false}),
+      sb.from("artists").select("*")
     ]);
-    if(songError) throw songError;
-    if(artistError) throw artistError;
+
+    const songs=songsResult.data||[];
+    const artists=artistsResult.data||[];
+
+    if(songsResult.error){
+      throw new Error(`Could not load songs: ${songsResult.error.message}`);
+    }
+
+    // Artist rows are supplementary information. If the artist query fails,
+    // still show the songs so the Super Admin can identify/remove content.
+    if(artistsResult.error){
+      console.warn("Copyright removal artist query failed:",artistsResult.error);
+      showMessage("adminCopyrightMessage",
+        `Artist details could not be loaded: ${artistsResult.error.message}. Songs are still shown.`,
+        "error");
+    }
 
     const artistMap={};
     (artists||[]).forEach(artist=>{
@@ -9664,7 +9680,6 @@ async function loadCopyrightRemovalPanel(){
       const details=[
         `Artist ID: ${artist.id||"—"}`,
         `Location: ${artist.location||"Not provided"}`,
-        `Genre: ${artist.genre||"Not provided"}`,
         `Years active: ${artist.years_active||"Not provided"}`,
         `Website: ${artist.website||"Not provided"}`,
         `Created: ${artist.created_at ? formatNewsDate(artist.created_at) : "Not available"}`
