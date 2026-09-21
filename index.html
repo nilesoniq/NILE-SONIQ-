@@ -3221,6 +3221,14 @@ document.addEventListener(
       return;
     }
 
+    /* Public song and artist detail URLs must work on a fresh page load,
+       not only after SPA navigation. This also gives crawlers and users
+       a real public destination for every indexed detail URL. */
+    if(isShortPublicRoute()){
+      await handleShortPublicRoute();
+      return;
+    }
+
     if(path === "/"){
       await showPage("home", false);
       window.scrollTo({top:0,left:0,behavior:"auto"});
