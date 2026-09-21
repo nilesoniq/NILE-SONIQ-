@@ -3980,6 +3980,7 @@ async function showAdminTab(tab){
   const walletTab = document.getElementById("adminTabWallet");
   const adminTab = document.getElementById("adminTabAdmins");
   const newsTab = document.getElementById("adminTabNews");
+  const commentsTab = document.getElementById("adminTabComments");
 
   [analyticsPanel,songsPanel,withdrawalsPanel,walletPanel,managementPanel,newsPanel,commentsPanel].forEach(el=>{if(el)el.classList.add("hidden")});
   [analyticsTab,songTab,newsTab,commentsTab,withdrawalTab,walletTab,adminTab].forEach(el=>{if(el)el.classList.remove("active")});
