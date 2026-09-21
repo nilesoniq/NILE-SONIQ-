@@ -1584,6 +1584,14 @@ footer{
 .news-card .news-excerpt{color:#aaa;line-height:1.6;font-size:14px;}
 .news-card .news-read{margin-top:auto;color:var(--orange);font-size:13px;font-weight:800;}
 .news-editor textarea{min-height:240px;resize:vertical;}
+
+/* SUPER ADMIN COPYRIGHT REVIEW DETAILS */
+.copyright-review-table .copyright-artist-cell{display:flex;align-items:center;gap:12px;min-width:190px;}
+.copyright-review-table .copyright-avatar{width:46px;height:46px;border-radius:50%;object-fit:cover;display:block;border:1px solid var(--border);background:#222;}
+.copyright-review-table .copyright-avatar-placeholder{width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#222;border:1px solid var(--border);font-weight:800;color:#fff;}
+.copyright-review-table .copyright-detail{display:flex;flex-direction:column;gap:3px;}
+.copyright-review-table .copyright-detail strong{color:#fff;}
+.copyright-review-table .copyright-detail small{color:#999;}
 </style>
 <script type="application/ld+json" id="nilesoniqStructuredData">
 {
@@ -2663,9 +2671,9 @@ Super Admin only. Use this area when a copyright complaint has been reviewed and
 <div class="dashboard-card" style="margin:0 0 18px;">
 <h3>Approved / Submitted Songs</h3>
 <div class="table-wrap">
-<table>
-<thead><tr><th>Song</th><th>Artist</th><th>Status</th><th>Action</th></tr></thead>
-<tbody id="adminCopyrightSongsTable"><tr><td colspan="4"><div class="loading">Loading songs...</div></td></tr></tbody>
+<table class="copyright-review-table">
+<thead><tr><th>Artist</th><th>Song</th><th>Status</th><th>Details</th><th>Action</th></tr></thead>
+<tbody id="adminCopyrightSongsTable"><tr><td colspan="5"><div class="loading">Loading songs...</div></td></tr></tbody>
 </table>
 </div>
 </div>
@@ -2673,9 +2681,9 @@ Super Admin only. Use this area when a copyright complaint has been reviewed and
 <div class="dashboard-card" style="margin:0;">
 <h3>Artist Profiles</h3>
 <div class="table-wrap">
-<table>
-<thead><tr><th>Artist</th><th>Location</th><th>Action</th></tr></thead>
-<tbody id="adminCopyrightArtistsTable"><tr><td colspan="3"><div class="loading">Loading artists...</div></td></tr></tbody>
+<table class="copyright-review-table">
+<thead><tr><th>Profile</th><th>Artist</th><th>Location</th><th>Details</th><th>Action</th></tr></thead>
+<tbody id="adminCopyrightArtistsTable"><tr><td colspan="5"><div class="loading">Loading artists...</div></td></tr></tbody>
 </table>
 </div>
 </div>
@@ -9599,31 +9607,76 @@ async function loadCopyrightRemovalPanel(){
   const artistsBody=document.getElementById("adminCopyrightArtistsTable");
   if(!songsBody || !artistsBody) return;
 
-  songsBody.innerHTML='<tr><td colspan="4"><div class="loading">Loading songs...</div></td></tr>';
-  artistsBody.innerHTML='<tr><td colspan="3"><div class="loading">Loading artists...</div></td></tr>';
+  songsBody.innerHTML='<tr><td colspan="5"><div class="loading">Loading songs and artist details...</div></td></tr>';
+  artistsBody.innerHTML='<tr><td colspan="5"><div class="loading">Loading artist profiles...</div></td></tr>';
 
   try{
     const [{data:songs,error:songError},{data:artists,error:artistError}]=await Promise.all([
-      sb.from("songs").select("id,title,artist,approved,artist_id").order("created_at",{ascending:false}),
-      sb.from("artists").select("id,name,location").order("created_at",{ascending:false})
+      sb.from("songs").select("id,title,artist,approved,artist_id,cover_url,created_at,release_date,genre,producer,label,location").order("created_at",{ascending:false}),
+      sb.from("artists").select("id,name,location,avatar_url,genre,years_active,website,created_at,user_id").order("created_at",{ascending:false})
     ]);
     if(songError) throw songError;
     if(artistError) throw artistError;
 
-    songsBody.innerHTML=(songs||[]).length ? (songs||[]).map(song=>`
-      <tr>
-        <td>${escapeHtml(song.title||"Untitled")}</td>
-        <td>${escapeHtml(song.artist||"Unknown")}</td>
-        <td><span class="status ${song.approved===true?'approved':'pending'}">${song.approved===true?'Approved':'Pending'}</span></td>
-        <td><button class="btn btn-danger" onclick="removeCopyrightSong('${escapeAttribute(song.id)}')">Delete for copyright</button></td>
-      </tr>`).join("") : '<tr><td colspan="4"><div class="empty">No songs found.</div></td></tr>';
+    const artistMap={};
+    (artists||[]).forEach(artist=>{
+      artistMap[String(artist.id)]=artist;
+      if(artist.user_id) artistMap[String(artist.user_id)]=artist;
+    });
 
-    artistsBody.innerHTML=(artists||[]).length ? (artists||[]).map(artist=>`
-      <tr>
-        <td>${escapeHtml(artist.name||"Unnamed artist")}</td>
+    const getArtistForSong=(song)=>{
+      return artistMap[String(song.artist_id||"")] ||
+        (artists||[]).find(a=>String(a.name||"").toLowerCase()===String(song.artist||"").toLowerCase()) ||
+        null;
+    };
+
+    const renderAvatar=(artist,label)=>{
+      const name=artist?.name || label || "Artist";
+      return artist?.avatar_url
+        ? `<img class="copyright-avatar" src="${escapeAttribute(artist.avatar_url)}" alt="${escapeAttribute(name)} profile picture" loading="lazy">`
+        : `<div class="copyright-avatar-placeholder" aria-label="No profile picture">${escapeHtml(getInitials(name))}</div>`;
+    };
+
+    songsBody.innerHTML=(songs||[]).length ? (songs||[]).map(song=>{
+      const artist=getArtistForSong(song);
+      const artistName=artist?.name || song.artist || "Unknown Artist";
+      const songDate=song.created_at ? formatNewsDate(song.created_at) : "Not available";
+      const releaseDate=song.release_date || "Not provided";
+      const details=[
+        `Song ID: ${song.id||"—"}`,
+        `Genre: ${song.genre||"Not provided"}`,
+        `Release: ${releaseDate}`,
+        `Uploaded: ${songDate}`,
+        `Producer: ${song.producer||"Not provided"}`,
+        `Label: ${song.label||"Not provided"}`,
+        `Location: ${song.location||artist?.location||"Not provided"}`
+      ].join("\\n");
+      return `<tr>
+        <td><div class="copyright-artist-cell">${renderAvatar(artist,artistName)}<div class="copyright-detail"><strong>${escapeHtml(artistName)}</strong><small>${escapeHtml(artist?.location||song.location||"Location not provided")}</small></div></div></td>
+        <td><div class="copyright-detail"><strong>${escapeHtml(song.title||"Untitled")}</strong><small>${escapeHtml(song.id||"")}</small></div></td>
+        <td><span class="status ${song.approved===true?'approved':'pending'}">${song.approved===true?'Approved':'Pending'}</span></td>
+        <td><button class="btn btn-dark" type="button" title="${escapeAttribute(details)}" onclick="alert(${JSON.stringify(details)})">View details</button></td>
+        <td><button class="btn btn-danger" onclick="removeCopyrightSong('${escapeAttribute(song.id)}')">Delete for copyright</button></td>
+      </tr>`;
+    }).join("") : '<tr><td colspan="5"><div class="empty">No songs found.</div></td></tr>';
+
+    artistsBody.innerHTML=(artists||[]).length ? (artists||[]).map(artist=>{
+      const details=[
+        `Artist ID: ${artist.id||"—"}`,
+        `Location: ${artist.location||"Not provided"}`,
+        `Genre: ${artist.genre||"Not provided"}`,
+        `Years active: ${artist.years_active||"Not provided"}`,
+        `Website: ${artist.website||"Not provided"}`,
+        `Created: ${artist.created_at ? formatNewsDate(artist.created_at) : "Not available"}`
+      ].join("\\n");
+      return `<tr>
+        <td>${renderAvatar(artist,artist.name)}</td>
+        <td><div class="copyright-detail"><strong>${escapeHtml(artist.name||"Unnamed artist")}</strong><small>${escapeHtml(artist.id||"")}</small></div></td>
         <td>${escapeHtml(artist.location||"Not provided")}</td>
+        <td><button class="btn btn-dark" type="button" title="${escapeAttribute(details)}" onclick="alert(${JSON.stringify(details)})">View details</button></td>
         <td><button class="btn btn-danger" onclick="removeCopyrightArtist('${escapeAttribute(artist.id)}')">Delete profile</button></td>
-      </tr>`).join("") : '<tr><td colspan="3"><div class="empty">No artist profiles found.</div></td></tr>';
+      </tr>`;
+    }).join("") : '<tr><td colspan="5"><div class="empty">No artist profiles found.</div></td></tr>';
   }catch(error){
     console.error("Copyright removal panel error:",error);
     showMessage("adminCopyrightMessage",error.message||"Could not load copyright removal tools.","error");
@@ -9632,12 +9685,14 @@ async function loadCopyrightRemovalPanel(){
 
 async function removeCopyrightSong(songId){
   if(!isCurrentUserSuperAdmin()){ alert("Only the Super Admin can remove songs for copyright complaints."); return; }
-  const song=(await sb.from("songs").select("id,title,artist").eq("id",songId).maybeSingle()).data;
+  const song=(await sb.from("songs").select("id,title,artist,artist_id").eq("id",songId).maybeSingle()).data;
+  let songArtist=song?.artist||"this artist";
+  if(song?.artist_id){ const artistRow=(await sb.from("artists").select("name").eq("id",song.artist_id).maybeSingle()).data; if(artistRow?.name) songArtist=artistRow.name; }
   if(!song) return;
-  const reason=prompt(`Enter the copyright-removal reason for “${song.title||"this song"}”.\n\nThis action permanently deletes the song.`,"Copyright complaint");
+  const reason=prompt(`Enter the copyright-removal reason for “${song.title||"this song"}” by ${songArtist}.\n\nThis action permanently deletes the song.`,"Copyright complaint");
   if(reason===null) return;
   if(!reason.trim()){ alert("A removal reason is required."); return; }
-  if(!confirm(`Permanently delete “${song.title||"this song"}” by ${song.artist||"this artist"}?\n\nThis cannot be undone.`)) return;
+  if(!confirm(`Permanently delete “${song.title||"this song"}” by ${songArtist}?\n\nThis cannot be undone.`)) return;
   try{
     const {error}=await sb.rpc("remove_copyright_song",{
       p_song_id:songId,
