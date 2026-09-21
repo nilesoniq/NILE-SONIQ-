@@ -2694,6 +2694,10 @@ Contact
 DMCA
 </a>
 
+<a href="/music-rights" onclick="history.pushState({},'', '/music-rights');showMusicRightsPolicy();updateCanonicalUrl('/music-rights');return false;">
+Music Rights &amp; Content Policy
+</a>
+
 <button
 id="adminLoginLink"
 class="footer-admin-login"
@@ -9880,6 +9884,55 @@ function showTerms(){
 
 function showContact(){
   openPolicyModal("Contact NileSoniQ - Kampala, Uganda", `<p>We are available to help with account, artist, music, technical, and copyright questions.</p><p><strong>Address:</strong> Kampala, Uganda<br><strong>Email:</strong> nilesoniq@gmail.com<br><strong>Phone/WhatsApp:</strong> 0785 823496</p><h3>For Artists:</h3><p>Contact us if you need help with artist profiles, music submissions, or platform features.</p><h3>For Copyright Issues:</h3><p>If you believe any song or other material infringes your rights, email us with the information requested in our <a href="/DMCA" onclick="history.pushState({},'','/DMCA');showDMCA();return false;">DMCA Copyright Policy</a>.</p><p style="margin-bottom:0;">Thank you for supporting Ugandan music.</p>`);
+}
+
+
+function showMusicRightsPolicy(){
+  openPolicyModal(
+    "Music Rights & Content Policy - NileSoniQ",
+    `<p><strong>Effective Date: September 21, 2026</strong></p>
+
+<p>NileSoniQ is an artist-first Ugandan music platform. We want artists to share their music while respecting the rights of artists, producers, labels, composers, publishers, photographers, and other rights holders.</p>
+
+<h3>1. Rights and Authorization</h3>
+<p>Artists and other submitters must have the necessary rights or authorization to submit music, artwork, metadata, and other material to NileSoniQ. Submitting content does not transfer ownership of that content to NileSoniQ.</p>
+
+<h3>2. Review Before Publication</h3>
+<p>User-submitted music is not automatically published. Song submissions are placed in a pending state and reviewed by an authorized NileSoniQ administrator before approval for public display.</p>
+
+<h3>3. Artist Confirmation</h3>
+<p>When submitting a song, the artist must accept the NileSoniQ Terms &amp; Conditions and confirm that they have the necessary rights or authorization to submit the music for streaming on NileSoniQ. The submission records the acceptance time for our records.</p>
+
+<h3>4. Copyright Complaints</h3>
+<p>If you are a copyright owner or authorized agent and believe that content on NileSoniQ infringes your rights, please send a written copyright notice to <strong>nilesoniq@gmail.com</strong> with the subject <strong>DMCA Takedown Request</strong>.</p>
+
+<p>Please include:</p>
+<p>1. Your full name and contact information.<br>
+2. A description of the copyrighted work you believe has been infringed.<br>
+3. The exact URL of the material on NileSoniQ.<br>
+4. A statement that you have a good-faith belief that the use is not authorized by the copyright owner, its agent, or the law.<br>
+5. A statement that the information in your notice is accurate and, where applicable, that you are the copyright owner or authorized to act for the owner.<br>
+6. Your physical or electronic signature.</p>
+
+<h3>5. How We Handle Reports</h3>
+<p>We review copyright complaints and may remove or restrict access to reported content while investigating. We may contact the uploader where appropriate and take action consistent with applicable law and our policies. Response and removal times can depend on the completeness of the complaint and the circumstances; we do not publish a guaranteed fixed takedown time.</p>
+
+<h3>6. Repeat Infringement</h3>
+<p>Accounts that repeatedly submit infringing material may lose upload privileges or may be suspended or terminated.</p>
+
+<h3>7. Prevention Measures</h3>
+<p>NileSoniq uses measures that may include manual review before a song is approved, artist rights confirmation, copyright reporting and takedown procedures, and review of reported or suspicious content.</p>
+
+<h3>8. Artist Responsibility</h3>
+<p>Artists and submitters are responsible for the legality and rights status of material they submit. NileSoniq does not knowingly intend to publish unauthorized copyrighted material.</p>
+
+<h3>9. Contact</h3>
+<p>For copyright or music-rights matters, contact:</p>
+<p><strong>Email:</strong> nilesoniq@gmail.com<br>
+<strong>Location:</strong> Kampala, Uganda</p>
+
+<p style="margin-bottom:0;">NileSoniQ<br>Kampala, Uganda<br>2026</p>`
+  );
 }
 
 function showDMCA(){
