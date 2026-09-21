@@ -1537,6 +1537,15 @@ footer{
 .news-card .news-excerpt{color:#aaa;line-height:1.6;font-size:14px;}
 .news-card .news-read{margin-top:auto;color:var(--orange);font-size:13px;font-weight:800;}
 .news-editor textarea{min-height:240px;resize:vertical;}
+
+.music-placeholder{
+  padding:18px;
+  text-align:center;
+  color:var(--muted);
+  border:1px dashed var(--border);
+  border-radius:14px;
+  background:rgba(255,255,255,.02);
+}
 </style>
 </head>
 
@@ -1720,8 +1729,8 @@ The latest approved music on NileSoniq.
 <div id="newReleasesContainer"
 class="song-grid">
 
-<div class="loading">
-Loading new releases...
+<div class="music-placeholder">
+Scroll down or tap “Start Listening” to load new releases.
 </div>
 
 </div>
@@ -1747,8 +1756,8 @@ The most-played songs on NileSoniq.
 <div id="topChartsContainer"
 class="song-grid">
 
-<div class="loading">
-Loading top charts...
+<div class="music-placeholder">
+Scroll down to load the current top charts.
 </div>
 
 </div>
@@ -1774,8 +1783,8 @@ Fresh music from NileSoniq artists.
 <div id="songsContainer"
 class="song-grid">
 
-<div class="loading">
-Loading music...
+<div class="music-placeholder">
+Scroll down to load trending music.
 </div>
 
 </div>
@@ -3015,7 +3024,7 @@ let publicReleasesLoaded = false;
 let publicChartsLoaded = false;
 let publicArtistsLoaded = false;
 let publicNewsLoaded = false;
-let publicLazyObserver = null;
+let publicHomeLoadTriggered = false;
 
 async function loadPublicSongsOnce(){
   if(publicSongsLoaded) return;
@@ -3047,63 +3056,78 @@ async function loadPublicNewsOnce(){
   await loadNews();
 }
 
-function setupLazyPublicContent(){
-  if(publicLazyObserver){
-    publicLazyObserver.disconnect();
-  }
+async function loadPublicHomeMusic(){
+  if(publicHomeLoadTriggered) return;
+  publicHomeLoadTriggered = true;
 
-  if(!("IntersectionObserver" in window)){
-    setTimeout(() => {
-      loadPublicSongsOnce();
-      loadPublicReleasesOnce();
-      loadPublicChartsOnce();
-    }, 0);
-    return;
-  }
+  // Load the homepage music only after the visitor has explicitly
+  // interacted with the music area (Start Listening or scrolling).
+  await Promise.allSettled([
+    loadPublicReleasesOnce(),
+    loadPublicChartsOnce(),
+    loadPublicSongsOnce()
+  ]);
+}
 
-  publicLazyObserver = new IntersectionObserver((entries, observer) => {
-    entries.forEach(entry => {
-      if(!entry.isIntersecting) return;
+function sectionIsNearViewport(element, distance=250){
+  if(!element) return false;
+  const rect = element.getBoundingClientRect();
+  return rect.top <= window.innerHeight + distance &&
+         rect.bottom >= -distance;
+}
 
-      const id = entry.target.id;
+function setupUserTriggeredMusicLoading(){
+  let scrollTimer = null;
 
-      if(id === "songsContainer"){
-        loadPublicSongsOnce();
-      }else if(id === "newReleasesContainer"){
-        loadPublicReleasesOnce();
-      }else if(id === "topChartsContainer"){
-        loadPublicChartsOnce();
-      }else if(id === "artistsContainer"){
-        loadPublicArtistsOnce();
-      }else if(id === "newsPageContainer"){
-        loadPublicNewsOnce();
+  const onUserScroll = () => {
+    if(publicHomeLoadTriggered) return;
+
+    clearTimeout(scrollTimer);
+    scrollTimer = setTimeout(() => {
+      // Important: this function is called from a real scroll event.
+      // We intentionally do NOT run this check during page startup.
+      const releaseSection = document.getElementById("newReleases");
+      const chartSection = document.getElementById("topCharts");
+      const songsSection = document.getElementById("trending");
+
+      if(
+        sectionIsNearViewport(releaseSection) ||
+        sectionIsNearViewport(chartSection) ||
+        sectionIsNearViewport(songsSection)
+      ){
+        loadPublicHomeMusic();
+        window.removeEventListener("scroll", onUserScroll);
       }
+    }, 80);
+  };
 
-      observer.unobserve(entry.target);
-    });
-  }, {
-    rootMargin: "500px 0px",
-    threshold: 0.01
-  });
+  window.addEventListener("scroll", onUserScroll, {passive:true});
 
-  [
-    "songsContainer",
-    "newReleasesContainer",
-    "topChartsContainer",
-    "artistsContainer",
-    "newsPageContainer"
-  ].forEach(id => {
-    const element = document.getElementById(id);
-    if(element){
-      publicLazyObserver.observe(element);
-    }
-  });
+  // Start Listening is the explicit, immediate way to request the music.
+  const startButton = document.querySelector(
+    ".hero-actions .btn.btn-orange"
+  );
+
+  if(startButton){
+    startButton.onclick = async () => {
+      await loadPublicHomeMusic();
+
+      const target = document.getElementById("newReleases");
+      if(target){
+        target.scrollIntoView({
+          behavior:"smooth",
+          block:"start"
+        });
+      }
+    };
+  }
 }
 
 
 /* =========================================================
    STARTUP
 ========================================================= */
+
 
 document.addEventListener(
 "DOMContentLoaded",
@@ -3118,8 +3142,8 @@ async () => {
   const path=normalizedSeoPath(window.location.pathname);
   updateCanonicalUrl(path);
 
-  // Render the page shell first. Public music/news/artist data
-  // is fetched only when its section/page is actually needed.
+  // Render the page shell immediately. No public song/release/chart
+  // queries happen here.
   if(["/about","/privacy","/terms","/contact","/dmca"].includes(path.toLowerCase())){
     await openPolicyRoute(path);
   }else if(path === "/artists" || path === "/songs" || path === "/news" || path === "/about"){
@@ -3130,8 +3154,10 @@ async () => {
     await showPage("home",false);
   }
 
-  // Begin lazy observation after the initial page has rendered.
-  setupLazyPublicContent();
+  // Do not trigger any music request merely because the page opened.
+  // Music starts loading only after scrolling into the music area or
+  // pressing Start Listening.
+  setupUserTriggeredMusicLoading();
 });
 
 
