@@ -1616,6 +1616,24 @@ footer{
 .trending-item .trend-title{font-weight:600;overflow:hidden;text-overflow:ellipsis;max-width:140px;}
 @keyframes trendingMove{from{transform:translateX(0)}to{transform:translateX(-50%)}}
 </style>
+
+<style>
+/* Compact artist and news cards */
+.artist-card{padding:12px;border-radius:14px;text-align:left;}
+.artist-avatar{width:62px;height:62px;margin:0 0 10px;}
+.artist-card h3{font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin:4px 0;}
+.artist-card p{font-size:12px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.artist-card .read-more,.news-card .read-more{color:var(--orange);font-weight:700;font-size:12px;display:inline-block;margin-top:8px;}
+.news-card{padding:12px;border-radius:14px;}
+.news-card img{max-height:120px;object-fit:cover;border-radius:10px;}
+.news-card h3{font-size:15px;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.news-card p{font-size:12px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+@media(max-width:760px){
+ .artist-grid{grid-template-columns:1fr;}
+ .artist-card{display:flex;gap:12px;align-items:center;text-align:left;}
+ .artist-avatar{flex:none;margin:0;width:55px;height:55px;}
+}
+</style>
 </head>
 
 <body>
