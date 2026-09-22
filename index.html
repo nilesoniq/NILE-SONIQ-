@@ -7482,23 +7482,34 @@ async function loadArtists(){
       return String(a.name || "").localeCompare(String(b.name || ""));
     });
 
-    container.innerHTML = rankedArtists.map((artist,index) => {
-      const avatar = artist.avatar_url
-        ? `<img src="${escapeAttribute(artist.avatar_url)}" alt="${escapeAttribute(artist.name || "Artist")}" loading="lazy">`
-        : `<div class="artist-avatar-placeholder">${getInitials(artist.name)}</div>`;
+    window.nileArtistsPages = { items: rankedArtists, page: 1, size: 5 };
+    window.renderArtistsPage = function(){
+      const start = (window.nileArtistsPages.page - 1) * window.nileArtistsPages.size;
+      const pageItems = window.nileArtistsPages.items.slice(start, start + window.nileArtistsPages.size);
+      container.innerHTML = pageItems.map((artist,localIndex) => {
+        const index = start + localIndex;
+        const avatar = artist.avatar_url
+          ? `<img src="${escapeAttribute(artist.avatar_url)}" alt="${escapeAttribute(artist.name || "Artist")}" loading="lazy">`
+          : `<div class="artist-avatar-placeholder">${getInitials(artist.name)}</div>`;
 
-      return `
-        <div class="artist-card" role="button" tabindex="0" onclick="openArtistProfile('${escapeAttribute(artist.id)}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openArtistProfile('${escapeAttribute(artist.id)}');}">
-          <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-            <div class="artist-rank-number">#${index+1}</div>
-            <div style="font-size:12px;color:#aaa;font-weight:700;">${formatNumber(artist.__artistPlays || 0)} views</div>
-          </div>
-          <div class="artist-avatar">${avatar}</div>
-          <h3>${escapeHtml(artist.name || "Unknown Artist")}</h3>
-          <p>${escapeHtml(artist.location || "Uganda")}</p>
-          <div style="margin-top:10px;color:var(--orange);font-size:12px;font-weight:700;">View Profile →</div>
-        </div>`;
-    }).join("");
+        return `
+          <div class="artist-card" role="button" tabindex="0" onclick="openArtistProfile('${escapeAttribute(artist.id)}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openArtistProfile('${escapeAttribute(artist.id)}');}">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+              <div class="artist-rank-number">#${index+1}</div>
+              <div style="font-size:12px;color:#aaa;font-weight:700;">${formatNumber(artist.__artistPlays || 0)} views</div>
+            </div>
+            <div class="artist-avatar">${avatar}</div>
+            <h3>${escapeHtml(artist.name || "Unknown Artist")}</h3>
+            <p>${escapeHtml(artist.location || "Uganda")}</p>
+            <div style="margin-top:10px;color:var(--orange);font-size:12px;font-weight:700;">View Profile →</div>
+          </div>`;
+      }).join("");
+      const nav = document.createElement('div');
+      nav.className='pagination-controls';
+      nav.innerHTML=`<button class="btn btn-dark" ${window.nileArtistsPages.page===1?'disabled':''} onclick="window.nileArtistsPages.page--;window.renderArtistsPage()">Previous</button><span>Page ${window.nileArtistsPages.page} of ${Math.ceil(window.nileArtistsPages.items.length/window.nileArtistsPages.size)}</span><button class="btn btn-dark" ${start+window.nileArtistsPages.size>=window.nileArtistsPages.items.length?'disabled':''} onclick="window.nileArtistsPages.page++;window.renderArtistsPage()">Next</button>`;
+      container.appendChild(nav);
+    };
+    window.renderArtistsPage();
 
   }catch(error){
     console.error("Artists error:",error);
