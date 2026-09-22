@@ -5589,8 +5589,9 @@ function renderSongs(songs){
     return;
   }
 
-  const cards = items.map(song => `
+  const cards = items.map((song, index) => `
     <div class="trending-item" onclick="openSongLink(window.__nileSongRegistry['${escapeAttribute(song.id)}'])">
+      <strong class="trend-number">${index + 1}.</strong>
       <img src="${escapeAttribute(song.cover || song.image || '')}" onerror="this.style.display='none'">
       <div>
         <div class="trend-title">${escapeHtml(song.title || 'Untitled')}</div>
