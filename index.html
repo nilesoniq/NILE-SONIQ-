@@ -1606,6 +1606,16 @@ footer{
 .pagination-controls{display:flex;justify-content:center;gap:15px;align-items:center;margin:20px 0;}
 .pagination-controls button{padding:8px 16px;cursor:pointer;border-radius:6px;}
 </style>
+
+<style>
+.trending-marquee-wrap{overflow:hidden;width:100%;position:relative;}
+.trending-marquee{display:flex;gap:16px;width:max-content;animation:trendingMove 35s linear infinite;}
+.trending-marquee:hover{animation-play-state:paused;}
+.trending-item{display:flex;align-items:center;gap:10px;min-width:220px;padding:10px 14px;border-radius:12px;background:var(--card-bg,rgba(0,0,0,.05));white-space:nowrap;}
+.trending-item img{width:45px;height:45px;border-radius:8px;object-fit:cover;}
+.trending-item .trend-title{font-weight:600;overflow:hidden;text-overflow:ellipsis;max-width:140px;}
+@keyframes trendingMove{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+</style>
 </head>
 
 <body>
@@ -5564,15 +5574,35 @@ function renderSongCards(
 
 
 function renderSongs(songs){
+  const container = document.getElementById("songsContainer");
+  if(!container) return;
 
-  renderSongCards(
-    paginateSongs(songs, "songsContainer"),
-    "songsContainer",
-    "No approved songs yet",
-    "New music will appear here after approval.",
-    true
-  );
+  const items = songs.slice(0, 5);
+  window.__nileSongRegistry = window.__nileSongRegistry || {};
 
+  items.forEach(song => {
+    window.__nileSongRegistry[song.id] = song;
+  });
+
+  if(!items.length){
+    container.innerHTML = `<div class="loading">No approved songs yet</div>`;
+    return;
+  }
+
+  const cards = items.map(song => `
+    <div class="trending-item" onclick="openSongLink(window.__nileSongRegistry['${escapeAttribute(song.id)}'])">
+      <img src="${escapeAttribute(song.cover || song.image || '')}" onerror="this.style.display='none'">
+      <div>
+        <div class="trend-title">${escapeHtml(song.title || 'Untitled')}</div>
+        <small>${escapeHtml(song.artist || 'Unknown Artist')}</small>
+      </div>
+    </div>`).join('');
+
+  container.className = 'trending-marquee-wrap';
+  container.innerHTML = `<div class="trending-marquee">${cards}${cards}</div>`;
+
+  const pagination = document.getElementById('songsPagination');
+  if(pagination) pagination.innerHTML='';
 }
 
 
