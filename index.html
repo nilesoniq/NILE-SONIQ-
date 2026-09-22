@@ -1602,6 +1602,10 @@ footer{
   "description":"NileSoniq is an artist-first Ugandan music platform for discovering Ugandan artists, approved music releases, charts and original music stories."
 }
 </script>
+<style>
+.pagination-controls{display:flex;justify-content:center;gap:15px;align-items:center;margin:20px 0;}
+.pagination-controls button{padding:8px 16px;cursor:pointer;border-radius:6px;}
+</style>
 </head>
 
 <body>
@@ -1811,6 +1815,7 @@ Loading new releases...
 </div>
 
 </div>
+<div id="newReleasesPagination" class="pagination-controls"></div>
 
 </section>
 
@@ -1838,6 +1843,7 @@ Loading top charts...
 </div>
 
 </div>
+<div id="topChartsPagination" class="pagination-controls"></div>
 
 </section>
 
@@ -1865,6 +1871,7 @@ Loading music...
 </div>
 
 </div>
+<div id="songsPagination" class="pagination-controls"></div>
 
 </section>
 
@@ -5137,6 +5144,41 @@ async function uploadSong(){
 }
 
 
+const SONGS_PER_PAGE = 5;
+const categoryPages = {
+  songsContainer: 1,
+  newReleasesContainer: 1,
+  topChartsContainer: 1
+};
+
+function renderPagination(containerId, total){
+  const id = containerId.replace('Container','Pagination');
+  const box = document.getElementById(id);
+  if(!box) return;
+  const page = categoryPages[containerId] || 1;
+  const pages = Math.ceil(total / SONGS_PER_PAGE);
+  if(pages <= 1){ box.innerHTML=''; return; }
+  box.innerHTML = `
+    <button ${page<=1?'disabled':''} onclick="changeSongPage('${containerId}',${page-1})">Previous</button>
+    <span>Page ${page} of ${pages}</span>
+    <button ${page>=pages?'disabled':''} onclick="changeSongPage('${containerId}',${page+1})">Next</button>`;
+}
+
+function changeSongPage(containerId, page){
+  if(page < 1) return;
+  categoryPages[containerId] = page;
+  if(containerId === 'songsContainer') renderSongs(currentSongs);
+  if(containerId === 'newReleasesContainer') renderNewReleases(newReleaseSongs);
+  if(containerId === 'topChartsContainer') renderTopCharts(topChartSongs);
+}
+
+function paginateSongs(songs, containerId){
+  const page = categoryPages[containerId] || 1;
+  const start = (page-1) * SONGS_PER_PAGE;
+  renderPagination(containerId, songs.length);
+  return songs.slice(start, start + SONGS_PER_PAGE);
+}
+
 /* =========================================================
    LOAD PUBLIC SONGS
 ========================================================= */
@@ -5524,7 +5566,7 @@ function renderSongCards(
 function renderSongs(songs){
 
   renderSongCards(
-    songs,
+    paginateSongs(songs, "songsContainer"),
     "songsContainer",
     "No approved songs yet",
     "New music will appear here after approval.",
@@ -5537,7 +5579,7 @@ function renderSongs(songs){
 function renderNewReleases(songs){
 
   renderSongCards(
-    songs,
+    paginateSongs(songs, "newReleasesContainer"),
     "newReleasesContainer",
     "No new releases yet",
     "New music will appear here after approval."
@@ -5551,7 +5593,7 @@ function renderTopCharts(songs){
   const rankedSongs = (songs || []).map((song,index) => ({...song,__rank:index+1}));
 
   renderSongCards(
-    rankedSongs,
+    paginateSongs(rankedSongs, "topChartsContainer"),
     "topChartsContainer",
     "No chart data yet",
     "Songs will appear here as they receive plays."
