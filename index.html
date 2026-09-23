@@ -3238,6 +3238,25 @@ window.supabase.createClient(
   }
 );
 
+/*
+  Separate client for public content.
+  Public song/artist/news reads do not need the visitor's logged-in JWT.
+  Keeping these reads session-free prevents a temporary Supabase auth/JWT
+  validation problem from breaking public pages such as Trending Songs.
+*/
+const publicSb =
+window.supabase.createClient(
+  SUPABASE_URL,
+  SUPABASE_PUBLISHABLE_KEY,
+  {
+    auth:{
+      persistSession:false,
+      autoRefreshToken:false,
+      detectSessionInUrl:false
+    }
+  }
+);
+
 
 /* =========================================================
    EARNINGS
@@ -5305,7 +5324,7 @@ async function loadSongs(){
     const {
       data,
       error
-    } = await sb
+    } = await publicSb
       .from("songs")
       .select("*")
       .eq(
@@ -5364,6 +5383,30 @@ async function loadSongs(){
 
     console.error(error);
 
+    const message = String(error?.message || "");
+
+    /* A public page should remain usable even if a logged-in session's
+       JWT is temporarily rejected by Supabase. Retry once through the
+       session-free public client. */
+    if(/JWT issued at future|PGRST303/i.test(message)){
+      try{
+        const retry = await publicSb
+          .from("songs")
+          .select("*")
+          .eq("approved",true)
+          .order("plays",{ascending:false,nullsFirst:false})
+          .order("created_at",{ascending:false});
+
+        if(!retry.error){
+          currentSongs = retry.data || [];
+          renderSongs(currentSongs);
+          return;
+        }
+      }catch(retryError){
+        console.error("Public song retry failed:",retryError);
+      }
+    }
+
     container.innerHTML = `
       <div class="empty">
         <h3>Could not load songs</h3>
@@ -5409,7 +5452,7 @@ async function loadNewReleases(){
     const {
       data,
       error
-    } = await sb
+    } = await publicSb
       .from("songs")
       .select("*")
       .eq(
@@ -5483,7 +5526,7 @@ async function loadTopCharts(){
     const {
       data,
       error
-    } = await sb
+    } = await publicSb
       .from("songs")
       .select("*")
       .eq(
@@ -6498,7 +6541,7 @@ function isShortPublicRoute(){
 async function openArtistBySlug(slug){
   const wanted = cleanSlug(decodeURIComponent(slug || ""));
   try{
-    const {data,error} = await sb
+    const {data,error} = await publicSb
       .from("artists")
       .select("*")
       .order("created_at",{ascending:false});
@@ -6520,7 +6563,7 @@ async function openArtistBySlug(slug){
 async function openSongBySlug(slug){
   const wanted = cleanSlug(decodeURIComponent(slug || ""));
   try{
-    const {data,error} = await sb
+    const {data,error} = await publicSb
       .from("songs")
       .select("*")
       .eq("approved",true)
@@ -6554,7 +6597,7 @@ async function showPublicSongPage(song){
   let artistRecord = null;
   if(song && song.artist_id){
     try{
-      const {data} = await sb.from("artists").select("*").eq("id",song.artist_id).maybeSingle();
+      const {data} = await publicSb.from("artists").select("*").eq("id",song.artist_id).maybeSingle();
       if(data) artistRecord = data;
     }catch(e){ console.warn("Could not load song artist profile:",e); }
   }
@@ -6660,7 +6703,7 @@ async function playPublicSongFromPage(songId){
   if(song){
     await playSong(song.id);
   }else{
-    const {data} = await sb.from("songs").select("*").eq("id",songId).eq("approved",true).maybeSingle();
+    const {data} = await publicSb.from("songs").select("*").eq("id",songId).eq("approved",true).maybeSingle();
     if(data) await playSong(data.id);
   }
 }
@@ -6774,7 +6817,7 @@ async function openArtistProfile(artistId, fromPublicRoute=false){
     const {
       data:artist,
       error:artistError
-    } = await sb
+    } = await publicSb
       .from("artists")
       .select("*")
       .eq("id",artistId)
@@ -6811,7 +6854,7 @@ async function openArtistProfile(artistId, fromPublicRoute=false){
     const {
       data:songsById,
       error:songsByIdError
-    } = await sb
+    } = await publicSb
       .from("songs")
       .select("*")
       .eq("artist_id",artist.id)
@@ -9282,7 +9325,7 @@ async function loadNews(){
   if(!container) return;
   container.innerHTML=`<div class="loading">Loading NileSoniq News...</div>`;
   try{
-    const {data,error}=await sb.from("news").select("id,title,slug,excerpt,content,image_url,published,published_at,created_at,updated_at").eq("published",true).order("published_at",{ascending:false,nullsFirst:false}).order("created_at",{ascending:false});
+    const {data,error}=await publicSb.from("news").select("id,title,slug,excerpt,content,image_url,published,published_at,created_at,updated_at").eq("published",true).order("published_at",{ascending:false,nullsFirst:false}).order("created_at",{ascending:false});
     if(error) throw error;
     renderNewsArticles(data || []);
   }catch(error){
