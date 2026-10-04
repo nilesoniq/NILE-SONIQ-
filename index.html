@@ -3785,61 +3785,152 @@ function showNormalMusicSections(){
 
 
 /* =========================================================
-   AUTH STATE
+   CLOUDFLARE AUTH STATE
 ========================================================= */
 
-sb.auth.onAuthStateChange(
-async (_event, session) => {
+const AUTH_API_BASE = "/api/auth";
 
-  currentUser =
-    session?.user || null;
+async function cloudflareAuthFetch(path, options = {}){
+  const opts = {...options};
+  opts.credentials = "include";
 
-  const searchInput = document.getElementById("searchInput");
-  if(searchInput && currentUser?.email && searchInput.value.trim() === currentUser.email.trim()){
-    searchInput.value = "";
-    if(typeof performSearch === "function") performSearch();
+  const headers = new Headers(opts.headers || {});
+  if(opts.body && !headers.has("Content-Type")){
+    headers.set("Content-Type","application/json");
+  }
+  opts.headers = headers;
+
+  const response = await fetch(
+    AUTH_API_BASE + path,
+    opts
+  );
+
+  let payload = null;
+  const contentType = response.headers.get("content-type") || "";
+
+  if(contentType.includes("application/json")){
+    payload = await response.json().catch(() => null);
+  }else{
+    const text = await response.text().catch(() => "");
+    payload = text ? {message:text} : null;
   }
 
-  await updateUI();
+  if(!response.ok){
+    const message =
+      payload?.message ||
+      payload?.error ||
+      payload?.errors?.[0]?.message ||
+      `Authentication request failed (${response.status}).`;
 
-});
+    const error = new Error(message);
+    error.status = response.status;
+    error.payload = payload;
+    throw error;
+  }
 
+  return payload;
+}
+
+function normalizeCloudflareUser(payload){
+  const user =
+    payload?.user ||
+    payload?.data?.user ||
+    payload?.data ||
+    payload?.account ||
+    null;
+
+  if(!user || typeof user !== "object"){
+    return null;
+  }
+
+  return {
+    ...user,
+    id: user.id || user.user_id || user.userId || null,
+    email: user.email || user.email_address || user.emailAddress || ""
+  };
+}
+
+function normalizeCloudflareAdmin(payload){
+  const admin =
+    payload?.admin ||
+    payload?.data?.admin ||
+    payload?.administrator ||
+    null;
+
+  if(!admin || typeof admin !== "object"){
+    return null;
+  }
+
+  return {
+    ...admin,
+    id: admin.id || null,
+    user_id: admin.user_id || admin.userId || null,
+    email: admin.email || "",
+    role: admin.role || "admin",
+    active: admin.active !== false
+  };
+}
+
+async function loadCloudflareSession(){
+  try{
+    const payload = await cloudflareAuthFetch(
+      "/me",
+      {
+        method:"GET"
+      }
+    );
+
+    const user = normalizeCloudflareUser(payload);
+    const admin = normalizeCloudflareAdmin(payload);
+
+    currentUser = user;
+    currentAdmin = admin;
+
+    if(user?.email){
+      const searchInput = document.getElementById("searchInput");
+      if(
+        searchInput &&
+        searchInput.value.trim() === user.email.trim()
+      ){
+        searchInput.value = "";
+        if(typeof performSearch === "function"){
+          performSearch();
+        }
+      }
+    }
+
+    await updateUI();
+    return payload;
+
+  }catch(error){
+
+    if(error?.status === 401 || error?.status === 403){
+      currentUser = null;
+      currentAdmin = null;
+      await updateUI();
+      return null;
+    }
+
+    console.error(
+      "Cloudflare authentication/session error:",
+      error
+    );
+
+    return null;
+  }
+}
+
+
+/* =========================================================
+   STARTUP AUTH CHECK
+========================================================= */
 
 async function checkUser(){
 
   try{
-
-    const {
-      data,
-      error
-    } = await sb.auth.getSession();
-
-    if(error){
-
-      console.error(
-        "Session error:",
-        error
-      );
-
-      return;
-
-    }
-
-    currentUser =
-      data.session?.user || null;
-
-    const searchInput = document.getElementById("searchInput");
-    if(searchInput && currentUser?.email && searchInput.value.trim() === currentUser.email.trim()){
-      searchInput.value = "";
-      if(typeof performSearch === "function") performSearch();
-    }
-
-    await updateUI();
-
+    await loadCloudflareSession();
   }catch(error){
-
     console.error(error);
-
   }
 
 }
@@ -3852,54 +3943,48 @@ async function checkUser(){
 async function isCurrentUserAdmin(){
 
   if(!currentUser){
-
     currentAdmin = null;
-
     return false;
+  }
 
+  if(
+    currentAdmin &&
+    currentAdmin.active !== false
+  ){
+    return true;
   }
 
   try{
 
-    const {
-      data,
-      error
-    } = await sb
-      .from("admins")
-      .select(
-        "id,user_id,email,role,active"
-      )
-      .eq(
-        "user_id",
-        currentUser.id
-      )
-      .eq(
-        "active",
-        true
-      )
-      .maybeSingle();
-
-    if(error){
-
-      console.error(
-        "Admin database check error:",
-        error
+    const payload =
+      await cloudflareAuthFetch(
+        "/me",
+        {
+          method:"GET"
+        }
       );
 
-      currentAdmin = null;
+    const user =
+      normalizeCloudflareUser(payload);
 
-      return false;
+    const admin =
+      normalizeCloudflareAdmin(payload);
 
+    if(user){
+      currentUser = user;
     }
 
-    currentAdmin = data || null;
+    currentAdmin = admin;
 
-    return !!data;
+    return !!(
+      admin &&
+      admin.active !== false
+    );
 
   }catch(error){
 
     console.error(
-      "Admin check failed:",
+      "Cloudflare admin check failed:",
       error
     );
 
@@ -4477,46 +4562,82 @@ async function submitAuth(){
 
     if(currentAuthMode === "login"){
 
-      const {error} =
-        await sb.auth.signInWithPassword({
-          email,
-          password
-        });
-
-      if(error){
-        throw error;
-      }
-
-
-      if(currentAuthContext === "admin"){
-
-        await new Promise(
-          resolve =>
-            setTimeout(resolve,300)
+      const payload =
+        await cloudflareAuthFetch(
+          "/login",
+          {
+            method:"POST",
+            headers:{
+              "Content-Type":"application/json"
+            },
+            credentials:"include",
+            body:JSON.stringify({
+              email,
+              password
+            })
+          }
         );
 
-        const {
-          data:adminData,
-          error:adminError
-        } = await sb
-          .from("admins")
-          .select(
-            "id,user_id,email,role,active"
-          )
-          .eq(
-            "user_id",
-            currentUser?.id
-          )
-          .eq(
-            "active",
-            true
-          )
-          .maybeSingle();
+      currentUser =
+        normalizeCloudflareUser(payload);
 
+      currentAdmin =
+        normalizeCloudflareAdmin(payload);
 
-        if(adminError || !adminData){
+      /*
+        Some Auth Worker implementations return only a success message
+        from /login and set the authenticated HttpOnly cookie. In that
+        case, immediately ask /me for the authenticated user.
+      */
+      if(!currentUser){
+        await loadCloudflareSession();
+      }
 
-          await sb.auth.signOut();
+      if(!currentUser){
+        throw new Error(
+          payload?.message === "NileSoniq Auth API"
+          ? "The Auth Worker is reachable, but its login endpoint did not return an authenticated user. Check the Worker /login response."
+          : "Login succeeded, but the authenticated user could not be loaded."
+        );
+      }
+
+      /*
+        Admin authorization is determined by the Cloudflare Auth Worker.
+        If /login did not include the admin record, /me is checked here.
+      */
+      if(currentAuthContext === "admin"){
+
+        if(!currentAdmin){
+          try{
+            const mePayload =
+              await cloudflareAuthFetch(
+                "/me",
+                {
+                  method:"GET"
+                }
+              );
+
+            currentUser =
+              normalizeCloudflareUser(mePayload) ||
+              currentUser;
+
+            currentAdmin =
+              normalizeCloudflareAdmin(mePayload);
+
+          }catch(meError){
+            console.error(
+              "Could not load Cloudflare admin session:",
+              meError
+            );
+          }
+        }
+
+        if(
+          !currentAdmin ||
+          currentAdmin.active === false
+        ){
+
+          await logoutCloudflareOnly();
 
           currentUser = null;
           currentAdmin = null;
@@ -4531,8 +4652,6 @@ async function submitAuth(){
 
         }
 
-
-        currentAdmin = adminData;
 
         showMessage(
           "authMessage",
@@ -4565,6 +4684,8 @@ async function submitAuth(){
         "success"
       );
 
+      await updateUI();
+
       setTimeout(
         closeAuthModal,
         700
@@ -4586,50 +4707,38 @@ async function submitAuth(){
       }
 
 
-      const {
-        data,
-        error
-      } = await sb.auth.signUp({
-        email,
-        password,
-        options:{
-          emailRedirectTo:AUTH_REDIRECT_URL,
-          data:{
-            artist_name:artistName
-          }
-        }
-      });
-
-
-      if(error){
-        throw error;
-      }
-
-
-      if(data.user){
-
-        const {
-          error:artistError
-        } = await sb
-          .from("artists")
-          .upsert(
-            {
-              user_id:data.user.id,
-              name:artistName
+      const payload =
+        await cloudflareAuthFetch(
+          "/register",
+          {
+            method:"POST",
+            headers:{
+              "Content-Type":"application/json"
             },
-            {
-              onConflict:"user_id"
-            }
-          );
+            credentials:"include",
+            body:JSON.stringify({
+              email,
+              password,
+              artist_name:artistName,
+              artistName:artistName
+            })
+          }
+        );
 
 
-        if(artistError){
+      currentUser =
+        normalizeCloudflareUser(payload);
 
-          console.error(
-            "Artist profile error:",
-            artistError
-          );
+      currentAdmin =
+        normalizeCloudflareAdmin(payload);
 
+
+      if(!currentUser){
+
+        try{
+          await loadCloudflareSession();
+        }catch(error){
+          console.error(error);
         }
 
       }
@@ -4637,11 +4746,21 @@ async function submitAuth(){
 
       showMessage(
         "authMessage",
-        data.session
+        currentUser
           ? "Account created successfully. You can now use NileSoniq."
-          : "Account created. Please check your email and click the confirmation link. You will be returned to NileSoniq.",
+          : (
+              payload?.message ||
+              "Account created successfully. You can now log in."
+            ),
         "success"
       );
+
+      /*
+        The old Supabase-specific artist-profile upsert is intentionally
+        not called here. Artist accounts are now owned by Cloudflare/D1.
+      */
+
+      await updateUI();
 
     }
 
@@ -4665,28 +4784,46 @@ async function submitAuth(){
    LOGOUT
 ========================================================= */
 
-async function logout(){
+async function logoutCloudflareOnly(){
 
-  const {error} =
-    await sb.auth.signOut();
+  try{
 
-
-  if(error){
-
-    alert(
-      "Logout failed: " +
-      error.message
+    await cloudflareAuthFetch(
+      "/logout",
+      {
+        method:"POST",
+        headers:{
+          "Content-Type":"application/json"
+        },
+        credentials:"include"
+      }
     );
 
-    return;
+  }catch(error){
+
+    /*
+      A logout request can legitimately return an error if the
+      session has already expired. Local state must still be cleared.
+    */
+    console.warn(
+      "Cloudflare logout request:",
+      error
+    );
 
   }
 
+}
+
+
+async function logout(){
+
+  await logoutCloudflareOnly();
 
   currentUser = null;
   currentArtist = null;
   currentAdmin = null;
 
+  await updateUI();
   await showPage("home");
 
 }
@@ -9038,7 +9175,7 @@ async function withdrawPlatformMoney(){
     const {
       data: sessionData,
       error: sessionError
-    } = await sb.auth.getSession();
+    } = await cloudflareAuthFetch("/me", {method:"GET"});
 
     if(sessionError){
       throw new Error(
