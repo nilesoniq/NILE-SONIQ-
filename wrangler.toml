@@ -5,17 +5,12 @@ compatibility_date = "2026-10-05"
 [[d1_databases]]
 binding = "DB"
 database_name = "nilesoniq"
-database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+database_id = "448a8c6f-eb5c-4a34-b804-2dc47255a05a"
 migrations_dir = "migrations"
 
 [[r2_buckets]]
 binding = "MEDIA_BUCKET"
 bucket_name = "nilesoniq-media"
-
-[vars]
-# Set payment endpoints as secrets/variables only when you have the real values.
-# PESAJET_COLLECTION_URL = ""
-# PESAJET_DISBURSEMENT_URL = ""
 
 [assets]
 directory = "public"
