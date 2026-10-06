@@ -28,13 +28,25 @@ export default {
 
       if (url.pathname === "/api/health") {
         response = await health(env);
-      } else if (url.pathname === "/api/auth/register" && method === "POST") {
+      } else if (
+        url.pathname === "/api/auth/register" &&
+        method === "POST"
+      ) {
         response = await register(request, env);
-      } else if (url.pathname === "/api/auth/login" && method === "POST") {
+      } else if (
+        url.pathname === "/api/auth/login" &&
+        method === "POST"
+      ) {
         response = await login(request, env);
-      } else if (url.pathname === "/api/auth/logout" && method === "POST") {
+      } else if (
+        url.pathname === "/api/auth/logout" &&
+        method === "POST"
+      ) {
         response = await logout(request, env);
-      } else if (url.pathname === "/api/auth/me" && method === "GET") {
+      } else if (
+        url.pathname === "/api/auth/me" &&
+        method === "GET"
+      ) {
         response = await me(request, env);
       } else if (
         url.pathname === "/api/storage/upload" &&
@@ -261,7 +273,7 @@ async function verifyPassword(password, storedHash) {
 }
 
 /* =========================================================
-   AUTH TABLE SETUP
+   AUTH TABLES
 ========================================================= */
 
 async function ensureAuthTables(db) {
@@ -325,7 +337,6 @@ async function health(env) {
     await env.MEDIA_BUCKET.head("health-check");
     storage = true;
   } catch (error) {
-    // R2 head on a missing object can still prove the binding works.
     storage = true;
   }
 
@@ -349,14 +360,38 @@ async function register(request, env) {
     const body = await request.json();
 
     console.log("REGISTER_BODY_RECEIVED", {
+      keys: Object.keys(body || {}),
       hasArtistName: !!body?.artistName,
+      hasArtistNameSnake: !!body?.artist_name,
+      hasName: !!body?.name,
+      hasArtist: !!body?.artist,
       hasEmail: !!body?.email,
       hasPassword: !!body?.password,
     });
 
-    const artistName = String(body?.artistName || "").trim();
-    const email = String(body?.email || "").trim().toLowerCase();
-    const password = String(body?.password || "");
+    const artistName = String(
+      body?.artistName ||
+      body?.artist_name ||
+      body?.name ||
+      body?.artist ||
+      ""
+    ).trim();
+
+    const email = String(
+      body?.email ||
+      body?.emailAddress ||
+      body?.email_address ||
+      ""
+    )
+      .trim()
+      .toLowerCase();
+
+    const password = String(
+      body?.password ||
+      body?.pass ||
+      body?.userPassword ||
+      ""
+    );
 
     if (!artistName) {
       console.log("REGISTER_VALIDATION_FAILED_ARTIST_NAME");
@@ -441,8 +476,6 @@ async function register(request, env) {
 
       console.log("REGISTER_REPAIRING_EXISTING_USER");
 
-      console.log("REGISTER_REPAIR_HASH_STARTED");
-
       const repairedHash = await hashPassword(password);
 
       console.log("REGISTER_REPAIR_HASH_FINISHED");
@@ -451,8 +484,6 @@ async function register(request, env) {
         db,
         "auth_local_credentials"
       );
-
-      console.log("REGISTER_CREDENTIAL_COLUMNS", columns);
 
       if (columns.includes("updated_at")) {
         await db
@@ -563,7 +594,9 @@ async function register(request, env) {
         null,
         nowIso(),
         nowIso(),
-        JSON.stringify({ provider: "email" }),
+        JSON.stringify({
+          provider: "email",
+        }),
         JSON.stringify({
           artist_name: artistName,
         })
@@ -585,10 +618,15 @@ async function register(request, env) {
       "auth_local_credentials"
     );
 
-    console.log("REGISTER_CREDENTIAL_COLUMNS", credentialColumns);
+    console.log(
+      "REGISTER_CREDENTIAL_COLUMNS",
+      credentialColumns
+    );
 
     if (credentialColumns.includes("updated_at")) {
-      console.log("REGISTER_CREDENTIAL_INSERT_WITH_UPDATED_AT");
+      console.log(
+        "REGISTER_CREDENTIAL_INSERT_WITH_UPDATED_AT"
+      );
 
       await db
         .prepare(
@@ -611,7 +649,9 @@ async function register(request, env) {
         )
         .run();
     } else {
-      console.log("REGISTER_CREDENTIAL_INSERT_THREE_COLUMNS");
+      console.log(
+        "REGISTER_CREDENTIAL_INSERT_THREE_COLUMNS"
+      );
 
       await db
         .prepare(
@@ -743,11 +783,21 @@ async function login(request, env) {
   try {
     const body = await request.json();
 
-    const email = String(body?.email || "")
+    const email = String(
+      body?.email ||
+      body?.emailAddress ||
+      body?.email_address ||
+      ""
+    )
       .trim()
       .toLowerCase();
 
-    const password = String(body?.password || "");
+    const password = String(
+      body?.password ||
+      body?.pass ||
+      body?.userPassword ||
+      ""
+    );
 
     if (!email || !password) {
       return json(
@@ -954,7 +1004,8 @@ async function me(request, env) {
 }
 
 function getBearerToken(request) {
-  const header = request.headers.get("Authorization") || "";
+  const header =
+    request.headers.get("Authorization") || "";
 
   if (!header.toLowerCase().startsWith("bearer ")) {
     return null;
@@ -980,7 +1031,8 @@ async function upload(request, env) {
     .replace(/[^a-zA-Z0-9._-]/g, "_")
     .slice(0, 180);
 
-  const key = `${Date.now()}-${crypto.randomUUID()}-${safeFilename}`;
+  const key =
+    `${Date.now()}-${crypto.randomUUID()}-${safeFilename}`;
 
   await env.MEDIA_BUCKET.put(
     key,
@@ -995,13 +1047,16 @@ async function upload(request, env) {
   return json({
     ok: true,
     key,
-    url: `/api/storage/public/${encodeURIComponent(key)}`,
+    url:
+      `/api/storage/public/${encodeURIComponent(key)}`,
   });
 }
 
 async function publicStorage(request, env, url) {
   const encodedKey =
-    url.pathname.slice("/api/storage/public/".length);
+    url.pathname.slice(
+      "/api/storage/public/".length
+    );
 
   const key = decodeURIComponent(encodedKey);
 
@@ -1028,7 +1083,7 @@ async function publicStorage(request, env, url) {
 }
 
 /* =========================================================
-   GENERIC RPC
+   RPC
 ========================================================= */
 
 async function rpc(request, env, url) {
@@ -1059,7 +1114,8 @@ async function rpc(request, env, url) {
 
   return json(
     {
-      error: `RPC function "${functionName}" is not implemented in the D1 migration yet.`,
+      error:
+        `RPC function "${functionName}" is not implemented in the D1 migration yet.`,
       args: body,
     },
     501
@@ -1067,7 +1123,7 @@ async function rpc(request, env, url) {
 }
 
 /* =========================================================
-   GENERIC DATABASE API
+   DATABASE API
 ========================================================= */
 
 const ALLOWED_TABLES = new Set([
@@ -1135,10 +1191,10 @@ async function dbSelect(request, env, table, url) {
     500
   );
 
-  const sql = `SELECT * FROM ${table} LIMIT ?`;
-
   const result = await env.DB
-    .prepare(sql)
+    .prepare(
+      `SELECT * FROM ${table} LIMIT ?`
+    )
     .bind(limit)
     .all();
 
@@ -1183,12 +1239,14 @@ async function dbInsert(request, env, table) {
     }
   }
 
-  const placeholders = columns.map(() => "?").join(", ");
-  const columnSql = columns.join(", ");
+  const placeholders =
+    columns.map(() => "?").join(", ");
 
   const result = await env.DB
     .prepare(
-      `INSERT INTO ${table} (${columnSql}) VALUES (${placeholders})`
+      `INSERT INTO ${table} (${columns.join(
+        ", "
+      )}) VALUES (${placeholders})`
     )
     .bind(...entries.map(([, value]) => value))
     .run();
@@ -1281,4 +1339,4 @@ async function dbDelete(request, env, table) {
     ok: true,
     success: result.success,
   });
-}
+    }
