@@ -10,8 +10,6 @@
 content="NileSoniq is an artist-first Ugandan music platform where listeners can stream approved songs, discover artists, explore releases, and read original music stories.">
 <link rel="canonical" href="https://nilesoniq.com/">
 
-
-
 <style>
 :root{
   --bg:#0a0a0a;
@@ -2888,53 +2886,234 @@ preload="metadata">
 <script>
 
 /* =========================================================
-   NILESONIQ CLOUDFLARE DATA ADAPTER
+   NILESONIQ CLOUDFLARE FRONTEND ADAPTER
 ========================================================= */
+
+/*
+  This page talks only to the Cloudflare Worker on the same origin.
+  The browser talks only to the Cloudflare Worker on the same origin.
+  No Supabase SDK, URL, key, or browser-side secret is used.
+*/
 const AUTH_API = "/api/auth";
 const MEMBERSHIP_API = "/api/membership";
-const AUTH_REDIRECT_URL = `${window.location.origin}/`;
+const CF_API = "/api";
 
-function cfQuery(table, initial={}){
-  const state={table,params:new URLSearchParams(),filters:[],method:"GET",body:null,selection:"*",singleMode:null};
-  function addFilter(op,col,val){state.params.set(`${op}.${col}`,String(val)); return api;}
-  const api={
-    select(columns="*", options){ state.selection=columns; if(state.method!=="GET") state.params.set("select",columns); else state.params.set("select",columns); return api; },
-    eq:(c,v)=>addFilter("eq",c,v), neq:(c,v)=>addFilter("neq",c,v), gt:(c,v)=>addFilter("gt",c,v), gte:(c,v)=>addFilter("gte",c,v), lt:(c,v)=>addFilter("lt",c,v), lte:(c,v)=>addFilter("lte",c,v),
-    order:(c,o={})=>{state.params.set("order",`${c}.${o.ascending===false?"desc":"asc"}`); return api;},
-    limit:n=>{state.params.set("limit",String(n));return api;},
-    maybeSingle:async()=>execute(true,true), single:async()=>execute(true,false),
-    insert:row=>{state.method="POST";state.body=row;return api;},
-    update:row=>{state.method="PATCH";state.body=row;return api;},
-    delete:()=>{state.method="DELETE";return api;},
-    upsert:row=>{state.method="POST";state.body=row;state.upsert=true;return api;}
-  };
-  Object.assign(state.params,initial);
-  async function execute(single=false,allowEmpty=false){
-    if(state.method==="GET") state.params.set("select",state.selection||"*");
-    const url=`/api/db/${encodeURIComponent(table)}?${state.params.toString()}`;
-    const res=await fetch(url,{method:state.method,credentials:"include",headers:{"Content-Type":"application/json","Accept":"application/json"},body:state.method==="GET"||state.method==="DELETE"?undefined:JSON.stringify(state.body)});
-    const json=await res.json().catch(()=>({}));
-    if(!res.ok) return {data:null,error:new Error(json.error||`Request failed (${res.status})`)};
-    let data=json.data;
-    if(single){ if(Array.isArray(data)) data=data[0]||null; if(!data && !allowEmpty) return {data:null,error:new Error("No rows returned")}; }
-    return {data,error:json.error?new Error(json.error):null};
+function cfError(message,status=500){
+  const e = new Error(message || "Cloudflare request failed");
+  e.status = status;
+  return e;
+}
+
+async function cfJson(url, options={}){
+  const response = await fetch(url, {
+    credentials:"include",
+    ...options,
+    headers:{
+      "Accept":"application/json",
+      ...(options.body instanceof FormData ? {} : {"Content-Type":"application/json"}),
+      ...(options.headers || {})
+    }
+  });
+  const data = await response.json().catch(()=>({}));
+  if(!response.ok){
+    throw cfError(data.error || data.message || `Request failed (${response.status})`,response.status);
   }
+  return data;
+}
+
+function makeQuery(table){
+  const state={
+    table,
+    select:"*",
+    filters:[],
+    order:null,
+    limit:null,
+    range:null,
+    singleMode:null,
+    operation:"select"
+  };
+
+  const api={
+    select(columns="*", options={}){
+      state.select=columns || "*";
+      return api;
+    },
+    eq(column,value){ state.filters.push(["eq",column,value]); return api; },
+    neq(column,value){ state.filters.push(["neq",column,value]); return api; },
+    gt(column,value){ state.filters.push(["gt",column,value]); return api; },
+    gte(column,value){ state.filters.push(["gte",column,value]); return api; },
+    lt(column,value){ state.filters.push(["lt",column,value]); return api; },
+    lte(column,value){ state.filters.push(["lte",column,value]); return api; },
+    in(column,values){ state.filters.push(["in",column,values]); return api; },
+    is(column,value){ state.filters.push(["is",column,value]); return api; },
+    order(column,{ascending=true,nullsFirst=null}={}){
+      state.order={column,ascending,nullsFirst}; return api;
+    },
+    limit(value){ state.limit=Number(value); return api; },
+    range(from,to){ state.range=[Number(from),Number(to)]; return api; },
+    maybeSingle(){ state.singleMode="maybeSingle"; return api; },
+    single(){ state.singleMode="single"; return api; },
+    insert(rows){ state.operation="insert"; state.rows=Array.isArray(rows)?rows:[rows]; return api; },
+    update(values){ state.operation="update"; state.values=values || {}; return api; },
+    delete(){ state.operation="delete"; return api; },
+    upsert(rows,options={}){ state.operation="upsert"; state.rows=Array.isArray(rows)?rows:[rows]; state.onConflict=options.onConflict || ""; return api; },
+    then(resolve,reject){ return executeQuery(state).then(resolve,reject); },
+    catch(reject){ return executeQuery(state).catch(reject); },
+    finally(fn){ return executeQuery(state).finally(fn); }
+  };
   return api;
 }
 
-const storageAdapter={from(bucket){return {
-  async upload(path,file){const res=await fetch(`/api/storage/upload?bucket=${encodeURIComponent(bucket)}&path=${encodeURIComponent(path)}`,{method:"POST",credentials:"include",headers:{"Content-Type":file.type||"application/octet-stream"},body:file}); const j=await res.json().catch(()=>({})); return {data:j.data||null,error:res.ok?null:new Error(j.error||"Upload failed")};},
-  getPublicUrl(path){return {data:{publicUrl:`/api/storage/public/${encodeURIComponent(bucket)}/${path.split('/').map(encodeURIComponent).join('/')}`}}}
-};}};
+async function executeQuery(state){
+  try{
+    if(state.operation==="select"){
+      const params=new URLSearchParams();
+      params.set("select",state.select || "*");
+      for(const [op,column,value] of state.filters){
+        params.append(op,`${column}:${Array.isArray(value)?value.join(","):String(value)}`);
+      }
+      if(state.order){
+        params.set("order",state.order.column);
+        params.set("ascending",state.order.ascending ? "true":"false");
+        if(state.order.nullsFirst!==null) params.set("nullsFirst",state.order.nullsFirst?"true":"false");
+      }
+      if(state.limit!==null) params.set("limit",String(state.limit));
+      if(state.range) params.set("range",`${state.range[0]}:${state.range[1]}`);
+      const data=await cfJson(`${CF_API}/db/${encodeURIComponent(state.table)}?${params.toString()}`,{method:"GET"});
+      let rows=Array.isArray(data) ? data : (Array.isArray(data.data)?data.data:(data.rows||[]));
+      if(state.singleMode){
+        if(state.singleMode==="single" && rows.length!==1) throw cfError(rows.length===0?"No rows found":"Multiple rows found",400);
+        return {data:rows[0] || null,error:null};
+      }
+      return {data:rows,error:null};
+    }
 
-const cloudflareData={
-  from:table=>cfQuery(table),
-  rpc:async(name,args={})=>{const res=await fetch(`/api/rpc/${encodeURIComponent(name)}`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify(args)});const j=await res.json().catch(()=>({}));return {data:j.data??null,error:res.ok?null:new Error(j.error||"RPC failed")};},
-  functions:{invoke:async(name,{body}={})=>{const res=await fetch(`/api/payments/${encodeURIComponent(name)}`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify(body||{})});const j=await res.json().catch(()=>({}));return {data:j,error:res.ok?null:new Error(j.error||j.message||"Function failed")};}},
-  storage:storageAdapter
+    const method=state.operation==="delete" ? "DELETE" : "POST";
+    const body={
+      action:state.operation,
+      values:state.values || null,
+      rows:state.rows || null,
+      onConflict:state.onConflict || null,
+      select:state.select || "*",
+      filters:state.filters.map(([op,column,value])=>({op,column,value}))
+    };
+    const data=await cfJson(`${CF_API}/db/${encodeURIComponent(state.table)}`,{
+      method,
+      body:JSON.stringify(body)
+    });
+    const rows=Array.isArray(data)?data:(Array.isArray(data.data)?data.data:(data.row?[data.row]:(data.rows||[])));
+    if(state.singleMode){ return {data:rows[0] || data.data || data.row || null,error:null}; }
+    return {data:rows,error:null};
+  }catch(error){
+    console.error("Cloudflare DB error:",state.table,error);
+    return {data:null,error};
+  }
+}
+
+function makeDbClient(){
+  return {
+    from(table){ return makeQuery(table); },
+    async rpc(name,params={}){
+      try{
+        const data=await cfJson(`${CF_API}/rpc/${encodeURIComponent(name)}`,{method:"POST",body:JSON.stringify(params || {})});
+        return {data:data.data !== undefined ? data.data : data.result !== undefined ? data.result : data,error:null};
+      }catch(error){ return {data:null,error}; }
+    },
+    functions:{
+      async invoke(name,{body=null}={}){
+        try{
+          const paymentRoute = name === "pesajet-collection"
+            ? `${CF_API}/payments/pesajet-collection`
+            : name === "pesajet-disbursement"
+              ? `${CF_API}/payments/pesajet-disbursement`
+              : `${CF_API}/rpc/${encodeURIComponent(name)}`;
+          const data=await cfJson(paymentRoute,{method:"POST",body:JSON.stringify(body || {})});
+          return {data:data.data !== undefined ? data.data : data,error:null};
+        }catch(error){ return {data:null,error}; }
+      }
+    },
+    storage:{
+      from(bucket){
+        return {
+          async upload(path,file,options={}){
+            try{
+              const form=new FormData();
+              form.append("bucket",bucket);
+              form.append("path",path);
+              form.append("file",file,file?.name || "upload");
+              form.append("upsert",options.upsert ? "true":"false");
+              if(options.contentType) form.append("contentType",options.contentType);
+              await cfJson(`${CF_API}/storage/upload`,{method:"POST",body:form});
+              return {data:{path},error:null};
+            }catch(error){ return {data:null,error}; }
+          },
+          getPublicUrl(path){
+            return {data:{publicUrl:`${CF_API}/storage/public/${encodeURIComponent(bucket)}/${String(path).split("/").map(encodeURIComponent).join("/")}`}};
+          }
+        };
+      }
+    }
+  };
+}
+
+const sb = makeDbClient();
+const AUTH_REDIRECT_URL = `${window.location.origin}/`;
+
+/* =========================================================
+   CLOUDFLARE AUTH STATE
+========================================================= */
+
+const authListeners = new Set();
+
+function notifyAuthListeners(){
+  const session = currentUser ? { user: currentUser } : null;
+  for(const listener of authListeners){
+    try{ listener("SIGNED_IN", session); }catch(error){ console.error(error); }
+  }
+}
+
+const authApi = {
+  onAuthStateChange(callback){
+    authListeners.add(callback);
+    return { data:{ subscription:{ unsubscribe:()=>authListeners.delete(callback) } } };
+  },
+  async getSession(){
+    try{
+      const response=await fetch(`${AUTH_API}/me`,{credentials:"include",headers:{"Accept":"application/json"},cache:"no-store"});
+      const data=await response.json().catch(()=>({}));
+      if(response.ok && data?.authenticated && data.user){
+        currentUser=data.user; currentAdmin=data.admin||null; currentArtist=data.artist||null;
+        return {data:{session:{user:currentUser}}};
+      }
+      currentUser=null; currentAdmin=null; currentArtist=null;
+      return {data:{session:null}};
+    }catch(error){ return {data:{session:null},error}; }
+  },
+  async signInWithPassword({email,password}){
+    try{
+      const data=await cfJson(`${AUTH_API}/login`,{method:"POST",body:JSON.stringify({email,password})});
+      currentUser=data.user||null; currentAdmin=data.admin||null; currentArtist=data.artist||null;
+      notifyAuthListeners();
+      return {data:{user:currentUser,session:currentUser?{user:currentUser}:null},error:null};
+    }catch(error){ return {data:{user:null,session:null},error}; }
+  },
+  async signUp({email,password,options}){
+    try{
+      const artist_name=options?.data?.artist_name || "";
+      const data=await cfJson(`${AUTH_API}/register`,{method:"POST",body:JSON.stringify({email,password,artist_name})});
+      currentUser=data.user||null; currentAdmin=data.admin||null; currentArtist=data.artist||null;
+      if(currentUser) notifyAuthListeners();
+      return {data:{user:currentUser,session:currentUser?{user:currentUser}:null},error:null};
+    }catch(error){ return {data:{user:null,session:null},error}; }
+  },
+  async signOut(){
+    try{ await cfJson(`${AUTH_API}/logout`,{method:"POST",body:JSON.stringify({})}); }
+    catch(error){ console.warn("Logout error:",error); }
+    currentUser=null; currentArtist=null; currentAdmin=null; notifyAuthListeners();
+    return {error:null};
+  }
 };
-const sb=cloudflareData;
-const publicSb=cloudflareData;
+
 
 /* =========================================================
    EARNINGS
@@ -3305,119 +3484,6 @@ function showNormalMusicSections(){
 
   });
 
-}
-
-
-/* =========================================================
-   CLOUDFLARE AUTH STATE
-========================================================= */
-
-const authListeners = new Set();
-
-function notifyAuthListeners(){
-  const session = currentUser ? { user: currentUser } : null;
-  for(const listener of authListeners){
-    try{ listener("SIGNED_IN", session); }catch(error){ console.error(error); }
-  }
-}
-
-const authApi = {
-  onAuthStateChange(callback){
-    authListeners.add(callback);
-    return { data:{ subscription:{ unsubscribe:()=>authListeners.delete(callback) } } };
-  },
-
-  async getSession(){
-    try{
-      const response = await fetch(`${AUTH_API}/me`, {
-        method:"GET",
-        credentials:"include",
-        headers:{"Accept":"application/json"},
-        cache:"no-store"
-      });
-      const data = await response.json().catch(()=>({}));
-      if(response.ok && data?.authenticated && data.user){
-        currentUser = data.user;
-        currentAdmin = data.admin || null;
-        currentArtist = data.artist || null;
-        return {data:{session:{user:currentUser}}};
-      }
-      currentUser = null;
-      currentAdmin = null;
-      currentArtist = null;
-      return {data:{session:null}};
-    }catch(error){
-      console.error("Cloudflare auth session error:",error);
-      return {data:{session:null},error};
-    }
-  },
-
-  async signInWithPassword({email,password}){
-    const response = await fetch(`${AUTH_API}/login`, {
-      method:"POST",
-      credentials:"include",
-      headers:{"Content-Type":"application/json","Accept":"application/json"},
-      body:JSON.stringify({email,password})
-    });
-    const data = await response.json().catch(()=>({}));
-    if(!response.ok || data.success === false){
-      return {error:new Error(data.error || data.message || "Invalid credentials")};
-    }
-    currentUser = data.user || null;
-    currentAdmin = data.admin || null;
-    currentArtist = data.artist || null;
-    notifyAuthListeners();
-    return {data:{user:currentUser,session:currentUser?{user:currentUser}:null},error:null};
-  },
-
-  async signUp({email,password,options}){
-    const artistName = options?.data?.artist_name || "";
-    const response = await fetch(`${AUTH_API}/register`, {
-      method:"POST",
-      credentials:"include",
-      headers:{"Content-Type":"application/json","Accept":"application/json"},
-      body:JSON.stringify({email,password,artist_name:artistName})
-    });
-    const data = await response.json().catch(()=>({}));
-    if(!response.ok || data.success === false){
-      return {data:{user:null,session:null},error:new Error(data.error || data.message || "Account creation failed")};
-    }
-    if(data.user){
-      currentUser = data.user;
-      currentAdmin = data.admin || null;
-      currentArtist = data.artist || null;
-      notifyAuthListeners();
-    }
-    return {data:{user:data.user || null,session:data.user?{user:data.user}:null},error:null};
-  },
-
-  async signOut(){
-    try{
-      const response = await fetch(`${AUTH_API}/logout`, {
-        method:"POST",
-        credentials:"include",
-        headers:{"Accept":"application/json"}
-      });
-      const data = await response.json().catch(()=>({}));
-      currentUser = null;
-      currentArtist = null;
-      currentAdmin = null;
-      notifyAuthListeners();
-      if(!response.ok && data.error){ return {error:new Error(data.error)}; }
-      return {error:null};
-    }catch(error){
-      return {error};
-    }
-  }
-};
-
-async function checkUser(){
-  try{
-    await authApi.getSession();
-    await updateUI();
-  }catch(error){
-    console.error(error);
-  }
 }
 
 
@@ -4723,7 +4789,7 @@ async function loadSongs(){
     /*
       If the visitor already has a search query,
       refresh the search results using the newly
-      loaded Supabase songs.
+      loaded songs.
     */
 
     const searchInput =
@@ -8137,7 +8203,10 @@ async function startPlatformDeposit(){
     return;
   }
 
-  
+  if(!sb){
+    showMessage("platformWalletMessage","Cloudflare backend is not available. Please refresh the page and try again.","error");
+    return;
+  }
 
   if(button){
     button.disabled=true;
