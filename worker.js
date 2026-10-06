@@ -1,3 +1,5 @@
+// NILE SONIQ AUTH WORKER - REGISTRATION ROUTE
+
 const ALLOWED_ORIGINS = [
   "https://nilesoniq.com",
   "https://www.nilesoniq.com",
@@ -396,12 +398,6 @@ async function register(request, env, origin) {
 
     const passwordHash = await hashPassword(password);
 
-    /*
-     * Create auth_users and auth_local_credentials together.
-     *
-     * If either INSERT fails, D1 rolls back the batch,
-     * preventing a half-created account.
-     */
     await env.DB.batch([
       env.DB.prepare(`
         INSERT INTO auth_users (
@@ -459,10 +455,6 @@ async function register(request, env, origin) {
       ),
     ]);
 
-    /*
-     * Artist profile is created separately because the
-     * existing artists table is part of the migrated schema.
-     */
     let artistCreated = true;
 
     try {
@@ -837,13 +829,6 @@ async function getMedia(request, env, origin) {
   });
 }
 
-/*
- * Existing frontend database API.
- * Supports the common request shapes:
- *
- * { sql: "...", params: [...] }
- * { query: "...", params: [...] }
- */
 async function databaseApi(request, env, origin) {
   try {
     const body = await readBody(request);
@@ -908,11 +893,6 @@ async function rpcApi(request, env, origin) {
       body?.name ||
       ""
     ).trim();
-
-    /*
-     * Keep this endpoint compatible with the existing app,
-     * but do not execute arbitrary SQL or arbitrary JS.
-     */
 
     if (!functionName) {
       return json(
@@ -1018,10 +998,6 @@ async function handleRequest(request, env) {
     return rpcApi(request, env, origin);
   }
 
-  /*
-   * Let Cloudflare Assets serve the actual NILE SONIQ
-   * website for all non-API routes.
-   */
   if (env.ASSETS) {
     return env.ASSETS.fetch(request);
   }
