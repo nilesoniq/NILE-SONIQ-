@@ -58,9 +58,9 @@ function corsHeaders(request) {
 function withCors(response, request) {
   const headers = new Headers(response.headers);
 
-  const cors = corsHeaders(request);
-
-  for (const [key, value] of Object.entries(cors)) {
+  for (const [key, value] of Object.entries(
+    corsHeaders(request)
+  )) {
     headers.set(key, value);
   }
 
@@ -86,9 +86,7 @@ function makeId() {
 function getCookie(request, name) {
   const cookieHeader = request.headers.get("Cookie") || "";
 
-  const parts = cookieHeader.split(";");
-
-  for (const part of parts) {
+  for (const part of cookieHeader.split(";")) {
     const trimmed = part.trim();
 
     if (!trimmed) continue;
@@ -130,9 +128,9 @@ function clearSessionCookie() {
   ].join("; ");
 }
 
-/* -------------------------------------------------------
+/* =======================================================
    PASSWORD HASHING
-------------------------------------------------------- */
+======================================================= */
 
 function bytesToBase64(bytes) {
   let binary = "";
@@ -146,7 +144,6 @@ function bytesToBase64(bytes) {
 
 function base64ToBytes(value) {
   const binary = atob(value);
-
   const bytes = new Uint8Array(binary.length);
 
   for (let i = 0; i < binary.length; i++) {
@@ -182,7 +179,9 @@ async function hashPassword(password, saltBytes = null) {
 
   return `pbkdf2$120000$${bytesToBase64(
     salt
-  )}$${bytesToBase64(new Uint8Array(bits))}`;
+  )}$${bytesToBase64(
+    new Uint8Array(bits)
+  )}`;
 }
 
 async function verifyPassword(password, stored) {
@@ -239,36 +238,79 @@ async function verifyPassword(password, stored) {
   return difference === 0;
 }
 
-/* -------------------------------------------------------
+/* =======================================================
    AUTH TABLES
-------------------------------------------------------- */
+======================================================= */
+
+async function tableColumns(db, tableName) {
+  const result = await db
+    .prepare(`PRAGMA table_info(${tableName})`)
+    .all();
+
+  return new Set(
+    (result.results || []).map(row => row.name)
+  );
+}
 
 async function ensureAuthTables(db) {
   await db.prepare(`
     CREATE TABLE IF NOT EXISTS auth_local_credentials (
-      user_id TEXT PRIMARY KEY,
+      user_id TEXT PRIMARY KEY NOT NULL,
       password_hash TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )
   `).run();
 
+  let credentialColumns =
+    await tableColumns(
+      db,
+      "auth_local_credentials"
+    );
+
+  if (!credentialColumns.has("updated_at")) {
+    await db.prepare(`
+      ALTER TABLE auth_local_credentials
+      ADD COLUMN updated_at TEXT NOT NULL
+      DEFAULT CURRENT_TIMESTAMP
+    `).run();
+  }
+
   await db.prepare(`
     CREATE TABLE IF NOT EXISTS auth_sessions (
-      token TEXT PRIMARY KEY,
+      token TEXT PRIMARY KEY NOT NULL,
       user_id TEXT NOT NULL,
       created_at TEXT NOT NULL,
       expires_at TEXT NOT NULL
     )
   `).run();
+
+  credentialColumns =
+    await tableColumns(
+      db,
+      "auth_local_credentials"
+    );
+
+  return credentialColumns;
 }
 
-/* -------------------------------------------------------
-   AUTH
-------------------------------------------------------- */
+/* =======================================================
+   AUTH - REGISTER
+======================================================= */
 
 async function register(request, env) {
-  const body = await request.json();
+  let body;
+
+  try {
+    body = await request.json();
+  } catch (error) {
+    return json(
+      {
+        error: "Invalid JSON request.",
+        details: String(error?.message || error)
+      },
+      400
+    );
+  }
 
   const artistName = String(
     body.artist_name ||
@@ -278,7 +320,6 @@ async function register(request, env) {
   ).trim();
 
   const email = cleanEmail(body.email);
-
   const password = String(body.password || "");
 
   if (!artistName) {
@@ -297,14 +338,28 @@ async function register(request, env) {
 
   if (password.length < 8) {
     return json(
-      { error: "Password must be at least 8 characters." },
+      {
+        error:
+          "Password must be at least 8 characters."
+      },
       400
     );
   }
 
-  await ensureAuthTables(env.DB);
-
   try {
+    /*
+      Make absolutely sure the local auth tables exist
+      before attempting registration.
+    */
+
+    const credentialColumns =
+      await ensureAuthTables(env.DB);
+
+    console.log(
+      "AUTH_CREDENTIAL_COLUMNS",
+      [...credentialColumns]
+    );
+
     const existing = await env.DB
       .prepare(`
         SELECT id
@@ -316,9 +371,130 @@ async function register(request, env) {
       .first();
 
     if (existing) {
+      /*
+        If an earlier failed registration created the
+        auth_users row but not credentials, repair that
+        account instead of permanently blocking the email.
+      */
+
+      const existingCredential =
+        await env.DB
+          .prepare(`
+            SELECT user_id
+            FROM auth_local_credentials
+            WHERE user_id = ?
+            LIMIT 1
+          `)
+          .bind(existing.id)
+          .first();
+
+      if (existingCredential) {
+        return json(
+          {
+            error:
+              "An account with this email already exists."
+          },
+          409
+        );
+      }
+
+      /*
+        Orphaned auth_users row detected.
+        Continue using that existing user ID and create
+        the missing credential/profile/session.
+      */
+
+      const userId = existing.id;
+      const timestamp = nowIso();
+
+      const passwordHash =
+        await hashPassword(password);
+
+      const credentialColumnsNow =
+        await tableColumns(
+          env.DB,
+          "auth_local_credentials"
+        );
+
+      if (
+        credentialColumnsNow.has("updated_at")
+      ) {
+        await env.DB
+          .prepare(`
+            INSERT INTO auth_local_credentials (
+              user_id,
+              password_hash,
+              created_at,
+              updated_at
+            )
+            VALUES (?, ?, ?, ?)
+          `)
+          .bind(
+            userId,
+            passwordHash,
+            timestamp,
+            timestamp
+          )
+          .run();
+      } else {
+        await env.DB
+          .prepare(`
+            INSERT INTO auth_local_credentials (
+              user_id,
+              password_hash,
+              created_at
+            )
+            VALUES (?, ?, ?)
+          `)
+          .bind(
+            userId,
+            passwordHash,
+            timestamp
+          )
+          .run();
+      }
+
+      const token = crypto.randomUUID();
+
+      const expires =
+        new Date(
+          Date.now() +
+          30 * 24 * 60 * 60 * 1000
+        ).toISOString();
+
+      await env.DB
+        .prepare(`
+          INSERT INTO auth_sessions (
+            token,
+            user_id,
+            created_at,
+            expires_at
+          )
+          VALUES (?, ?, ?, ?)
+        `)
+        .bind(
+          token,
+          userId,
+          timestamp,
+          expires
+        )
+        .run();
+
       return json(
-        { error: "An account with this email already exists." },
-        409
+        {
+          success: true,
+          repaired: true,
+          user: {
+            id: userId,
+            email,
+            artist_name: artistName
+          }
+        },
+        201,
+        {
+          "Set-Cookie":
+            sessionCookie(token)
+        }
       );
     }
 
@@ -326,12 +502,7 @@ async function register(request, env) {
     const timestamp = nowIso();
 
     /*
-      We deliberately keep encrypted_password empty for new
-      Cloudflare-native accounts.
-
-      The real password hash is stored in auth_local_credentials.
-      This avoids trying to write a bcrypt hash into a Supabase
-      Auth-compatible column.
+      Create the auth_users record.
     */
 
     await env.DB
@@ -360,40 +531,85 @@ async function register(request, env) {
       )
       .run();
 
-    const passwordHash = await hashPassword(password);
-
-    await env.DB
-      .prepare(`
-        INSERT INTO auth_local_credentials (
-          user_id,
-          password_hash,
-          created_at,
-          updated_at
-        )
-        VALUES (?, ?, ?, ?)
-      `)
-      .bind(
-        userId,
-        passwordHash,
-        timestamp,
-        timestamp
-      )
-      .run();
+    console.log(
+      "AUTH_USER_CREATED",
+      userId
+    );
 
     /*
-      Try to create the artist record.
+      Create password credentials.
+    */
 
-      Different versions of the database can have slightly
-      different artists columns, so we inspect the table first.
+    const passwordHash =
+      await hashPassword(password);
+
+    const currentColumns =
+      await tableColumns(
+        env.DB,
+        "auth_local_credentials"
+      );
+
+    console.log(
+      "AUTH_LOCAL_COLUMNS",
+      [...currentColumns]
+    );
+
+    if (currentColumns.has("updated_at")) {
+      await env.DB
+        .prepare(`
+          INSERT INTO auth_local_credentials (
+            user_id,
+            password_hash,
+            created_at,
+            updated_at
+          )
+          VALUES (?, ?, ?, ?)
+        `)
+        .bind(
+          userId,
+          passwordHash,
+          timestamp,
+          timestamp
+        )
+        .run();
+    } else {
+      await env.DB
+        .prepare(`
+          INSERT INTO auth_local_credentials (
+            user_id,
+            password_hash,
+            created_at
+          )
+          VALUES (?, ?, ?)
+        `)
+        .bind(
+          userId,
+          passwordHash,
+          timestamp
+        )
+        .run();
+    }
+
+    console.log(
+      "AUTH_CREDENTIAL_CREATED",
+      userId
+    );
+
+    /*
+      Create artist profile.
     */
 
     try {
-      const columns = await env.DB
-        .prepare(`PRAGMA table_info(artists)`)
-        .all();
+      const columns =
+        await env.DB
+          .prepare(
+            `PRAGMA table_info(artists)`
+          )
+          .all();
 
       const names = new Set(
-        (columns.results || []).map(row => row.name)
+        (columns.results || [])
+          .map(row => row.name)
       );
 
       const insertColumns = [];
@@ -434,10 +650,11 @@ async function register(request, env) {
         insertValues.push(timestamp);
       }
 
-      if (insertColumns.length > 0) {
-        const placeholders = insertColumns
-          .map(() => "?")
-          .join(", ");
+      if (insertColumns.length) {
+        const placeholders =
+          insertColumns
+            .map(() => "?")
+            .join(", ");
 
         await env.DB
           .prepare(`
@@ -448,27 +665,31 @@ async function register(request, env) {
           `)
           .bind(...insertValues)
           .run();
+
+        console.log(
+          "ARTIST_CREATED",
+          userId
+        );
       }
     } catch (artistError) {
-      /*
-        Do not destroy a successful account registration just
-        because the optional artist profile shape differs.
-      */
-
       console.error(
-        "Artist profile creation warning:",
+        "ARTIST_PROFILE_WARNING",
         artistError
       );
     }
 
     /*
-      Automatically create a login session.
+      Create login session.
     */
 
-    const token = crypto.randomUUID();
-    const expires = new Date(
-      Date.now() + 30 * 24 * 60 * 60 * 1000
-    ).toISOString();
+    const token =
+      crypto.randomUUID();
+
+    const expires =
+      new Date(
+        Date.now() +
+        30 * 24 * 60 * 60 * 1000
+      ).toISOString();
 
     await env.DB
       .prepare(`
@@ -488,6 +709,11 @@ async function register(request, env) {
       )
       .run();
 
+    console.log(
+      "AUTH_SESSION_CREATED",
+      userId
+    );
+
     return json(
       {
         success: true,
@@ -499,9 +725,11 @@ async function register(request, env) {
       },
       201,
       {
-        "Set-Cookie": sessionCookie(token)
+        "Set-Cookie":
+          sessionCookie(token)
       }
     );
+
   } catch (error) {
     console.error(
       "REGISTER_ERROR",
@@ -510,60 +738,99 @@ async function register(request, env) {
 
     return json(
       {
-        error: "Account creation failed.",
-        details: String(error?.message || error)
+        error:
+          "Account creation failed.",
+        details:
+          String(
+            error?.message || error
+          ),
+        stack:
+          String(
+            error?.stack || ""
+          )
       },
       500
     );
   }
 }
 
+/* =======================================================
+   AUTH - LOGIN
+======================================================= */
+
 async function login(request, env) {
-  const body = await request.json();
+  let body;
 
-  const email = cleanEmail(body.email);
-
-  const password = String(body.password || "");
-
-  if (!email || !password) {
+  try {
+    body = await request.json();
+  } catch (error) {
     return json(
-      { error: "Email and password are required." },
+      {
+        error: "Invalid JSON request.",
+        details:
+          String(
+            error?.message || error
+          )
+      },
       400
     );
   }
 
-  await ensureAuthTables(env.DB);
+  const email =
+    cleanEmail(body.email);
+
+  const password =
+    String(body.password || "");
+
+  if (!email || !password) {
+    return json(
+      {
+        error:
+          "Email and password are required."
+      },
+      400
+    );
+  }
 
   try {
-    const user = await env.DB
-      .prepare(`
-        SELECT
-          id,
-          email,
-          raw_user_meta_data
-        FROM auth_users
-        WHERE lower(email) = ?
-        LIMIT 1
-      `)
-      .bind(email)
-      .first();
+    await ensureAuthTables(
+      env.DB
+    );
+
+    const user =
+      await env.DB
+        .prepare(`
+          SELECT
+            id,
+            email,
+            raw_user_meta_data
+          FROM auth_users
+          WHERE lower(email) = ?
+          LIMIT 1
+        `)
+        .bind(email)
+        .first();
 
     if (!user) {
       return json(
-        { error: "Invalid credentials." },
+        {
+          error:
+            "Invalid credentials."
+        },
         401
       );
     }
 
-    const credential = await env.DB
-      .prepare(`
-        SELECT password_hash
-        FROM auth_local_credentials
-        WHERE user_id = ?
-        LIMIT 1
-      `)
-      .bind(user.id)
-      .first();
+    const credential =
+      await env.DB
+        .prepare(`
+          SELECT password_hash
+          FROM auth_local_credentials
+          WHERE user_id = ?
+          LIMIT 1
+        `)
+        .bind(user.id)
+        .first();
 
     if (!credential) {
       return json(
@@ -575,25 +842,33 @@ async function login(request, env) {
       );
     }
 
-    const valid = await verifyPassword(
-      password,
-      credential.password_hash
-    );
+    const valid =
+      await verifyPassword(
+        password,
+        credential.password_hash
+      );
 
     if (!valid) {
       return json(
-        { error: "Invalid credentials." },
+        {
+          error:
+            "Invalid credentials."
+        },
         401
       );
     }
 
-    const token = crypto.randomUUID();
+    const token =
+      crypto.randomUUID();
 
-    const created = nowIso();
+    const created =
+      nowIso();
 
-    const expires = new Date(
-      Date.now() + 30 * 24 * 60 * 60 * 1000
-    ).toISOString();
+    const expires =
+      new Date(
+        Date.now() +
+        30 * 24 * 60 * 60 * 1000
+      ).toISOString();
 
     await env.DB
       .prepare(`
@@ -623,9 +898,11 @@ async function login(request, env) {
       },
       200,
       {
-        "Set-Cookie": sessionCookie(token)
+        "Set-Cookie":
+          sessionCookie(token)
       }
     );
+
   } catch (error) {
     console.error(
       "LOGIN_ERROR",
@@ -634,45 +911,64 @@ async function login(request, env) {
 
     return json(
       {
-        error: "Login failed.",
-        details: String(error?.message || error)
+        error:
+          "Login failed.",
+        details:
+          String(
+            error?.message || error
+          ),
+        stack:
+          String(
+            error?.stack || ""
+          )
       },
       500
     );
   }
 }
 
-async function currentUser(request, env) {
-  await ensureAuthTables(env.DB);
+/* =======================================================
+   CURRENT USER
+======================================================= */
 
-  const token = getCookie(
-    request,
-    "nile_session"
-  );
-
-  if (!token) {
-    return json({
-      user: null
-    });
-  }
-
+async function currentUser(
+  request,
+  env
+) {
   try {
-    const row = await env.DB
-      .prepare(`
-        SELECT
-          s.user_id,
-          s.expires_at,
-          u.id,
-          u.email,
-          u.raw_user_meta_data
-        FROM auth_sessions s
-        JOIN auth_users u
-          ON u.id = s.user_id
-        WHERE s.token = ?
-        LIMIT 1
-      `)
-      .bind(token)
-      .first();
+    await ensureAuthTables(
+      env.DB
+    );
+
+    const token =
+      getCookie(
+        request,
+        "nile_session"
+      );
+
+    if (!token) {
+      return json({
+        user: null
+      });
+    }
+
+    const row =
+      await env.DB
+        .prepare(`
+          SELECT
+            s.user_id,
+            s.expires_at,
+            u.id,
+            u.email,
+            u.raw_user_meta_data
+          FROM auth_sessions s
+          JOIN auth_users u
+            ON u.id = s.user_id
+          WHERE s.token = ?
+          LIMIT 1
+        `)
+        .bind(token)
+        .first();
 
     if (!row) {
       return json({
@@ -682,7 +978,9 @@ async function currentUser(request, env) {
 
     if (
       row.expires_at &&
-      new Date(row.expires_at).getTime() < Date.now()
+      new Date(
+        row.expires_at
+      ).getTime() < Date.now()
     ) {
       await env.DB
         .prepare(`
@@ -702,9 +1000,11 @@ async function currentUser(request, env) {
         id: row.id,
         email: row.email,
         raw_user_meta_data:
-          row.raw_user_meta_data || null
+          row.raw_user_meta_data ||
+          null
       }
     });
+
   } catch (error) {
     console.error(
       "ME_ERROR",
@@ -713,48 +1013,80 @@ async function currentUser(request, env) {
 
     return json(
       {
-        error: "Unable to load current user."
+        error:
+          "Unable to load current user.",
+        details:
+          String(
+            error?.message || error
+          )
       },
       500
     );
   }
 }
 
-async function logout(request, env) {
-  await ensureAuthTables(env.DB);
+/* =======================================================
+   LOGOUT
+======================================================= */
 
-  const token = getCookie(
-    request,
-    "nile_session"
-  );
+async function logout(
+  request,
+  env
+) {
+  try {
+    await ensureAuthTables(
+      env.DB
+    );
 
-  if (token) {
-    await env.DB
-      .prepare(`
-        DELETE FROM auth_sessions
-        WHERE token = ?
-      `)
-      .bind(token)
-      .run();
-  }
+    const token =
+      getCookie(
+        request,
+        "nile_session"
+      );
 
-  return json(
-    {
-      success: true
-    },
-    200,
-    {
-      "Set-Cookie": clearSessionCookie()
+    if (token) {
+      await env.DB
+        .prepare(`
+          DELETE FROM auth_sessions
+          WHERE token = ?
+        `)
+        .bind(token)
+        .run();
     }
-  );
+
+    return json(
+      {
+        success: true
+      },
+      200,
+      {
+        "Set-Cookie":
+          clearSessionCookie()
+      }
+    );
+
+  } catch (error) {
+    return json(
+      {
+        error:
+          "Logout failed.",
+        details:
+          String(
+            error?.message || error
+          )
+      },
+      500
+    );
+  }
 }
 
-/* -------------------------------------------------------
+/* =======================================================
    DATABASE HELPERS
-------------------------------------------------------- */
+======================================================= */
 
 function safeTable(value) {
-  const table = String(value || "");
+  const table =
+    String(value || "");
 
   if (!ALLOWED_TABLES.has(table)) {
     throw new Error(
@@ -770,31 +1102,40 @@ function parseSelectColumns(value) {
     return "*";
   }
 
-  const columns = String(value)
-    .split(",")
-    .map(x => x.trim())
-    .filter(Boolean);
+  const columns =
+    String(value)
+      .split(",")
+      .map(x => x.trim())
+      .filter(Boolean);
 
   if (!columns.length) {
     return "*";
   }
 
   for (const column of columns) {
-    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(column)) {
-      throw new Error("Invalid column name.");
+    if (
+      !/^[A-Za-z_][A-Za-z0-9_]*$/.test(
+        column
+      )
+    ) {
+      throw new Error(
+        "Invalid column name."
+      );
     }
   }
 
   return columns.join(", ");
 }
 
-function buildFilters(url, params, startIndex = 1) {
+function buildFilters(url) {
   const clauses = [];
   const bindings = [];
 
-  let index = startIndex;
+  for (const [
+    key,
+    value
+  ] of url.searchParams.entries()) {
 
-  for (const [key, value] of url.searchParams.entries()) {
     if (
       key === "select" ||
       key === "order" ||
@@ -804,41 +1145,79 @@ function buildFilters(url, params, startIndex = 1) {
       continue;
     }
 
-    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
+    if (
+      !/^[A-Za-z_][A-Za-z0-9_]*$/.test(
+        key
+      )
+    ) {
       continue;
     }
 
     if (value.startsWith("eq.")) {
       clauses.push(`${key} = ?`);
-      bindings.push(value.slice(3));
-    } else if (value.startsWith("neq.")) {
+      bindings.push(
+        value.slice(3)
+      );
+    } else if (
+      value.startsWith("neq.")
+    ) {
       clauses.push(`${key} != ?`);
-      bindings.push(value.slice(4));
-    } else if (value.startsWith("gt.")) {
+      bindings.push(
+        value.slice(4)
+      );
+    } else if (
+      value.startsWith("gt.")
+    ) {
       clauses.push(`${key} > ?`);
-      bindings.push(value.slice(3));
-    } else if (value.startsWith("gte.")) {
+      bindings.push(
+        value.slice(3)
+      );
+    } else if (
+      value.startsWith("gte.")
+    ) {
       clauses.push(`${key} >= ?`);
-      bindings.push(value.slice(4));
-    } else if (value.startsWith("lt.")) {
+      bindings.push(
+        value.slice(4)
+      );
+    } else if (
+      value.startsWith("lt.")
+    ) {
       clauses.push(`${key} < ?`);
-      bindings.push(value.slice(3));
-    } else if (value.startsWith("lte.")) {
+      bindings.push(
+        value.slice(3)
+      );
+    } else if (
+      value.startsWith("lte.")
+    ) {
       clauses.push(`${key} <= ?`);
-      bindings.push(value.slice(4));
-    } else if (value === "is.null") {
-      clauses.push(`${key} IS NULL`);
-    } else if (value === "not.is.null") {
-      clauses.push(`${key} IS NOT NULL`);
-    } else if (value.startsWith("like.")) {
-      clauses.push(`${key} LIKE ?`);
-      bindings.push(value.slice(5));
+      bindings.push(
+        value.slice(4)
+      );
+    } else if (
+      value === "is.null"
+    ) {
+      clauses.push(
+        `${key} IS NULL`
+      );
+    } else if (
+      value === "not.is.null"
+    ) {
+      clauses.push(
+        `${key} IS NOT NULL`
+      );
+    } else if (
+      value.startsWith("like.")
+    ) {
+      clauses.push(
+        `${key} LIKE ?`
+      );
+      bindings.push(
+        value.slice(5)
+      );
     } else {
       clauses.push(`${key} = ?`);
       bindings.push(value);
     }
-
-    index++;
   }
 
   return {
@@ -847,16 +1226,29 @@ function buildFilters(url, params, startIndex = 1) {
   };
 }
 
-async function dbGet(request, env, table) {
+/* =======================================================
+   DATABASE GET
+======================================================= */
+
+async function dbGet(
+  request,
+  env,
+  table
+) {
   table = safeTable(table);
 
-  const url = new URL(request.url);
+  const url =
+    new URL(request.url);
 
-  const columns = parseSelectColumns(
-    url.searchParams.get("select")
-  );
+  const columns =
+    parseSelectColumns(
+      url.searchParams.get(
+        "select"
+      )
+    );
 
-  const filters = buildFilters(url);
+  const filters =
+    buildFilters(url);
 
   let sql = `
     SELECT ${columns}
@@ -865,24 +1257,34 @@ async function dbGet(request, env, table) {
 
   if (filters.clauses.length) {
     sql += `
-      WHERE ${filters.clauses.join(" AND ")}
+      WHERE ${filters.clauses.join(
+        " AND "
+      )}
     `;
   }
 
-  const order = url.searchParams.get("order");
+  const order =
+    url.searchParams.get(
+      "order"
+    );
 
   if (order) {
-    const parts = order.split(",");
-
     const safeParts = [];
 
-    for (const part of parts) {
-      const bits = part.trim().split(".");
+    for (
+      const part of
+      order.split(",")
+    ) {
+      const bits =
+        part.trim().split(".");
 
-      const column = bits[0];
+      const column =
+        bits[0];
 
       if (
-        !/^[A-Za-z_][A-Za-z0-9_]*$/.test(column)
+        !/^[A-Za-z_][A-Za-z0-9_]*$/.test(
+          column
+        )
       ) {
         continue;
       }
@@ -899,50 +1301,84 @@ async function dbGet(request, env, table) {
 
     if (safeParts.length) {
       sql += `
-        ORDER BY ${safeParts.join(", ")}
+        ORDER BY ${safeParts.join(
+          ", "
+        )}
       `;
     }
   }
 
-  const limit = Number(
-    url.searchParams.get("limit")
-  );
+  const limit =
+    Number(
+      url.searchParams.get(
+        "limit"
+      )
+    );
 
-  const offset = Number(
-    url.searchParams.get("offset")
-  );
+  const offset =
+    Number(
+      url.searchParams.get(
+        "offset"
+      )
+    );
 
-  if (Number.isFinite(limit) && limit > 0) {
-    sql += ` LIMIT ${Math.min(limit, 500)}`;
+  if (
+    Number.isFinite(limit) &&
+    limit > 0
+  ) {
+    sql += `
+      LIMIT ${Math.min(
+        limit,
+        500
+      )}
+    `;
 
     if (
       Number.isFinite(offset) &&
       offset >= 0
     ) {
-      sql += ` OFFSET ${Math.min(offset, 5000)}`;
+      sql += `
+        OFFSET ${Math.min(
+          offset,
+          5000
+        )}
+      `;
     }
   } else {
     sql += ` LIMIT 500`;
   }
 
-  const result = await env.DB
-    .prepare(sql)
-    .bind(...filters.bindings)
-    .all();
+  const result =
+    await env.DB
+      .prepare(sql)
+      .bind(...filters.bindings)
+      .all();
 
-  return json(result.results || []);
+  return json(
+    result.results || []
+  );
 }
 
-async function dbInsert(request, env, table) {
+/* =======================================================
+   DATABASE INSERT
+======================================================= */
+
+async function dbInsert(
+  request,
+  env,
+  table
+) {
   table = safeTable(table);
 
-  const body = await request.json();
+  const body =
+    await request.json();
 
-  const rows = Array.isArray(body)
-    ? body
-    : Array.isArray(body?.rows)
-      ? body.rows
-      : [body];
+  const rows =
+    Array.isArray(body)
+      ? body
+      : Array.isArray(body?.rows)
+        ? body.rows
+        : [body];
 
   if (!rows.length) {
     return json([]);
@@ -951,22 +1387,26 @@ async function dbInsert(request, env, table) {
   const statements = [];
 
   for (const row of rows) {
-    const keys = Object.keys(row).filter(
-      key =>
-        /^[A-Za-z_][A-Za-z0-9_]*$/.test(key)
-    );
+    const keys =
+      Object.keys(row)
+        .filter(key =>
+          /^[A-Za-z_][A-Za-z0-9_]*$/.test(
+            key
+          )
+        );
 
     if (!keys.length) {
       continue;
     }
 
-    const placeholders = keys
-      .map(() => "?")
-      .join(", ");
+    const placeholders =
+      keys.map(() => "?")
+        .join(", ");
 
-    const values = keys.map(
-      key => row[key]
-    );
+    const values =
+      keys.map(
+        key => row[key]
+      );
 
     statements.push(
       env.DB
@@ -985,20 +1425,35 @@ async function dbInsert(request, env, table) {
   }
 
   const result =
-    await env.DB.batch(statements);
+    await env.DB.batch(
+      statements
+    );
 
-  return json({
-    success: true,
-    count: result.length
-  }, 201);
+  return json(
+    {
+      success: true,
+      count: result.length
+    },
+    201
+  );
 }
 
-async function dbPatch(request, env, table) {
+/* =======================================================
+   DATABASE PATCH
+======================================================= */
+
+async function dbPatch(
+  request,
+  env,
+  table
+) {
   table = safeTable(table);
 
-  const body = await request.json();
+  const body =
+    await request.json();
 
-  const values = body?.values || body;
+  const values =
+    body?.values || body;
 
   if (
     !values ||
@@ -1006,14 +1461,19 @@ async function dbPatch(request, env, table) {
     Array.isArray(values)
   ) {
     return json(
-      { error: "Invalid update body." },
+      {
+        error:
+          "Invalid update body."
+      },
       400
     );
   }
 
-  const url = new URL(request.url);
+  const url =
+    new URL(request.url);
 
-  const filters = buildFilters(url);
+  const filters =
+    buildFilters(url);
 
   if (!filters.clauses.length) {
     return json(
@@ -1025,35 +1485,50 @@ async function dbPatch(request, env, table) {
     );
   }
 
-  const keys = Object.keys(values).filter(
-    key =>
-      /^[A-Za-z_][A-Za-z0-9_]*$/.test(key)
-  );
+  const keys =
+    Object.keys(values)
+      .filter(key =>
+        /^[A-Za-z_][A-Za-z0-9_]*$/.test(
+          key
+        )
+      );
 
   if (!keys.length) {
     return json(
-      { error: "Nothing to update." },
+      {
+        error:
+          "Nothing to update."
+      },
       400
     );
   }
 
-  const assignments = keys
-    .map(key => `${key} = ?`)
-    .join(", ");
+  const assignments =
+    keys
+      .map(
+        key =>
+          `${key} = ?`
+      )
+      .join(", ");
 
   const bindings = [
-    ...keys.map(key => values[key]),
+    ...keys.map(
+      key => values[key]
+    ),
     ...filters.bindings
   ];
 
-  const result = await env.DB
-    .prepare(`
-      UPDATE ${table}
-      SET ${assignments}
-      WHERE ${filters.clauses.join(" AND ")}
-    `)
-    .bind(...bindings)
-    .run();
+  const result =
+    await env.DB
+      .prepare(`
+        UPDATE ${table}
+        SET ${assignments}
+        WHERE ${filters.clauses.join(
+          " AND "
+        )}
+      `)
+      .bind(...bindings)
+      .run();
 
   return json({
     success: true,
@@ -1062,12 +1537,22 @@ async function dbPatch(request, env, table) {
   });
 }
 
-async function dbDelete(request, env, table) {
+/* =======================================================
+   DATABASE DELETE
+======================================================= */
+
+async function dbDelete(
+  request,
+  env,
+  table
+) {
   table = safeTable(table);
 
-  const url = new URL(request.url);
+  const url =
+    new URL(request.url);
 
-  const filters = buildFilters(url);
+  const filters =
+    buildFilters(url);
 
   if (!filters.clauses.length) {
     return json(
@@ -1079,13 +1564,16 @@ async function dbDelete(request, env, table) {
     );
   }
 
-  const result = await env.DB
-    .prepare(`
-      DELETE FROM ${table}
-      WHERE ${filters.clauses.join(" AND ")}
-    `)
-    .bind(...filters.bindings)
-    .run();
+  const result =
+    await env.DB
+      .prepare(`
+        DELETE FROM ${table}
+        WHERE ${filters.clauses.join(
+          " AND "
+        )}
+      `)
+      .bind(...filters.bindings)
+      .run();
 
   return json({
     success: true,
@@ -1094,12 +1582,16 @@ async function dbDelete(request, env, table) {
   });
 }
 
-/* -------------------------------------------------------
-   RPC
-------------------------------------------------------- */
+/* =======================================================
+   RPC - RECORD PLAY
+======================================================= */
 
-async function rpcRecordSongPlay(request, env) {
-  const body = await request.json();
+async function rpcRecordSongPlay(
+  request,
+  env
+) {
+  const body =
+    await request.json();
 
   const songId =
     body.song_id ||
@@ -1107,32 +1599,48 @@ async function rpcRecordSongPlay(request, env) {
 
   if (!songId) {
     return json(
-      { error: "song_id is required." },
+      {
+        error:
+          "song_id is required."
+      },
       400
     );
   }
 
-  const token = getCookie(
-    request,
-    "nile_session"
-  );
-
   let userId = null;
 
+  const token =
+    getCookie(
+      request,
+      "nile_session"
+    );
+
   if (token) {
-    await ensureAuthTables(env.DB);
+    try {
+      await ensureAuthTables(
+        env.DB
+      );
 
-    const session = await env.DB
-      .prepare(`
-        SELECT user_id
-        FROM auth_sessions
-        WHERE token = ?
-        LIMIT 1
-      `)
-      .bind(token)
-      .first();
+      const session =
+        await env.DB
+          .prepare(`
+            SELECT user_id
+            FROM auth_sessions
+            WHERE token = ?
+            LIMIT 1
+          `)
+          .bind(token)
+          .first();
 
-    userId = session?.user_id || null;
+      userId =
+        session?.user_id ||
+        null;
+    } catch (error) {
+      console.error(
+        "SESSION_LOOKUP_ERROR",
+        error
+      );
+    }
   }
 
   try {
@@ -1159,11 +1667,6 @@ async function rpcRecordSongPlay(request, env) {
       error
     );
 
-    /*
-      Some versions of the table may use a different
-      timestamp column. Try the simplest compatible form.
-    */
-
     try {
       await env.DB
         .prepare(`
@@ -1188,20 +1691,19 @@ async function rpcRecordSongPlay(request, env) {
     }
   }
 
-  /*
-    Update play count if the songs table contains one.
-  */
-
   try {
-    const columns = await env.DB
-      .prepare(`PRAGMA table_info(songs)`)
-      .all();
+    const columns =
+      await env.DB
+        .prepare(
+          `PRAGMA table_info(songs)`
+        )
+        .all();
 
-    const names = new Set(
-      (columns.results || []).map(
-        row => row.name
-      )
-    );
+    const names =
+      new Set(
+        (columns.results || [])
+          .map(row => row.name)
+      );
 
     if (names.has("play_count")) {
       await env.DB
@@ -1213,7 +1715,9 @@ async function rpcRecordSongPlay(request, env) {
         `)
         .bind(songId)
         .run();
-    } else if (names.has("plays")) {
+    } else if (
+      names.has("plays")
+    ) {
       await env.DB
         .prepare(`
           UPDATE songs
@@ -1236,25 +1740,31 @@ async function rpcRecordSongPlay(request, env) {
   });
 }
 
+/* =======================================================
+   RPC - PLATFORM TOTAL
+======================================================= */
+
 async function rpcPlatformCompletedTotal(
   env
 ) {
   try {
-    const result = await env.DB
-      .prepare(`
-        SELECT
-          COALESCE(
-            SUM(amount),
-            0
-          ) AS total
-        FROM platform_payouts
-      `)
-      .first();
+    const result =
+      await env.DB
+        .prepare(`
+          SELECT
+            COALESCE(
+              SUM(amount),
+              0
+            ) AS total
+          FROM platform_payouts
+        `)
+        .first();
 
     return json({
-      total: Number(
-        result?.total || 0
-      )
+      total:
+        Number(
+          result?.total || 0
+        )
     });
   } catch (error) {
     console.error(
@@ -1268,9 +1778,9 @@ async function rpcPlatformCompletedTotal(
   }
 }
 
-/* -------------------------------------------------------
-   R2 STORAGE
-------------------------------------------------------- */
+/* =======================================================
+   R2 UPLOAD
+======================================================= */
 
 async function storageUpload(
   request,
@@ -1278,25 +1788,40 @@ async function storageUpload(
 ) {
   if (!env.MEDIA_BUCKET) {
     return json(
-      { error: "R2 bucket is not configured." },
+      {
+        error:
+          "R2 bucket is not configured."
+      },
       500
     );
   }
 
-  const url = new URL(request.url);
+  const url =
+    new URL(request.url);
 
   let key =
-    url.searchParams.get("key") ||
-    request.headers.get("X-File-Key");
+    url.searchParams.get(
+      "key"
+    ) ||
+    request.headers.get(
+      "X-File-Key"
+    );
 
   if (!key) {
     return json(
-      { error: "File key is required." },
+      {
+        error:
+          "File key is required."
+      },
       400
     );
   }
 
-  key = key.replace(/^\/+/, "");
+  key =
+    key.replace(
+      /^\/+/,
+      ""
+    );
 
   if (
     !key.startsWith("audio/") &&
@@ -1312,10 +1837,13 @@ async function storageUpload(
   }
 
   const contentType =
-    request.headers.get("Content-Type") ||
+    request.headers.get(
+      "Content-Type"
+    ) ||
     "application/octet-stream";
 
-  const body = await request.arrayBuffer();
+  const body =
+    await request.arrayBuffer();
 
   await env.MEDIA_BUCKET.put(
     key,
@@ -1333,6 +1861,10 @@ async function storageUpload(
   });
 }
 
+/* =======================================================
+   R2 PUBLIC
+======================================================= */
+
 async function storagePublic(
   request,
   env,
@@ -1341,26 +1873,36 @@ async function storagePublic(
   if (!env.MEDIA_BUCKET) {
     return new Response(
       "R2 bucket is not configured.",
-      { status: 500 }
+      {
+        status: 500
+      }
     );
   }
 
-  key = decodeURIComponent(key)
-    .replace(/^\/+/, "");
+  key =
+    decodeURIComponent(key)
+      .replace(/^\/+/, "");
 
   const object =
-    await env.MEDIA_BUCKET.get(key);
+    await env.MEDIA_BUCKET.get(
+      key
+    );
 
   if (!object) {
     return new Response(
       "Not found",
-      { status: 404 }
+      {
+        status: 404
+      }
     );
   }
 
-  const headers = new Headers();
+  const headers =
+    new Headers();
 
-  object.writeHttpMetadata(headers);
+  object.writeHttpMetadata(
+    headers
+  );
 
   headers.set(
     "Cache-Control",
@@ -1374,68 +1916,130 @@ async function storagePublic(
 
   return new Response(
     object.body,
-    { headers }
+    {
+      headers
+    }
   );
 }
 
-/* -------------------------------------------------------
+/* =======================================================
    API ROUTER
-------------------------------------------------------- */
+======================================================= */
 
-async function api(request, env) {
-  const url = new URL(request.url);
+async function api(
+  request,
+  env
+) {
+  const url =
+    new URL(request.url);
 
-  const path = url.pathname;
+  const path =
+    url.pathname;
 
-  if (path === "/api/health") {
+  if (
+    path ===
+    "/api/health"
+  ) {
     return json({
       ok: true,
       service: "nile-soniq",
-      database: Boolean(env.DB),
-      storage: Boolean(env.MEDIA_BUCKET),
+      database:
+        Boolean(env.DB),
+      storage:
+        Boolean(
+          env.MEDIA_BUCKET
+        ),
       time: nowIso()
     });
   }
 
-  if (path === "/api/auth/register") {
-    if (request.method !== "POST") {
+  if (
+    path ===
+    "/api/auth/register"
+  ) {
+    if (
+      request.method !==
+      "POST"
+    ) {
       return json(
-        { error: "Method not allowed." },
+        {
+          error:
+            "Method not allowed."
+        },
         405
       );
     }
 
-    return register(request, env);
+    return register(
+      request,
+      env
+    );
   }
 
-  if (path === "/api/auth/login") {
-    if (request.method !== "POST") {
+  if (
+    path ===
+    "/api/auth/login"
+  ) {
+    if (
+      request.method !==
+      "POST"
+    ) {
       return json(
-        { error: "Method not allowed." },
+        {
+          error:
+            "Method not allowed."
+        },
         405
       );
     }
 
-    return login(request, env);
+    return login(
+      request,
+      env
+    );
   }
 
-  if (path === "/api/auth/logout") {
-    return logout(request, env);
+  if (
+    path ===
+    "/api/auth/logout"
+  ) {
+    return logout(
+      request,
+      env
+    );
   }
 
-  if (path === "/api/auth/me") {
-    return currentUser(request, env);
+  if (
+    path ===
+    "/api/auth/me"
+  ) {
+    return currentUser(
+      request,
+      env
+    );
   }
 
-  if (path === "/api/storage/upload") {
-    if (request.method !== "POST") {
+  if (
+    path ===
+    "/api/storage/upload"
+  ) {
+    if (
+      request.method !==
+      "POST"
+    ) {
       return json(
-        { error: "Method not allowed." },
+        {
+          error:
+            "Method not allowed."
+        },
         405
       );
     }
 
-    return storageUpload(request, env);
+    return storageUpload(
+      request,
+      env
+    );
   }
 
   if (
@@ -1443,10 +2047,11 @@ async function api(request, env) {
       "/api/storage/public/"
     )
   ) {
-    const key = path.replace(
-      "/api/storage/public/",
-      ""
-    );
+    const key =
+      path.replace(
+        "/api/storage/public/",
+        ""
+      );
 
     return storagePublic(
       request,
@@ -1455,14 +2060,20 @@ async function api(request, env) {
     );
   }
 
-  if (path.startsWith("/api/rpc/")) {
-    const rpcName = path.replace(
-      "/api/rpc/",
-      ""
-    );
+  if (
+    path.startsWith(
+      "/api/rpc/"
+    )
+  ) {
+    const rpcName =
+      path.replace(
+        "/api/rpc/",
+        ""
+      );
 
     if (
-      rpcName === "record_song_play"
+      rpcName ===
+      "record_song_play"
     ) {
       return rpcRecordSongPlay(
         request,
@@ -1488,17 +2099,24 @@ async function api(request, env) {
     );
   }
 
-  /*
-    Generic database compatibility layer.
-  */
-
-  if (path.startsWith("/api/db/")) {
-    const table = decodeURIComponent(
-      path.replace("/api/db/", "")
-    );
+  if (
+    path.startsWith(
+      "/api/db/"
+    )
+  ) {
+    const table =
+      decodeURIComponent(
+        path.replace(
+          "/api/db/",
+          ""
+        )
+      );
 
     try {
-      if (request.method === "GET") {
+      if (
+        request.method ===
+        "GET"
+      ) {
         return dbGet(
           request,
           env,
@@ -1507,7 +2125,8 @@ async function api(request, env) {
       }
 
       if (
-        request.method === "POST"
+        request.method ===
+        "POST"
       ) {
         return dbInsert(
           request,
@@ -1517,8 +2136,10 @@ async function api(request, env) {
       }
 
       if (
-        request.method === "PATCH" ||
-        request.method === "PUT"
+        request.method ===
+          "PATCH" ||
+        request.method ===
+          "PUT"
       ) {
         return dbPatch(
           request,
@@ -1528,7 +2149,8 @@ async function api(request, env) {
       }
 
       if (
-        request.method === "DELETE"
+        request.method ===
+        "DELETE"
       ) {
         return dbDelete(
           request,
@@ -1538,9 +2160,13 @@ async function api(request, env) {
       }
 
       return json(
-        { error: "Method not allowed." },
+        {
+          error:
+            "Method not allowed."
+        },
         405
       );
+
     } catch (error) {
       console.error(
         "DATABASE_ERROR",
@@ -1549,10 +2175,18 @@ async function api(request, env) {
 
       return json(
         {
-          error: "Database request failed.",
-          details: String(
-            error?.message || error
-          )
+          error:
+            "Database request failed.",
+          details:
+            String(
+              error?.message ||
+              error
+            ),
+          stack:
+            String(
+              error?.stack ||
+              ""
+            )
         },
         500
       );
@@ -1562,34 +2196,50 @@ async function api(request, env) {
   return null;
 }
 
-/* -------------------------------------------------------
+/* =======================================================
    MAIN WORKER
-------------------------------------------------------- */
+======================================================= */
 
 export default {
-  async fetch(request, env) {
+  async fetch(
+    request,
+    env
+  ) {
     try {
-      if (request.method === "OPTIONS") {
+      if (
+        request.method ===
+        "OPTIONS"
+      ) {
         return withCors(
-          new Response(null, {
-            status: 204,
-            headers: corsHeaders(request)
-          }),
+          new Response(
+            null,
+            {
+              status: 204,
+              headers:
+                corsHeaders(
+                  request
+                )
+            }
+          ),
           request
         );
       }
 
-      const url = new URL(request.url);
-
-      /*
-        API requests go to the Worker.
-      */
+      const url =
+        new URL(
+          request.url
+        );
 
       if (
-        url.pathname.startsWith("/api/")
+        url.pathname.startsWith(
+          "/api/"
+        )
       ) {
         const response =
-          await api(request, env);
+          await api(
+            request,
+            env
+          );
 
         if (response) {
           return withCors(
@@ -1599,13 +2249,10 @@ export default {
         }
       }
 
-      /*
-        Everything else is served by
-        Cloudflare Workers Assets.
-      */
-
       if (env.ASSETS) {
-        return env.ASSETS.fetch(request);
+        return env.ASSETS.fetch(
+          request
+        );
       }
 
       return new Response(
@@ -1618,6 +2265,7 @@ export default {
           }
         }
       );
+
     } catch (error) {
       console.error(
         "WORKER_FATAL_ERROR",
@@ -1627,10 +2275,18 @@ export default {
       return withCors(
         json(
           {
-            error: "Internal server error.",
-            details: String(
-              error?.message || error
-            )
+            error:
+              "Internal server error.",
+            details:
+              String(
+                error?.message ||
+                error
+              ),
+            stack:
+              String(
+                error?.stack ||
+                ""
+              )
           },
           500
         ),
