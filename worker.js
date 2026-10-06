@@ -1,145 +1,68 @@
-export default {
-  async fetch(request, env) {
-    try {
-      const url = new URL(request.url);
-      const path = url.pathname;
-
-      if (request.method === "OPTIONS") {
-        return cors(new Response(null, { status: 204 }));
-      }
-
-      // Health check
-      if (path === "/api/health") {
-        return json({
-          ok: true,
-          service: "nile-soniq-auth",
-          database: !!env.DB,
-          storage: !!env.MEDIA_BUCKET
-        });
-      }
-
-      // ---------------------------------------------------------
-      // AUTH
-      // ---------------------------------------------------------
-
-      if (path === "/api/auth/register" && request.method === "POST") {
-        return register(request, env);
-      }
-
-      if (path === "/api/auth/login" && request.method === "POST") {
-        return login(request, env);
-      }
-
-      if (path === "/api/auth/logout" && request.method === "POST") {
-        return logout(request, env);
-      }
-
-      if (path === "/api/auth/me" && request.method === "GET") {
-        return me(request, env);
-      }
-
-      // ---------------------------------------------------------
-      // DATABASE API
-      // ---------------------------------------------------------
-
-      if (path.startsWith("/api/db/")) {
-        return databaseApi(request, env);
-      }
-
-      // ---------------------------------------------------------
-      // RPC
-      // ---------------------------------------------------------
-
-      if (path.startsWith("/api/rpc/")) {
-        return rpcApi(request, env);
-      }
-
-      // ---------------------------------------------------------
-      // R2 STORAGE
-      // ---------------------------------------------------------
-
-      if (path === "/api/storage/upload" && request.method === "POST") {
-        return storageUpload(request, env);
-      }
-
-      if (
-        path.startsWith("/api/storage/public/") &&
-        request.method === "GET"
-      ) {
-        return storagePublic(request, env);
-      }
-
-      // ---------------------------------------------------------
-      // PAYMENT PLACEHOLDERS
-      // ---------------------------------------------------------
-
-      if (
-        path === "/api/payments/pesajet-collection" &&
-        request.method === "POST"
-      ) {
-        return paymentProxy(
-          request,
-          env,
-          env.PESAJET_COLLECTION_URL
-        );
-      }
-
-      if (
-        path === "/api/payments/pesajet-disbursement" &&
-        request.method === "POST"
-      ) {
-        return paymentProxy(
-          request,
-          env,
-          env.PESAJET_DISBURSEMENT_URL
-        );
-      }
-
-      // ---------------------------------------------------------
-      // CLOUDFLARE ASSETS
-      // ---------------------------------------------------------
-
-      if (env.ASSETS) {
-        return env.ASSETS.fetch(request);
-      }
-
-      return json(
-        {
-          error: "Not found"
-        },
-        404
-      );
-    } catch (error) {
-      console.error("Worker error:", error);
-
-      return json(
-        {
-          error: error?.message || "Internal server error"
-        },
-        500
-      );
-    }
-  }
+const JSON_HEADERS = {
+  "Content-Type": "application/json; charset=utf-8",
+  "Cache-Control": "no-store"
 };
 
+const ALLOWED_TABLES = new Set([
+  "admins",
+  "artist_payouts",
+  "artist_wallets",
+  "artists",
+  "comments",
+  "copyright_removals",
+  "likes",
+  "news",
+  "news_comments",
+  "news_reactions",
+  "platform_deposits",
+  "platform_payouts",
+  "platform_wallet",
+  "songs",
+  "song_play_log",
+  "auth_users",
+  "auth_identities"
+]);
 
-// =============================================================
-// RESPONSE HELPERS
-// =============================================================
+function json(data, status = 200, extraHeaders = {}) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      ...JSON_HEADERS,
+      ...extraHeaders
+    }
+  });
+}
 
-function cors(response) {
+function corsHeaders(request) {
+  const origin = request.headers.get("Origin");
+
+  const allowed = [
+    "https://nilesoniq.com",
+    "https://www.nilesoniq.com",
+    "https://nile-soniq-auth.nilesoniq.workers.dev"
+  ];
+
+  return {
+    "Access-Control-Allow-Origin":
+      origin && allowed.includes(origin)
+        ? origin
+        : "https://nile-soniq-auth.nilesoniq.workers.dev",
+    "Access-Control-Allow-Credentials": "true",
+    "Access-Control-Allow-Headers":
+      "Content-Type, Authorization, X-Requested-With",
+    "Access-Control-Allow-Methods":
+      "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+  };
+}
+
+function withCors(response, request) {
   const headers = new Headers(response.headers);
 
-  headers.set("Access-Control-Allow-Origin", "*");
-  headers.set(
-    "Access-Control-Allow-Methods",
-    "GET,POST,PATCH,PUT,DELETE,OPTIONS"
-  );
-  headers.set(
-    "Access-Control-Allow-Headers",
-    "Content-Type, Authorization"
-  );
-  headers.set("Access-Control-Allow-Credentials", "true");
+  const cors = corsHeaders(request);
+
+  for (const [key, value] of Object.entries(cors)) {
+    headers.set(key, value);
+  }
 
   return new Response(response.body, {
     status: response.status,
@@ -148,190 +71,46 @@ function cors(response) {
   });
 }
 
+function cleanEmail(value) {
+  return String(value || "").trim().toLowerCase();
+}
 
-function json(data, status = 200, extraHeaders = {}) {
-  const headers = new Headers({
-    "Content-Type": "application/json; charset=utf-8",
-    "Cache-Control": "no-store"
-  });
+function nowIso() {
+  return new Date().toISOString();
+}
 
-  for (const [key, value] of Object.entries(extraHeaders)) {
-    headers.set(key, value);
+function makeId() {
+  return crypto.randomUUID();
+}
+
+function getCookie(request, name) {
+  const cookieHeader = request.headers.get("Cookie") || "";
+
+  const parts = cookieHeader.split(";");
+
+  for (const part of parts) {
+    const trimmed = part.trim();
+
+    if (!trimmed) continue;
+
+    const eq = trimmed.indexOf("=");
+
+    if (eq === -1) continue;
+
+    const key = trimmed.slice(0, eq);
+    const value = trimmed.slice(eq + 1);
+
+    if (key === name) {
+      return decodeURIComponent(value);
+    }
   }
 
-  return cors(
-    new Response(JSON.stringify(data), {
-      status,
-      headers
-    })
-  );
+  return null;
 }
 
-
-// =============================================================
-// AUTH CONFIG
-// =============================================================
-
-const SUPABASE_URL =
-  "https://nxiygxnzlusasgzdknft.supabase.co";
-
-const SUPABASE_PUBLISHABLE_KEY =
-  "sb_publishable_MJYDrg3qcgynvoRTWHQvAA_qt7nRTDw";
-
-
-// =============================================================
-// DATABASE BOOTSTRAP
-// =============================================================
-
-async function ensureAuthTables(env) {
-  await env.DB.prepare(`
-    CREATE TABLE IF NOT EXISTS auth_local_credentials (
-      user_id TEXT PRIMARY KEY,
-      password_hash TEXT NOT NULL,
-      password_salt TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    )
-  `).run();
-
-  await env.DB.prepare(`
-    CREATE TABLE IF NOT EXISTS auth_sessions (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      expires_at TEXT NOT NULL,
-      created_at TEXT NOT NULL
-    )
-  `).run();
-}
-
-
-// =============================================================
-// PASSWORD HASHING
-// =============================================================
-
-const PBKDF2_ITERATIONS = 120000;
-
-
-function bytesToBase64(bytes) {
-  let binary = "";
-
-  for (const byte of bytes) {
-    binary += String.fromCharCode(byte);
-  }
-
-  return btoa(binary);
-}
-
-
-function base64ToBytes(value) {
-  const binary = atob(value);
-  const bytes = new Uint8Array(binary.length);
-
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-
-  return bytes;
-}
-
-
-function randomBase64(bytes = 16) {
-  const array = new Uint8Array(bytes);
-  crypto.getRandomValues(array);
-  return bytesToBase64(array);
-}
-
-
-async function derivePassword(password, saltBase64) {
-  const salt = base64ToBytes(saltBase64);
-
-  const keyMaterial =
-    await crypto.subtle.importKey(
-      "raw",
-      new TextEncoder().encode(password),
-      {
-        name: "PBKDF2"
-      },
-      false,
-      ["deriveBits"]
-    );
-
-  const bits =
-    await crypto.subtle.deriveBits(
-      {
-        name: "PBKDF2",
-        salt,
-        iterations: PBKDF2_ITERATIONS,
-        hash: "SHA-256"
-      },
-      keyMaterial,
-      256
-    );
-
-  return bytesToBase64(
-    new Uint8Array(bits)
-  );
-}
-
-
-function safeEqual(a, b) {
-  if (a.length !== b.length) {
-    return false;
-  }
-
-  let result = 0;
-
-  for (let i = 0; i < a.length; i++) {
-    result |=
-      a.charCodeAt(i) ^
-      b.charCodeAt(i);
-  }
-
-  return result === 0;
-}
-
-
-async function hashPassword(password) {
-  const salt = randomBase64(16);
-
-  const hash =
-    await derivePassword(
-      password,
-      salt
-    );
-
-  return {
-    hash,
-    salt
-  };
-}
-
-
-async function verifyLocalPassword(
-  password,
-  hash,
-  salt
-) {
-  const calculated =
-    await derivePassword(
-      password,
-      salt
-    );
-
-  return safeEqual(
-    calculated,
-    hash
-  );
-}
-
-
-// =============================================================
-// SESSION
-// =============================================================
-
-function sessionCookie(id) {
+function sessionCookie(token) {
   return [
-    "nile_session=" + encodeURIComponent(id),
+    `nile_session=${encodeURIComponent(token)}`,
     "Path=/",
     "HttpOnly",
     "Secure",
@@ -339,7 +118,6 @@ function sessionCookie(id) {
     "Max-Age=2592000"
   ].join("; ");
 }
-
 
 function clearSessionCookie() {
   return [
@@ -352,679 +130,611 @@ function clearSessionCookie() {
   ].join("; ");
 }
 
+/* -------------------------------------------------------
+   PASSWORD HASHING
+------------------------------------------------------- */
 
-function getCookie(request, name) {
-  const cookieHeader =
-    request.headers.get("Cookie") || "";
+function bytesToBase64(bytes) {
+  let binary = "";
 
-  const parts =
-    cookieHeader.split(";");
-
-  for (const part of parts) {
-    const [key, ...rest] =
-      part.trim().split("=");
-
-    if (key === name) {
-      return decodeURIComponent(
-        rest.join("=")
-      );
-    }
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
   }
 
-  return null;
+  return btoa(binary);
 }
 
+function base64ToBytes(value) {
+  const binary = atob(value);
 
-async function createSession(userId, env) {
-  await ensureAuthTables(env);
+  const bytes = new Uint8Array(binary.length);
 
-  const id = crypto.randomUUID();
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
 
-  const now =
-    new Date();
+  return bytes;
+}
 
-  const expires =
-    new Date(
-      now.getTime() +
-      30 * 24 * 60 * 60 * 1000
-    );
+async function hashPassword(password, saltBytes = null) {
+  const salt =
+    saltBytes ||
+    crypto.getRandomValues(new Uint8Array(16));
 
-  await env.DB.prepare(`
-    INSERT INTO auth_sessions
-      (id, user_id, expires_at, created_at)
-    VALUES (?, ?, ?, ?)
-  `)
-    .bind(
-      id,
-      userId,
-      expires.toISOString(),
-      now.toISOString()
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(password),
+    "PBKDF2",
+    false,
+    ["deriveBits"]
+  );
+
+  const bits = await crypto.subtle.deriveBits(
+    {
+      name: "PBKDF2",
+      salt,
+      iterations: 120000,
+      hash: "SHA-256"
+    },
+    key,
+    256
+  );
+
+  return `pbkdf2$120000$${bytesToBase64(
+    salt
+  )}$${bytesToBase64(new Uint8Array(bits))}`;
+}
+
+async function verifyPassword(password, stored) {
+  if (!stored || !stored.startsWith("pbkdf2$")) {
+    return false;
+  }
+
+  const parts = stored.split("$");
+
+  if (parts.length !== 4) {
+    return false;
+  }
+
+  const iterations = Number(parts[1]);
+
+  if (!Number.isFinite(iterations)) {
+    return false;
+  }
+
+  const salt = base64ToBytes(parts[2]);
+  const expected = base64ToBytes(parts[3]);
+
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(password),
+    "PBKDF2",
+    false,
+    ["deriveBits"]
+  );
+
+  const bits = await crypto.subtle.deriveBits(
+    {
+      name: "PBKDF2",
+      salt,
+      iterations,
+      hash: "SHA-256"
+    },
+    key,
+    256
+  );
+
+  const actual = new Uint8Array(bits);
+
+  if (actual.length !== expected.length) {
+    return false;
+  }
+
+  let difference = 0;
+
+  for (let i = 0; i < actual.length; i++) {
+    difference |= actual[i] ^ expected[i];
+  }
+
+  return difference === 0;
+}
+
+/* -------------------------------------------------------
+   AUTH TABLES
+------------------------------------------------------- */
+
+async function ensureAuthTables(db) {
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS auth_local_credentials (
+      user_id TEXT PRIMARY KEY,
+      password_hash TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
     )
-    .run();
+  `).run();
 
-  return id;
-}
-
-
-async function getSessionUser(request, env) {
-  await ensureAuthTables(env);
-
-  const sessionId =
-    getCookie(
-      request,
-      "nile_session"
-    );
-
-  if (!sessionId) {
-    return null;
-  }
-
-  const row =
-    await env.DB.prepare(`
-      SELECT
-        s.id AS session_id,
-        s.user_id,
-        s.expires_at,
-        u.id,
-        u.email,
-        u.raw_user_meta_data,
-        u.created_at
-      FROM auth_sessions s
-      JOIN auth_users u
-        ON u.id = s.user_id
-      WHERE s.id = ?
-      LIMIT 1
-    `)
-      .bind(sessionId)
-      .first();
-
-  if (!row) {
-    return null;
-  }
-
-  if (
-    row.expires_at &&
-    new Date(row.expires_at) <= new Date()
-  ) {
-    await env.DB.prepare(
-      "DELETE FROM auth_sessions WHERE id = ?"
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS auth_sessions (
+      token TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL
     )
-      .bind(sessionId)
-      .run();
-
-    return null;
-  }
-
-  return row;
+  `).run();
 }
 
+/* -------------------------------------------------------
+   AUTH
+------------------------------------------------------- */
 
-// =============================================================
-// USER / ARTIST HELPERS
-// =============================================================
+async function register(request, env) {
+  const body = await request.json();
 
-async function getArtistForUser(userId, env) {
-  try {
-    const row =
-      await env.DB.prepare(`
-        SELECT *
-        FROM artists
-        WHERE user_id = ?
-        LIMIT 1
-      `)
-        .bind(userId)
-        .first();
+  const artistName = String(
+    body.artist_name ||
+    body.artistName ||
+    body.name ||
+    ""
+  ).trim();
 
-    return row || null;
-  } catch {
-    return null;
-  }
-}
+  const email = cleanEmail(body.email);
 
+  const password = String(body.password || "");
 
-async function getAdminForUser(userId, env) {
-  try {
-    const row =
-      await env.DB.prepare(`
-        SELECT *
-        FROM admins
-        WHERE user_id = ?
-        LIMIT 1
-      `)
-        .bind(userId)
-        .first();
-
-    return row || null;
-  } catch {
-    return null;
-  }
-}
-
-
-async function publicUser(row, env) {
-  if (!row) {
-    return null;
-  }
-
-  let metadata = {};
-
-  try {
-    metadata =
-      row.raw_user_meta_data
-        ? JSON.parse(
-            row.raw_user_meta_data
-          )
-        : {};
-  } catch {
-    metadata = {};
-  }
-
-  return {
-    id: row.id,
-    email: row.email || null,
-    artist_name:
-      metadata.artist_name ||
-      metadata.name ||
-      null,
-    created_at:
-      row.created_at || null
-  };
-}
-
-
-// =============================================================
-// AUTH: LOGIN
-// =============================================================
-
-async function login(request, env) {
-  const body =
-    await request.json().catch(
-      () => ({})
-    );
-
-  const email =
-    String(body.email || "")
-      .trim()
-      .toLowerCase();
-
-  const password =
-    String(body.password || "");
-
-  if (!email || !password) {
+  if (!artistName) {
     return json(
-      {
-        success: false,
-        error:
-          "Email and password are required."
-      },
+      { error: "Artist name is required." },
       400
     );
   }
 
-  await ensureAuthTables(env);
-
-  const user =
-    await env.DB.prepare(`
-      SELECT *
-      FROM auth_users
-      WHERE lower(email) = ?
-        AND deleted_at IS NULL
-      LIMIT 1
-    `)
-      .bind(email)
-      .first();
-
-  if (!user) {
+  if (!email) {
     return json(
-      {
-        success: false,
-        error: "Invalid credentials"
-      },
-      401
-    );
-  }
-
-  let authenticated = false;
-
-  // -----------------------------------------------------------
-  // FIRST: locally migrated password
-  // -----------------------------------------------------------
-
-  const local =
-    await env.DB.prepare(`
-      SELECT
-        password_hash,
-        password_salt
-      FROM auth_local_credentials
-      WHERE user_id = ?
-      LIMIT 1
-    `)
-      .bind(user.id)
-      .first();
-
-  if (local) {
-    authenticated =
-      await verifyLocalPassword(
-        password,
-        local.password_hash,
-        local.password_salt
-      );
-  }
-
-  // -----------------------------------------------------------
-  // SECOND: legacy Supabase password
-  // -----------------------------------------------------------
-
-  if (
-    !authenticated &&
-    user.encrypted_password
-  ) {
-    authenticated =
-      await verifyLegacySupabasePassword(
-        email,
-        password
-      );
-
-    // Migrate password verification
-    // to D1 after successful legacy login.
-    if (authenticated) {
-      const credentials =
-        await hashPassword(password);
-
-      const now =
-        new Date().toISOString();
-
-      await env.DB.prepare(`
-        INSERT INTO auth_local_credentials
-          (
-            user_id,
-            password_hash,
-            password_salt,
-            created_at,
-            updated_at
-          )
-        VALUES (?, ?, ?, ?, ?)
-        ON CONFLICT(user_id)
-        DO UPDATE SET
-          password_hash = excluded.password_hash,
-          password_salt = excluded.password_salt,
-          updated_at = excluded.updated_at
-      `)
-        .bind(
-          user.id,
-          credentials.hash,
-          credentials.salt,
-          now,
-          now
-        )
-        .run();
-    }
-  }
-
-  if (!authenticated) {
-    return json(
-      {
-        success: false,
-        error: "Invalid credentials"
-      },
-      401
-    );
-  }
-
-  const sessionId =
-    await createSession(
-      user.id,
-      env
-    );
-
-  const artist =
-    await getArtistForUser(
-      user.id,
-      env
-    );
-
-  const admin =
-    await getAdminForUser(
-      user.id,
-      env
-    );
-
-  return json(
-    {
-      success: true,
-      user:
-        await publicUser(
-          user,
-          env
-        ),
-      artist,
-      admin
-    },
-    200,
-    {
-      "Set-Cookie":
-        sessionCookie(sessionId)
-    }
-  );
-}
-
-
-// =============================================================
-// LEGACY SUPABASE PASSWORD VERIFICATION
-// =============================================================
-
-async function verifyLegacySupabasePassword(
-  email,
-  password
-) {
-  try {
-    const response =
-      await fetch(
-        `${SUPABASE_URL}/auth/v1/token?grant_type=password`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type":
-              "application/json",
-            "apikey":
-              SUPABASE_PUBLISHABLE_KEY
-          },
-          body: JSON.stringify({
-            email,
-            password
-          })
-        }
-      );
-
-    return response.ok;
-  } catch (error) {
-    console.error(
-      "Legacy password verification error:",
-      error
-    );
-
-    return false;
-  }
-}
-
-
-// =============================================================
-// AUTH: REGISTER
-// =============================================================
-
-async function register(request, env) {
-  const body =
-    await request.json().catch(
-      () => ({})
-    );
-
-  const email =
-    String(body.email || "")
-      .trim()
-      .toLowerCase();
-
-  const password =
-    String(body.password || "");
-
-  const artistName =
-    String(
-      body.artist_name || ""
-    ).trim();
-
-  if (!email || !password) {
-    return json(
-      {
-        success: false,
-        error:
-          "Email and password are required."
-      },
+      { error: "Email is required." },
       400
     );
   }
 
   if (password.length < 8) {
     return json(
-      {
-        success: false,
-        error:
-          "Password must be at least 8 characters."
-      },
+      { error: "Password must be at least 8 characters." },
       400
     );
   }
 
-  await ensureAuthTables(env);
+  await ensureAuthTables(env.DB);
 
-  const existing =
-    await env.DB.prepare(`
-      SELECT id
-      FROM auth_users
-      WHERE lower(email) = ?
-      LIMIT 1
-    `)
+  try {
+    const existing = await env.DB
+      .prepare(`
+        SELECT id
+        FROM auth_users
+        WHERE lower(email) = ?
+        LIMIT 1
+      `)
       .bind(email)
       .first();
 
-  if (existing) {
+    if (existing) {
+      return json(
+        { error: "An account with this email already exists." },
+        409
+      );
+    }
+
+    const userId = makeId();
+    const timestamp = nowIso();
+
+    /*
+      We deliberately keep encrypted_password empty for new
+      Cloudflare-native accounts.
+
+      The real password hash is stored in auth_local_credentials.
+      This avoids trying to write a bcrypt hash into a Supabase
+      Auth-compatible column.
+    */
+
+    await env.DB
+      .prepare(`
+        INSERT INTO auth_users (
+          id,
+          email,
+          encrypted_password,
+          email_confirmed_at,
+          created_at,
+          updated_at,
+          is_sso_user,
+          is_anonymous
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `)
+      .bind(
+        userId,
+        email,
+        "",
+        timestamp,
+        timestamp,
+        timestamp,
+        0,
+        0
+      )
+      .run();
+
+    const passwordHash = await hashPassword(password);
+
+    await env.DB
+      .prepare(`
+        INSERT INTO auth_local_credentials (
+          user_id,
+          password_hash,
+          created_at,
+          updated_at
+        )
+        VALUES (?, ?, ?, ?)
+      `)
+      .bind(
+        userId,
+        passwordHash,
+        timestamp,
+        timestamp
+      )
+      .run();
+
+    /*
+      Try to create the artist record.
+
+      Different versions of the database can have slightly
+      different artists columns, so we inspect the table first.
+    */
+
+    try {
+      const columns = await env.DB
+        .prepare(`PRAGMA table_info(artists)`)
+        .all();
+
+      const names = new Set(
+        (columns.results || []).map(row => row.name)
+      );
+
+      const insertColumns = [];
+      const insertValues = [];
+
+      if (names.has("id")) {
+        insertColumns.push("id");
+        insertValues.push(makeId());
+      }
+
+      if (names.has("user_id")) {
+        insertColumns.push("user_id");
+        insertValues.push(userId);
+      }
+
+      if (names.has("name")) {
+        insertColumns.push("name");
+        insertValues.push(artistName);
+      }
+
+      if (names.has("artist_name")) {
+        insertColumns.push("artist_name");
+        insertValues.push(artistName);
+      }
+
+      if (names.has("email")) {
+        insertColumns.push("email");
+        insertValues.push(email);
+      }
+
+      if (names.has("created_at")) {
+        insertColumns.push("created_at");
+        insertValues.push(timestamp);
+      }
+
+      if (names.has("updated_at")) {
+        insertColumns.push("updated_at");
+        insertValues.push(timestamp);
+      }
+
+      if (insertColumns.length > 0) {
+        const placeholders = insertColumns
+          .map(() => "?")
+          .join(", ");
+
+        await env.DB
+          .prepare(`
+            INSERT INTO artists (
+              ${insertColumns.join(", ")}
+            )
+            VALUES (${placeholders})
+          `)
+          .bind(...insertValues)
+          .run();
+      }
+    } catch (artistError) {
+      /*
+        Do not destroy a successful account registration just
+        because the optional artist profile shape differs.
+      */
+
+      console.error(
+        "Artist profile creation warning:",
+        artistError
+      );
+    }
+
+    /*
+      Automatically create a login session.
+    */
+
+    const token = crypto.randomUUID();
+    const expires = new Date(
+      Date.now() + 30 * 24 * 60 * 60 * 1000
+    ).toISOString();
+
+    await env.DB
+      .prepare(`
+        INSERT INTO auth_sessions (
+          token,
+          user_id,
+          created_at,
+          expires_at
+        )
+        VALUES (?, ?, ?, ?)
+      `)
+      .bind(
+        token,
+        userId,
+        timestamp,
+        expires
+      )
+      .run();
+
     return json(
       {
-        success: false,
-        error:
-          "An account with this email already exists."
+        success: true,
+        user: {
+          id: userId,
+          email,
+          artist_name: artistName
+        }
       },
-      409
+      201,
+      {
+        "Set-Cookie": sessionCookie(token)
+      }
     );
-  }
-
-  const userId =
-    crypto.randomUUID();
-
-  const credentials =
-    await hashPassword(password);
-
-  const now =
-    new Date().toISOString();
-
-  // Existing auth_users table is a migrated
-  // Supabase Auth table. Only populate fields
-  // that are actually required by its schema.
-  await env.DB.prepare(`
-    INSERT INTO auth_users
-      (
-        id,
-        email,
-        encrypted_password,
-        email_confirmed_at,
-        raw_app_meta_data,
-        raw_user_meta_data,
-        created_at,
-        updated_at,
-        is_sso_user,
-        is_anonymous
-      )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0)
-  `)
-    .bind(
-      userId,
-      email,
-      "",
-      now,
-      JSON.stringify({
-        provider: "email",
-        providers: ["email"]
-      }),
-      JSON.stringify({
-        artist_name:
-          artistName || null
-      }),
-      now,
-      now
-    )
-    .run();
-
-  await env.DB.prepare(`
-    INSERT INTO auth_local_credentials
-      (
-        user_id,
-        password_hash,
-        password_salt,
-        created_at,
-        updated_at
-      )
-    VALUES (?, ?, ?, ?, ?)
-  `)
-    .bind(
-      userId,
-      credentials.hash,
-      credentials.salt,
-      now,
-      now
-    )
-    .run();
-
-  // Create an artist record when the artists
-  // table contains the expected user_id column.
-  try {
-    const artistColumns =
-      await env.DB.prepare(
-        "PRAGMA table_info(artists)"
-      ).all();
-
-    const names =
-      (artistColumns.results || [])
-        .map(row => row.name);
-
-    if (
-      names.includes("user_id") &&
-      names.includes("name")
-    ) {
-      const artistId =
-        crypto.randomUUID();
-
-      await env.DB.prepare(`
-        INSERT INTO artists
-          (id, user_id, name)
-        VALUES (?, ?, ?)
-      `)
-        .bind(
-          artistId,
-          userId,
-          artistName || email.split("@")[0]
-        )
-        .run();
-    }
   } catch (error) {
     console.error(
-      "Artist creation skipped:",
+      "REGISTER_ERROR",
       error
+    );
+
+    return json(
+      {
+        error: "Account creation failed.",
+        details: String(error?.message || error)
+      },
+      500
+    );
+  }
+}
+
+async function login(request, env) {
+  const body = await request.json();
+
+  const email = cleanEmail(body.email);
+
+  const password = String(body.password || "");
+
+  if (!email || !password) {
+    return json(
+      { error: "Email and password are required." },
+      400
     );
   }
 
-  const sessionId =
-    await createSession(
-      userId,
-      env
-    );
+  await ensureAuthTables(env.DB);
 
-  const user =
-    await env.DB.prepare(`
-      SELECT *
-      FROM auth_users
-      WHERE id = ?
-      LIMIT 1
-    `)
-      .bind(userId)
+  try {
+    const user = await env.DB
+      .prepare(`
+        SELECT
+          id,
+          email,
+          raw_user_meta_data
+        FROM auth_users
+        WHERE lower(email) = ?
+        LIMIT 1
+      `)
+      .bind(email)
       .first();
 
-  const artist =
-    await getArtistForUser(
-      userId,
-      env
+    if (!user) {
+      return json(
+        { error: "Invalid credentials." },
+        401
+      );
+    }
+
+    const credential = await env.DB
+      .prepare(`
+        SELECT password_hash
+        FROM auth_local_credentials
+        WHERE user_id = ?
+        LIMIT 1
+      `)
+      .bind(user.id)
+      .first();
+
+    if (!credential) {
+      return json(
+        {
+          error:
+            "This account has not yet been migrated to Cloudflare login."
+        },
+        401
+      );
+    }
+
+    const valid = await verifyPassword(
+      password,
+      credential.password_hash
     );
 
-  return json(
-    {
-      success: true,
-      user:
-        await publicUser(
-          user,
-          env
-        ),
-      artist,
-      admin: null
-    },
-    201,
-    {
-      "Set-Cookie":
-        sessionCookie(sessionId)
+    if (!valid) {
+      return json(
+        { error: "Invalid credentials." },
+        401
+      );
     }
-  );
+
+    const token = crypto.randomUUID();
+
+    const created = nowIso();
+
+    const expires = new Date(
+      Date.now() + 30 * 24 * 60 * 60 * 1000
+    ).toISOString();
+
+    await env.DB
+      .prepare(`
+        INSERT INTO auth_sessions (
+          token,
+          user_id,
+          created_at,
+          expires_at
+        )
+        VALUES (?, ?, ?, ?)
+      `)
+      .bind(
+        token,
+        user.id,
+        created,
+        expires
+      )
+      .run();
+
+    return json(
+      {
+        success: true,
+        user: {
+          id: user.id,
+          email: user.email
+        }
+      },
+      200,
+      {
+        "Set-Cookie": sessionCookie(token)
+      }
+    );
+  } catch (error) {
+    console.error(
+      "LOGIN_ERROR",
+      error
+    );
+
+    return json(
+      {
+        error: "Login failed.",
+        details: String(error?.message || error)
+      },
+      500
+    );
+  }
 }
 
+async function currentUser(request, env) {
+  await ensureAuthTables(env.DB);
 
-// =============================================================
-// AUTH: ME
-// =============================================================
+  const token = getCookie(
+    request,
+    "nile_session"
+  );
 
-async function me(request, env) {
-  const session =
-    await getSessionUser(
-      request,
-      env
-    );
-
-  if (!session) {
+  if (!token) {
     return json({
-      authenticated: false,
-      user: null,
-      artist: null,
-      admin: null
+      user: null
     });
   }
 
-  const artist =
-    await getArtistForUser(
-      session.user_id,
-      env
+  try {
+    const row = await env.DB
+      .prepare(`
+        SELECT
+          s.user_id,
+          s.expires_at,
+          u.id,
+          u.email,
+          u.raw_user_meta_data
+        FROM auth_sessions s
+        JOIN auth_users u
+          ON u.id = s.user_id
+        WHERE s.token = ?
+        LIMIT 1
+      `)
+      .bind(token)
+      .first();
+
+    if (!row) {
+      return json({
+        user: null
+      });
+    }
+
+    if (
+      row.expires_at &&
+      new Date(row.expires_at).getTime() < Date.now()
+    ) {
+      await env.DB
+        .prepare(`
+          DELETE FROM auth_sessions
+          WHERE token = ?
+        `)
+        .bind(token)
+        .run();
+
+      return json({
+        user: null
+      });
+    }
+
+    return json({
+      user: {
+        id: row.id,
+        email: row.email,
+        raw_user_meta_data:
+          row.raw_user_meta_data || null
+      }
+    });
+  } catch (error) {
+    console.error(
+      "ME_ERROR",
+      error
     );
 
-  const admin =
-    await getAdminForUser(
-      session.user_id,
-      env
+    return json(
+      {
+        error: "Unable to load current user."
+      },
+      500
     );
-
-  return json({
-    authenticated: true,
-    user:
-      await publicUser(
-        session,
-        env
-      ),
-    artist,
-    admin
-  });
+  }
 }
 
-
-// =============================================================
-// AUTH: LOGOUT
-// =============================================================
-
 async function logout(request, env) {
-  const sessionId =
-    getCookie(
-      request,
-      "nile_session"
-    );
+  await ensureAuthTables(env.DB);
 
-  if (sessionId) {
-    await ensureAuthTables(env);
+  const token = getCookie(
+    request,
+    "nile_session"
+  );
 
-    await env.DB.prepare(
-      "DELETE FROM auth_sessions WHERE id = ?"
-    )
-      .bind(sessionId)
+  if (token) {
+    await env.DB
+      .prepare(`
+        DELETE FROM auth_sessions
+        WHERE token = ?
+      `)
+      .bind(token)
       .run();
   }
 
@@ -1034,187 +744,57 @@ async function logout(request, env) {
     },
     200,
     {
-      "Set-Cookie":
-        clearSessionCookie()
+      "Set-Cookie": clearSessionCookie()
     }
   );
 }
 
+/* -------------------------------------------------------
+   DATABASE HELPERS
+------------------------------------------------------- */
 
-// =============================================================
-// DATABASE API
-// =============================================================
+function safeTable(value) {
+  const table = String(value || "");
 
-const ALLOWED_TABLES = new Set([
-  "admins",
-  "artist_payouts",
-  "artist_wallets",
-  "artists",
-  "auth_identities",
-  "auth_users",
-  "comments",
-  "copyright_removals",
-  "likes",
-  "news",
-  "news_comments",
-  "news_reactions",
-  "platform_deposits",
-  "platform_payouts",
-  "platform_wallet",
-  "song_play_log",
-  "songs"
-]);
+  if (!ALLOWED_TABLES.has(table)) {
+    throw new Error(
+      `Table not allowed: ${table}`
+    );
+  }
 
-
-function validateTable(name) {
-  return (
-    ALLOWED_TABLES.has(name)
-  );
+  return table;
 }
 
-
-function parseJsonValue(value) {
-  if (value === null || value === undefined) {
-    return null;
+function parseSelectColumns(value) {
+  if (!value || value === "*") {
+    return "*";
   }
 
-  if (
-    value === "true"
-  ) {
-    return true;
+  const columns = String(value)
+    .split(",")
+    .map(x => x.trim())
+    .filter(Boolean);
+
+  if (!columns.length) {
+    return "*";
   }
 
-  if (
-    value === "false"
-  ) {
-    return false;
+  for (const column of columns) {
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(column)) {
+      throw new Error("Invalid column name.");
+    }
   }
 
-  if (
-    value === "null"
-  ) {
-    return null;
-  }
-
-  if (
-    /^-?\d+(\.\d+)?$/.test(value)
-  ) {
-    return Number(value);
-  }
-
-  return value;
+  return columns.join(", ");
 }
 
+function buildFilters(url, params, startIndex = 1) {
+  const clauses = [];
+  const bindings = [];
 
-async function databaseApi(request, env) {
-  const path =
-    new URL(request.url).pathname;
+  let index = startIndex;
 
-  const table =
-    path.replace(
-      "/api/db/",
-      ""
-    ).replace(
-      /\/+$/,
-      ""
-    );
-
-  if (!validateTable(table)) {
-    return json(
-      {
-        error: "Table not allowed."
-      },
-      400
-    );
-  }
-
-  const url =
-    new URL(request.url);
-
-  if (request.method === "GET") {
-    return dbSelect(
-      request,
-      env,
-      table,
-      url
-    );
-  }
-
-  if (
-    request.method === "POST"
-  ) {
-    return dbInsert(
-      request,
-      env,
-      table
-    );
-  }
-
-  if (
-    request.method === "PATCH" ||
-    request.method === "PUT"
-  ) {
-    return dbUpdate(
-      request,
-      env,
-      table,
-      url
-    );
-  }
-
-  if (
-    request.method === "DELETE"
-  ) {
-    return dbDelete(
-      request,
-      env,
-      table,
-      url
-    );
-  }
-
-  return json(
-    {
-      error:
-        "Method not supported."
-    },
-    405
-  );
-}
-
-
-// -------------------------------------------------------------
-// SELECT
-// -------------------------------------------------------------
-
-async function dbSelect(
-  request,
-  env,
-  table,
-  url
-) {
-  let columns =
-    url.searchParams.get(
-      "select"
-    ) || "*";
-
-  // Keep the API safe by allowing only
-  // simple column selections.
-  if (
-    !/^[A-Za-z0-9_*,\s]+$/.test(
-      columns
-    )
-  ) {
-    columns = "*";
-  }
-
-  const where = [];
-  const values = [];
-
-  for (
-    const [key, value]
-    of url.searchParams.entries()
-  ) {
+  for (const [key, value] of url.searchParams.entries()) {
     if (
       key === "select" ||
       key === "order" ||
@@ -1224,608 +804,429 @@ async function dbSelect(
       continue;
     }
 
-    const match =
-      key.match(
-        /^([A-Za-z0-9_]+)\.(eq|neq|gt|gte|lt|lte|like|ilike|is)$/
-      );
-
-    if (!match) {
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
       continue;
     }
 
-    const column =
-      match[1];
-
-    const operator =
-      match[2];
-
-    if (
-      operator === "eq"
-    ) {
-      where.push(
-        `"${column}" = ?`
-      );
-      values.push(
-        parseJsonValue(value)
-      );
+    if (value.startsWith("eq.")) {
+      clauses.push(`${key} = ?`);
+      bindings.push(value.slice(3));
+    } else if (value.startsWith("neq.")) {
+      clauses.push(`${key} != ?`);
+      bindings.push(value.slice(4));
+    } else if (value.startsWith("gt.")) {
+      clauses.push(`${key} > ?`);
+      bindings.push(value.slice(3));
+    } else if (value.startsWith("gte.")) {
+      clauses.push(`${key} >= ?`);
+      bindings.push(value.slice(4));
+    } else if (value.startsWith("lt.")) {
+      clauses.push(`${key} < ?`);
+      bindings.push(value.slice(3));
+    } else if (value.startsWith("lte.")) {
+      clauses.push(`${key} <= ?`);
+      bindings.push(value.slice(4));
+    } else if (value === "is.null") {
+      clauses.push(`${key} IS NULL`);
+    } else if (value === "not.is.null") {
+      clauses.push(`${key} IS NOT NULL`);
+    } else if (value.startsWith("like.")) {
+      clauses.push(`${key} LIKE ?`);
+      bindings.push(value.slice(5));
+    } else {
+      clauses.push(`${key} = ?`);
+      bindings.push(value);
     }
 
-    if (
-      operator === "neq"
-    ) {
-      where.push(
-        `"${column}" != ?`
-      );
-      values.push(
-        parseJsonValue(value)
-      );
-    }
-
-    if (
-      operator === "gt"
-    ) {
-      where.push(
-        `"${column}" > ?`
-      );
-      values.push(
-        parseJsonValue(value)
-      );
-    }
-
-    if (
-      operator === "gte"
-    ) {
-      where.push(
-        `"${column}" >= ?`
-      );
-      values.push(
-        parseJsonValue(value)
-      );
-    }
-
-    if (
-      operator === "lt"
-    ) {
-      where.push(
-        `"${column}" < ?`
-      );
-      values.push(
-        parseJsonValue(value)
-      );
-    }
-
-    if (
-      operator === "lte"
-    ) {
-      where.push(
-        `"${column}" <= ?`
-      );
-      values.push(
-        parseJsonValue(value)
-      );
-    }
-
-    if (
-      operator === "like"
-    ) {
-      where.push(
-        `"${column}" LIKE ?`
-      );
-      values.push(value);
-    }
-
-    if (
-      operator === "ilike"
-    ) {
-      where.push(
-        `LOWER("${column}") LIKE LOWER(?)`
-      );
-      values.push(value);
-    }
-
-    if (
-      operator === "is"
-    ) {
-      if (value === "null") {
-        where.push(
-          `"${column}" IS NULL`
-        );
-      }
-
-      if (
-        value === "not.null"
-      ) {
-        where.push(
-          `"${column}" IS NOT NULL`
-        );
-      }
-    }
+    index++;
   }
 
-  let sql =
-    `SELECT ${columns} FROM "${table}"`;
+  return {
+    clauses,
+    bindings
+  };
+}
 
-  if (where.length) {
-    sql +=
-      " WHERE " +
-      where.join(" AND ");
+async function dbGet(request, env, table) {
+  table = safeTable(table);
+
+  const url = new URL(request.url);
+
+  const columns = parseSelectColumns(
+    url.searchParams.get("select")
+  );
+
+  const filters = buildFilters(url);
+
+  let sql = `
+    SELECT ${columns}
+    FROM ${table}
+  `;
+
+  if (filters.clauses.length) {
+    sql += `
+      WHERE ${filters.clauses.join(" AND ")}
+    `;
   }
 
-  const order =
-    url.searchParams.get(
-      "order"
-    );
+  const order = url.searchParams.get("order");
 
   if (order) {
-    const parts =
-      order.split(",");
+    const parts = order.split(",");
 
-    const orderParts = [];
+    const safeParts = [];
 
-    for (
-      const part
-      of parts
-    ) {
-      const pieces =
-        part.split(".");
+    for (const part of parts) {
+      const bits = part.trim().split(".");
 
-      const column =
-        pieces[0];
+      const column = bits[0];
 
       if (
-        !/^[A-Za-z0-9_]+$/.test(
-          column
-        )
+        !/^[A-Za-z_][A-Za-z0-9_]*$/.test(column)
       ) {
         continue;
       }
 
       const direction =
-        pieces[1] === "desc"
+        bits[1] === "desc"
           ? "DESC"
           : "ASC";
 
-      orderParts.push(
-        `"${column}" ${direction}`
+      safeParts.push(
+        `${column} ${direction}`
       );
     }
 
-    if (orderParts.length) {
-      sql +=
-        " ORDER BY " +
-        orderParts.join(", ");
+    if (safeParts.length) {
+      sql += `
+        ORDER BY ${safeParts.join(", ")}
+      `;
     }
   }
 
-  const limit =
-    Number(
-      url.searchParams.get(
-        "limit"
-      ) || 100
-    );
+  const limit = Number(
+    url.searchParams.get("limit")
+  );
 
-  const offset =
-    Number(
-      url.searchParams.get(
-        "offset"
-      ) || 0
-    );
+  const offset = Number(
+    url.searchParams.get("offset")
+  );
 
-  sql +=
-    ` LIMIT ${Math.min(
-      Math.max(limit, 1),
-      500
-    )}`;
+  if (Number.isFinite(limit) && limit > 0) {
+    sql += ` LIMIT ${Math.min(limit, 500)}`;
 
-  if (offset > 0) {
-    sql +=
-      ` OFFSET ${Math.max(
-        offset,
-        0
-      )}`;
+    if (
+      Number.isFinite(offset) &&
+      offset >= 0
+    ) {
+      sql += ` OFFSET ${Math.min(offset, 5000)}`;
+    }
+  } else {
+    sql += ` LIMIT 500`;
   }
 
-  const statement =
-    env.DB.prepare(sql);
+  const result = await env.DB
+    .prepare(sql)
+    .bind(...filters.bindings)
+    .all();
 
-  const result =
-    values.length
-      ? await statement.bind(
-          ...values
-        ).all()
-      : await statement.all();
-
-  return json({
-    data:
-      result.results || []
-  });
+  return json(result.results || []);
 }
 
+async function dbInsert(request, env, table) {
+  table = safeTable(table);
 
-// -------------------------------------------------------------
-// INSERT
-// -------------------------------------------------------------
+  const body = await request.json();
 
-async function dbInsert(
-  request,
-  env,
-  table
-) {
-  const body =
-    await request.json().catch(
-      () => null
-    );
-
-  if (
-    !body ||
-    typeof body !== "object"
-  ) {
-    return json(
-      {
-        error:
-          "Invalid JSON body."
-      },
-      400
-    );
-  }
-
-  const rows =
-    Array.isArray(body)
-      ? body
+  const rows = Array.isArray(body)
+    ? body
+    : Array.isArray(body?.rows)
+      ? body.rows
       : [body];
 
   if (!rows.length) {
-    return json({
-      data: []
-    });
+    return json([]);
   }
 
-  const first =
-    rows[0];
+  const statements = [];
 
-  const columns =
-    Object.keys(first)
-      .filter(
-        key =>
-          /^[A-Za-z0-9_]+$/.test(
-            key
-          )
-      );
-
-  if (!columns.length) {
-    return json(
-      {
-        error:
-          "No valid columns."
-      },
-      400
+  for (const row of rows) {
+    const keys = Object.keys(row).filter(
+      key =>
+        /^[A-Za-z_][A-Za-z0-9_]*$/.test(key)
     );
-  }
 
-  const placeholders =
-    columns
+    if (!keys.length) {
+      continue;
+    }
+
+    const placeholders = keys
       .map(() => "?")
       .join(", ");
 
-  const sql =
-    `INSERT INTO "${table}" (${columns
-      .map(c => `"${c}"`)
-      .join(", ")})
-     VALUES (${placeholders})`;
-
-  const statements =
-    rows.map(row =>
-      env.DB.prepare(sql).bind(
-        ...columns.map(
-          column =>
-            row[column] ?? null
-        )
-      )
+    const values = keys.map(
+      key => row[key]
     );
 
-  await env.DB.batch(
-    statements
-  );
+    statements.push(
+      env.DB
+        .prepare(`
+          INSERT INTO ${table} (
+            ${keys.join(", ")}
+          )
+          VALUES (${placeholders})
+        `)
+        .bind(...values)
+    );
+  }
 
-  return json(
-    {
-      success: true
-    },
-    201
-  );
+  if (!statements.length) {
+    return json([]);
+  }
+
+  const result =
+    await env.DB.batch(statements);
+
+  return json({
+    success: true,
+    count: result.length
+  }, 201);
 }
 
+async function dbPatch(request, env, table) {
+  table = safeTable(table);
 
-// -------------------------------------------------------------
-// UPDATE
-// -------------------------------------------------------------
+  const body = await request.json();
 
-async function dbUpdate(
-  request,
-  env,
-  table,
-  url
-) {
-  const body =
-    await request.json().catch(
-      () => null
-    );
+  const values = body?.values || body;
 
   if (
-    !body ||
-    typeof body !== "object"
+    !values ||
+    typeof values !== "object" ||
+    Array.isArray(values)
   ) {
     return json(
-      {
-        error:
-          "Invalid JSON body."
-      },
+      { error: "Invalid update body." },
       400
     );
   }
 
-  const columns =
-    Object.keys(body)
-      .filter(
-        key =>
-          /^[A-Za-z0-9_]+$/.test(
-            key
-          )
-      );
+  const url = new URL(request.url);
 
-  if (!columns.length) {
+  const filters = buildFilters(url);
+
+  if (!filters.clauses.length) {
     return json(
       {
         error:
-          "No valid columns."
+          "An update requires a filter."
       },
       400
     );
   }
 
-  const where = [];
-  const values = [];
+  const keys = Object.keys(values).filter(
+    key =>
+      /^[A-Za-z_][A-Za-z0-9_]*$/.test(key)
+  );
 
-  for (
-    const [key, value]
-    of url.searchParams.entries()
-  ) {
-    const match =
-      key.match(
-        /^([A-Za-z0-9_]+)\.eq$/
-      );
-
-    if (!match) {
-      continue;
-    }
-
-    where.push(
-      `"${match[1]}" = ?`
-    );
-
-    values.push(
-      parseJsonValue(value)
-    );
-  }
-
-  if (!where.length) {
+  if (!keys.length) {
     return json(
-      {
-        error:
-          "Update requires a filter."
-      },
+      { error: "Nothing to update." },
       400
     );
   }
 
-  const setSql =
-    columns
-      .map(
-        column =>
-          `"${column}" = ?`
-      )
-      .join(", ");
+  const assignments = keys
+    .map(key => `${key} = ?`)
+    .join(", ");
 
-  const sql =
-    `UPDATE "${table}"
-     SET ${setSql}
-     WHERE ${where.join(
-       " AND "
-     )}`;
-
-  const params = [
-    ...columns.map(
-      column =>
-        body[column] ?? null
-    ),
-    ...values
+  const bindings = [
+    ...keys.map(key => values[key]),
+    ...filters.bindings
   ];
 
-  await env.DB.prepare(sql)
-    .bind(...params)
+  const result = await env.DB
+    .prepare(`
+      UPDATE ${table}
+      SET ${assignments}
+      WHERE ${filters.clauses.join(" AND ")}
+    `)
+    .bind(...bindings)
     .run();
 
   return json({
-    success: true
+    success: true,
+    changes:
+      result.meta?.changes || 0
   });
 }
 
+async function dbDelete(request, env, table) {
+  table = safeTable(table);
 
-// -------------------------------------------------------------
-// DELETE
-// -------------------------------------------------------------
+  const url = new URL(request.url);
 
-async function dbDelete(
-  request,
-  env,
-  table,
-  url
-) {
-  const where = [];
-  const values = [];
+  const filters = buildFilters(url);
 
-  for (
-    const [key, value]
-    of url.searchParams.entries()
-  ) {
-    const match =
-      key.match(
-        /^([A-Za-z0-9_]+)\.eq$/
-      );
-
-    if (!match) {
-      continue;
-    }
-
-    where.push(
-      `"${match[1]}" = ?`
-    );
-
-    values.push(
-      parseJsonValue(value)
-    );
-  }
-
-  if (!where.length) {
+  if (!filters.clauses.length) {
     return json(
       {
         error:
-          "Delete requires a filter."
+          "A delete requires a filter."
       },
       400
     );
   }
 
-  const sql =
-    `DELETE FROM "${table}"
-     WHERE ${where.join(
-       " AND "
-     )}`;
-
-  await env.DB.prepare(sql)
-    .bind(...values)
+  const result = await env.DB
+    .prepare(`
+      DELETE FROM ${table}
+      WHERE ${filters.clauses.join(" AND ")}
+    `)
+    .bind(...filters.bindings)
     .run();
 
   return json({
-    success: true
+    success: true,
+    changes:
+      result.meta?.changes || 0
   });
 }
 
+/* -------------------------------------------------------
+   RPC
+------------------------------------------------------- */
 
-// =============================================================
-// RPC API
-// =============================================================
+async function rpcRecordSongPlay(request, env) {
+  const body = await request.json();
 
-async function rpcApi(request, env) {
-  const path =
-    new URL(request.url).pathname;
-
-  const name =
-    path.replace(
-      "/api/rpc/",
-      ""
-    );
-
-  const body =
-    await request.json().catch(
-      () => ({})
-    );
-
-  if (
-    name ===
-    "record_song_play"
-  ) {
-    return recordSongPlay(
-      body,
-      env
-    );
-  }
-
-  if (
-    name ===
-    "get_platform_completed_total"
-  ) {
-    return getPlatformCompletedTotal(
-      env
-    );
-  }
-
-  return json(
-    {
-      error:
-        "RPC not found."
-    },
-    404
-  );
-}
-
-
-async function recordSongPlay(
-  body,
-  env
-) {
   const songId =
-    body.p_song_id ||
-    body.song_id;
+    body.song_id ||
+    body.songId;
 
   if (!songId) {
     return json(
-      {
-        error:
-          "Song ID is required."
-      },
+      { error: "song_id is required." },
       400
     );
   }
 
-  try {
-    await env.DB.prepare(`
-      UPDATE songs
-      SET plays =
-        COALESCE(plays, 0) + 1
-      WHERE id = ?
-    `)
-      .bind(songId)
-      .run();
-  } catch (error) {
-    console.error(
-      "Song play update:",
-      error
-    );
+  const token = getCookie(
+    request,
+    "nile_session"
+  );
+
+  let userId = null;
+
+  if (token) {
+    await ensureAuthTables(env.DB);
+
+    const session = await env.DB
+      .prepare(`
+        SELECT user_id
+        FROM auth_sessions
+        WHERE token = ?
+        LIMIT 1
+      `)
+      .bind(token)
+      .first();
+
+    userId = session?.user_id || null;
   }
 
   try {
-    const user =
-      await getSessionUser(
-        new Request(
-          "https://internal",
-          {
-            headers: {}
-          }
-        ),
-        env
-      );
-
-    await env.DB.prepare(`
-      INSERT INTO song_play_log
-        (
+    await env.DB
+      .prepare(`
+        INSERT INTO song_play_log (
           id,
           song_id,
           user_id,
           played_at
         )
-      VALUES (?, ?, ?, ?)
-    `)
+        VALUES (?, ?, ?, ?)
+      `)
       .bind(
-        crypto.randomUUID(),
+        makeId(),
         songId,
-        user?.user_id || null,
-        new Date().toISOString()
+        userId,
+        nowIso()
       )
       .run();
   } catch (error) {
     console.error(
-      "Play log:",
+      "SONG_PLAY_LOG_ERROR",
+      error
+    );
+
+    /*
+      Some versions of the table may use a different
+      timestamp column. Try the simplest compatible form.
+    */
+
+    try {
+      await env.DB
+        .prepare(`
+          INSERT INTO song_play_log (
+            id,
+            song_id,
+            user_id
+          )
+          VALUES (?, ?, ?)
+        `)
+        .bind(
+          makeId(),
+          songId,
+          userId
+        )
+        .run();
+    } catch (secondError) {
+      console.error(
+        "SONG_PLAY_LOG_SECOND_ERROR",
+        secondError
+      );
+    }
+  }
+
+  /*
+    Update play count if the songs table contains one.
+  */
+
+  try {
+    const columns = await env.DB
+      .prepare(`PRAGMA table_info(songs)`)
+      .all();
+
+    const names = new Set(
+      (columns.results || []).map(
+        row => row.name
+      )
+    );
+
+    if (names.has("play_count")) {
+      await env.DB
+        .prepare(`
+          UPDATE songs
+          SET play_count =
+            COALESCE(play_count, 0) + 1
+          WHERE id = ?
+        `)
+        .bind(songId)
+        .run();
+    } else if (names.has("plays")) {
+      await env.DB
+        .prepare(`
+          UPDATE songs
+          SET plays =
+            COALESCE(plays, 0) + 1
+          WHERE id = ?
+        `)
+        .bind(songId)
+        .run();
+    }
+  } catch (error) {
+    console.error(
+      "SONG_COUNT_ERROR",
       error
     );
   }
@@ -1835,35 +1236,41 @@ async function recordSongPlay(
   });
 }
 
-
-async function getPlatformCompletedTotal(
+async function rpcPlatformCompletedTotal(
   env
 ) {
   try {
-    const row =
-      await env.DB.prepare(`
+    const result = await env.DB
+      .prepare(`
         SELECT
           COALESCE(
             SUM(amount),
             0
           ) AS total
-        FROM platform_deposits
-      `).first();
+        FROM platform_payouts
+      `)
+      .first();
 
     return json({
-      data: row?.total || 0
+      total: Number(
+        result?.total || 0
+      )
     });
-  } catch {
+  } catch (error) {
+    console.error(
+      "PLATFORM_TOTAL_ERROR",
+      error
+    );
+
     return json({
-      data: 0
+      total: 0
     });
   }
 }
 
-
-// =============================================================
-// R2 UPLOAD
-// =============================================================
+/* -------------------------------------------------------
+   R2 STORAGE
+------------------------------------------------------- */
 
 async function storageUpload(
   request,
@@ -1871,49 +1278,44 @@ async function storageUpload(
 ) {
   if (!env.MEDIA_BUCKET) {
     return json(
-      {
-        error:
-          "R2 storage is not configured."
-      },
+      { error: "R2 bucket is not configured." },
       500
     );
   }
 
+  const url = new URL(request.url);
+
+  let key =
+    url.searchParams.get("key") ||
+    request.headers.get("X-File-Key");
+
+  if (!key) {
+    return json(
+      { error: "File key is required." },
+      400
+    );
+  }
+
+  key = key.replace(/^\/+/, "");
+
+  if (
+    !key.startsWith("audio/") &&
+    !key.startsWith("covers/")
+  ) {
+    return json(
+      {
+        error:
+          "Files must be stored under audio/ or covers/."
+      },
+      400
+    );
+  }
+
   const contentType =
-    request.headers.get(
-      "Content-Type"
-    ) ||
+    request.headers.get("Content-Type") ||
     "application/octet-stream";
 
-  const filename =
-    request.headers.get(
-      "X-File-Name"
-    ) ||
-    crypto.randomUUID();
-
-  const folder =
-    request.headers.get(
-      "X-Storage-Folder"
-    ) ||
-    "uploads";
-
-  const safeFolder =
-    folder.replace(
-      /[^A-Za-z0-9/_-]/g,
-      ""
-    );
-
-  const safeFilename =
-    filename.replace(
-      /[^A-Za-z0-9._-]/g,
-      "_"
-    );
-
-  const key =
-    `${safeFolder}/${crypto.randomUUID()}-${safeFilename}`;
-
-  const body =
-    await request.arrayBuffer();
+  const body = await request.arrayBuffer();
 
   await env.MEDIA_BUCKET.put(
     key,
@@ -1927,79 +1329,42 @@ async function storageUpload(
 
   return json({
     success: true,
-    path: key,
     key
   });
 }
 
-
-// =============================================================
-// R2 PUBLIC FILE
-// =============================================================
-
 async function storagePublic(
   request,
-  env
+  env,
+  key
 ) {
   if (!env.MEDIA_BUCKET) {
     return new Response(
-      "Storage unavailable",
-      {
-        status: 500
-      }
+      "R2 bucket is not configured.",
+      { status: 500 }
     );
   }
 
-  const url =
-    new URL(request.url);
-
-  const prefix =
-    "/api/storage/public/";
-
-  const path =
-    decodeURIComponent(
-      url.pathname.slice(
-        prefix.length
-      )
-    );
-
-  const parts =
-    path.split("/");
-
-  // First part is the bucket name.
-  parts.shift();
-
-  const key =
-    parts.join("/");
-
-  if (!key) {
-    return new Response(
-      "File not found",
-      {
-        status: 404
-      }
-    );
-  }
+  key = decodeURIComponent(key)
+    .replace(/^\/+/, "");
 
   const object =
-    await env.MEDIA_BUCKET.get(
-      key
-    );
+    await env.MEDIA_BUCKET.get(key);
 
   if (!object) {
     return new Response(
-      "File not found",
-      {
-        status: 404
-      }
+      "Not found",
+      { status: 404 }
     );
   }
 
-  const headers =
-    new Headers();
+  const headers = new Headers();
 
-  object.writeHttpMetadata(
-    headers
+  object.writeHttpMetadata(headers);
+
+  headers.set(
+    "Cache-Control",
+    "public, max-age=31536000, immutable"
   );
 
   headers.set(
@@ -2007,82 +1372,270 @@ async function storagePublic(
     object.httpEtag
   );
 
-  headers.set(
-    "Cache-Control",
-    "public, max-age=31536000, immutable"
-  );
-
-  return cors(
-    new Response(
-      object.body,
-      {
-        headers
-      }
-    )
+  return new Response(
+    object.body,
+    { headers }
   );
 }
 
+/* -------------------------------------------------------
+   API ROUTER
+------------------------------------------------------- */
 
-// =============================================================
-// PESAjet PROXY
-// =============================================================
+async function api(request, env) {
+  const url = new URL(request.url);
 
-async function paymentProxy(
-  request,
-  env,
-  endpoint
-) {
-  if (!endpoint) {
-    return json(
-      {
-        success: false,
-        error:
-          "PesaJet endpoint is not configured yet."
-      },
-      503
+  const path = url.pathname;
+
+  if (path === "/api/health") {
+    return json({
+      ok: true,
+      service: "nile-soniq",
+      database: Boolean(env.DB),
+      storage: Boolean(env.MEDIA_BUCKET),
+      time: nowIso()
+    });
+  }
+
+  if (path === "/api/auth/register") {
+    if (request.method !== "POST") {
+      return json(
+        { error: "Method not allowed." },
+        405
+      );
+    }
+
+    return register(request, env);
+  }
+
+  if (path === "/api/auth/login") {
+    if (request.method !== "POST") {
+      return json(
+        { error: "Method not allowed." },
+        405
+      );
+    }
+
+    return login(request, env);
+  }
+
+  if (path === "/api/auth/logout") {
+    return logout(request, env);
+  }
+
+  if (path === "/api/auth/me") {
+    return currentUser(request, env);
+  }
+
+  if (path === "/api/storage/upload") {
+    if (request.method !== "POST") {
+      return json(
+        { error: "Method not allowed." },
+        405
+      );
+    }
+
+    return storageUpload(request, env);
+  }
+
+  if (
+    path.startsWith(
+      "/api/storage/public/"
+    )
+  ) {
+    const key = path.replace(
+      "/api/storage/public/",
+      ""
+    );
+
+    return storagePublic(
+      request,
+      env,
+      key
     );
   }
 
-  const body =
-    await request.text();
-
-  const response =
-    await fetch(
-      endpoint,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type":
-            request.headers.get(
-              "Content-Type"
-            ) ||
-            "application/json",
-          "Authorization":
-            request.headers.get(
-              "Authorization"
-            ) || ""
-        },
-        body
-      }
+  if (path.startsWith("/api/rpc/")) {
+    const rpcName = path.replace(
+      "/api/rpc/",
+      ""
     );
 
-  const text =
-    await response.text();
+    if (
+      rpcName === "record_song_play"
+    ) {
+      return rpcRecordSongPlay(
+        request,
+        env
+      );
+    }
 
-  return cors(
-    new Response(
-      text,
+    if (
+      rpcName ===
+      "get_platform_completed_total"
+    ) {
+      return rpcPlatformCompletedTotal(
+        env
+      );
+    }
+
+    return json(
       {
-        status:
-          response.status,
-        headers: {
-          "Content-Type":
-            response.headers.get(
-              "Content-Type"
-            ) ||
-            "application/json"
+        error:
+          `Unknown RPC: ${rpcName}`
+      },
+      404
+    );
+  }
+
+  /*
+    Generic database compatibility layer.
+  */
+
+  if (path.startsWith("/api/db/")) {
+    const table = decodeURIComponent(
+      path.replace("/api/db/", "")
+    );
+
+    try {
+      if (request.method === "GET") {
+        return dbGet(
+          request,
+          env,
+          table
+        );
+      }
+
+      if (
+        request.method === "POST"
+      ) {
+        return dbInsert(
+          request,
+          env,
+          table
+        );
+      }
+
+      if (
+        request.method === "PATCH" ||
+        request.method === "PUT"
+      ) {
+        return dbPatch(
+          request,
+          env,
+          table
+        );
+      }
+
+      if (
+        request.method === "DELETE"
+      ) {
+        return dbDelete(
+          request,
+          env,
+          table
+        );
+      }
+
+      return json(
+        { error: "Method not allowed." },
+        405
+      );
+    } catch (error) {
+      console.error(
+        "DATABASE_ERROR",
+        error
+      );
+
+      return json(
+        {
+          error: "Database request failed.",
+          details: String(
+            error?.message || error
+          )
+        },
+        500
+      );
+    }
+  }
+
+  return null;
+}
+
+/* -------------------------------------------------------
+   MAIN WORKER
+------------------------------------------------------- */
+
+export default {
+  async fetch(request, env) {
+    try {
+      if (request.method === "OPTIONS") {
+        return withCors(
+          new Response(null, {
+            status: 204,
+            headers: corsHeaders(request)
+          }),
+          request
+        );
+      }
+
+      const url = new URL(request.url);
+
+      /*
+        API requests go to the Worker.
+      */
+
+      if (
+        url.pathname.startsWith("/api/")
+      ) {
+        const response =
+          await api(request, env);
+
+        if (response) {
+          return withCors(
+            response,
+            request
+          );
         }
       }
-    )
-  );
+
+      /*
+        Everything else is served by
+        Cloudflare Workers Assets.
+      */
+
+      if (env.ASSETS) {
+        return env.ASSETS.fetch(request);
+      }
+
+      return new Response(
+        "NILE SONIQ Worker is running.",
+        {
+          status: 200,
+          headers: {
+            "Content-Type":
+              "text/plain; charset=utf-8"
+          }
         }
+      );
+    } catch (error) {
+      console.error(
+        "WORKER_FATAL_ERROR",
+        error
+      );
+
+      return withCors(
+        json(
+          {
+            error: "Internal server error.",
+            details: String(
+              error?.message || error
+            )
+          },
+          500
+        ),
+        request
+      );
+    }
+  }
+};
