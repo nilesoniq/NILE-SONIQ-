@@ -3374,6 +3374,13 @@ const authApi = {
     currentUser = data.user || null;
     currentAdmin = data.admin || null;
     currentArtist = data.artist || null;
+
+    // Login only returns the account identity. Ask the Cloudflare Worker
+    // for the verified session profile so admin/artist state is populated.
+    // This avoids incorrectly rejecting an active administrator just
+    // because the /login response does not include the admin record.
+    await this.getSession();
+
     notifyAuthListeners();
     return {data:{user:currentUser,session:currentUser?{user:currentUser}:null},error:null};
   },
