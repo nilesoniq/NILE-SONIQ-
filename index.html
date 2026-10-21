@@ -2971,6 +2971,11 @@ let currentPlayingIndex = -1;
 
 let currentAdmin = null;
 const adminPreviewedSongs = new Set();
+
+// Cloudflare D1 may return SQLite booleans as 0/1 rather than true/false.
+function isSongApproved(song){
+  return !!song && (song.approved === true || song.approved === 1 || song.approved === "1");
+}
 let adminPreviewAudio = null;
 
 let countedPlaySongId = null;
@@ -3723,7 +3728,7 @@ async function showPage(page, updateUrl=true){
 
       updateAdminTabs();
 
-      await showAdminTab(isCurrentUserSuperAdmin() ? "analytics" : "songs");
+      await showAdminTab("songs");
 
     }else{
 
@@ -6994,8 +6999,7 @@ async function loadMySongs(){
       tbody.innerHTML =
         songs.map(song => {
 
-          const approved =
-            song.approved === true;
+          const approved = isSongApproved(song);
 
 
           return `
@@ -7980,8 +7984,8 @@ async function loadAdminAnalytics(){
     const artists=artistsResult.data || [];
     const withdrawals=withdrawalsResult.data || [];
 
-    const approved=songs.filter(s=>s.approved===true);
-    const pending=songs.filter(s=>s.approved!==true);
+    const approved=songs.filter(s=>isSongApproved(s));
+    const pending=songs.filter(s=>!isSongApproved(s) && String(s.review_status || "").toLowerCase() !== "rejected");
     const plays=songs.reduce((n,s)=>n+Number(s.plays||0),0);
     const likes=songs.reduce((n,s)=>n+Number(s.likes||0),0);
     const pendingWithdrawals=withdrawals.filter(w=>["pending","processing"].includes(String(w.status||"pending").toLowerCase()));
@@ -8498,10 +8502,10 @@ async function loadAdminSongs(){
 
 
     const pending =
-      (data || []).filter(
-        song =>
-          song.approved !== true
-      );
+      (data || []).filter(song => {
+        const status = String(song.review_status || "").toLowerCase();
+        return !isSongApproved(song) && status !== "rejected";
+      });
 
 
     if(!pending.length){
@@ -8665,7 +8669,7 @@ async function previewAdminSong(songId){
             <p><strong>Record label:</strong> ${escapeHtml(song.label || "Not provided")}</p>
             <p><strong>Location:</strong> ${escapeHtml(song.location || "Not provided")}</p>
             <p><strong>Terms accepted:</strong> ${song.terms_accepted === true ? "Yes" : "No"}</p>
-            <p><strong>Status:</strong> ${song.approved === true ? "Approved" : "Pending review"}</p>
+            <p><strong>Status:</strong> ${isSongApproved(song) ? "Approved" : (String(song.review_status || "").toLowerCase() === "rejected" ? "Rejected" : "Pending review")}</p>
           </div>
         </div>
 
@@ -8732,7 +8736,8 @@ async function approveSong(songId){
     } = await sb
       .from("songs")
       .update({
-        approved:true
+        approved:true,
+        review_status:"approved"
       })
       .eq(
         "id",
@@ -8820,7 +8825,8 @@ async function rejectSong(songId){
     } = await sb
       .from("songs")
       .update({
-        approved:false
+        approved:false,
+        review_status:"rejected"
       })
       .eq(
         "id",
