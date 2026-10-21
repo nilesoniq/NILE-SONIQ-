@@ -2888,7 +2888,7 @@ preload="metadata">
 <script>
 
 /* =========================================================
-   NILESONIQ REBUILD WORKING COPY
+   NILESONIQ CLOUDFLARE WORKING COPY
    Based on index-cloudflare.html. This file is separate from the original.
    Frontend changes do not replace server-side authorization/security checks.
    Do not deploy until Cloudflare API routes and payment endpoints are tested.
@@ -2918,7 +2918,7 @@ function cfQuery(table, initial={}){
   Object.assign(state.params,initial);
   async function execute(single=false,allowEmpty=false){
     if(state.method==="GET") state.params.set("select",state.selection||"*");
-    if(state.upsert) state.params.set("upsert", "true");
+    if(state.upsert) state.params.set("upsert","true");
     const url=`/api/db/${encodeURIComponent(table)}?${state.params.toString()}`;
     const res=await fetch(url,{method:state.method,credentials:"include",headers:{"Content-Type":"application/json","Accept":"application/json"},body:state.method==="GET"||state.method==="DELETE"?undefined:JSON.stringify(state.body)});
     const json=await res.json().catch(()=>({}));
@@ -4432,9 +4432,6 @@ async function uploadSong(){
     return;
 
   }
-
-  // Submission is allowed whether or not terms are accepted.
-  // The actual checkbox value is saved for the admin review gate.
 
   const uploadButton =
     document.getElementById(
@@ -7821,7 +7818,8 @@ async function updateWithdrawalStatus(
       throw new Error("Song submission was not found.");
     }
 
-    if(submittedSong.terms_accepted !== true && submittedSong.terms_accepted !== 1 && submittedSong.terms_accepted !== "1"){
+    const termsAccepted = submittedSong.terms_accepted === true || submittedSong.terms_accepted === 1 || submittedSong.terms_accepted === "1" || submittedSong.terms_accepted === "true";
+    if(!termsAccepted){
       throw new Error("This submission cannot be approved because the artist has not accepted the NileSoniQ Terms & Conditions.");
     }
 
@@ -8674,7 +8672,7 @@ async function previewAdminSong(songId){
             <p><strong>Featured artists:</strong> ${escapeHtml(song.featured_artists || "None listed")}</p>
             <p><strong>Record label:</strong> ${escapeHtml(song.label || "Not provided")}</p>
             <p><strong>Location:</strong> ${escapeHtml(song.location || "Not provided")}</p>
-            <p><strong>Terms accepted:</strong> ${(song.terms_accepted === true || song.terms_accepted === 1 || song.terms_accepted === "1") ? "Yes" : "No"}</p>
+            <p><strong>Terms accepted:</strong> ${song.terms_accepted === true ? "Yes" : "No"}</p>
             <p><strong>Status:</strong> ${song.approved === true ? "Approved" : "Pending review"}</p>
           </div>
         </div>
