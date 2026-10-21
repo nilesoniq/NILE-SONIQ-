@@ -14,10 +14,6 @@ binding = "MEDIA_BUCKET"
 bucket_name = "nilesoniq-media"
 
 [vars]
-# Set payment endpoints as secrets/variables only when you have the real values.
+# Configure real payment endpoints only when verified.
 # PESAJET_COLLECTION_URL = ""
 # PESAJET_DISBURSEMENT_URL = ""
-
-[assets]
-directory = "public"
-binding = "ASSETS"
