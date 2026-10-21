@@ -3441,67 +3441,46 @@ async function checkUser(){
 ========================================================= */
 
 async function isCurrentUserAdmin(){
-
   if(!currentUser){
-
     currentAdmin = null;
-
     return false;
-
   }
 
+  // The Cloudflare Worker verifies the signed-in user's admin record
+  // through /api/auth/me. Use that trusted session response instead of
+  // making a second browser-side query to the protected admins table.
   try{
-
-    const {
-      data,
-      error
-    } = await sb
-      .from("admins")
-      .select(
-        "id,user_id,email,role,active"
+    if(
+      currentAdmin &&
+      currentAdmin.user_id === currentUser.id &&
+      (
+        currentAdmin.active === true ||
+        currentAdmin.active === 1 ||
+        currentAdmin.active === "1" ||
+        String(currentAdmin.active).toLowerCase() === "true"
       )
-      .eq(
-        "user_id",
-        currentUser.id
-      )
-      .eq(
-        "active",
-        true
-      )
-      .maybeSingle();
-
-    if(error){
-
-      console.error(
-        "Admin database check error:",
-        error
-      );
-
-      currentAdmin = null;
-
-      return false;
-
+    ){
+      return true;
     }
 
-    currentAdmin = data || null;
+    await authApi.getSession();
 
-    return !!data;
-
-  }catch(error){
-
-    console.error(
-      "Admin check failed:",
-      error
+    return !!(
+      currentAdmin &&
+      currentAdmin.user_id === currentUser.id &&
+      (
+        currentAdmin.active === true ||
+        currentAdmin.active === 1 ||
+        currentAdmin.active === "1" ||
+        String(currentAdmin.active).toLowerCase() === "true"
+      )
     );
-
+  }catch(error){
+    console.error("Admin session check failed:", error);
     currentAdmin = null;
-
     return false;
-
   }
-
 }
-
 
 function isCurrentUserSuperAdmin(){
 
