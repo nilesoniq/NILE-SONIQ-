@@ -3487,13 +3487,20 @@ async function isCurrentUserAdmin(){
   }
 }
 
-function isCurrentUserSuperAdmin(){
+function normalizeAdminRole(role){
+  return String(role || "").trim().toLowerCase().replace(/[\s-]+/g,"_");
+}
 
+function isAdminActiveValue(value){
+  return value === true || value === 1 || value === "1" || String(value).toLowerCase() === "true";
+}
+
+function isCurrentUserSuperAdmin(){
   return !!(
     currentAdmin &&
-    currentAdmin.role === "super_admin"
+    isAdminActiveValue(currentAdmin.active) &&
+    normalizeAdminRole(currentAdmin.role) === "super_admin"
   );
-
 }
 
 
@@ -8668,7 +8675,7 @@ async function previewAdminSong(songId){
             <p><strong>Featured artists:</strong> ${escapeHtml(song.featured_artists || "None listed")}</p>
             <p><strong>Record label:</strong> ${escapeHtml(song.label || "Not provided")}</p>
             <p><strong>Location:</strong> ${escapeHtml(song.location || "Not provided")}</p>
-            <p><strong>Terms accepted:</strong> ${song.terms_accepted === true ? "Yes" : "No"}</p>
+            <p><strong>Terms accepted:</strong> ${isAdminActiveValue(song.terms_accepted) ? "Yes" : "No"}</p>
             <p><strong>Status:</strong> ${isSongApproved(song) ? "Approved" : (String(song.review_status || "").toLowerCase() === "rejected" ? "Rejected" : "Pending review")}</p>
           </div>
         </div>
@@ -8736,7 +8743,7 @@ async function approveSong(songId){
     } = await sb
       .from("songs")
       .update({
-        approved:true,
+        approved:1,
         review_status:"approved"
       })
       .eq(
@@ -8749,6 +8756,15 @@ async function approveSong(songId){
       throw error;
     }
 
+    const {data:verifiedSong,error:verifyError}=await sb
+      .from("songs")
+      .select("id,approved,review_status")
+      .eq("id",songId)
+      .maybeSingle();
+    if(verifyError) throw verifyError;
+    if(!verifiedSong || !isSongApproved(verifiedSong) || String(verifiedSong.review_status || "").toLowerCase() !== "approved"){
+      throw new Error("The database did not confirm the approval. Check the Cloudflare Worker deployment and D1 database.");
+    }
 
     showMessage(
       "adminMessage",
@@ -8825,7 +8841,7 @@ async function rejectSong(songId){
     } = await sb
       .from("songs")
       .update({
-        approved:false,
+        approved:0,
         review_status:"rejected"
       })
       .eq(
@@ -8838,6 +8854,15 @@ async function rejectSong(songId){
       throw error;
     }
 
+    const {data:verifiedSong,error:verifyError}=await sb
+      .from("songs")
+      .select("id,approved,review_status")
+      .eq("id",songId)
+      .maybeSingle();
+    if(verifyError) throw verifyError;
+    if(!verifiedSong || isSongApproved(verifiedSong) || String(verifiedSong.review_status || "").toLowerCase() !== "rejected"){
+      throw new Error("The database did not confirm the rejection. Check the Cloudflare Worker deployment and D1 database.");
+    }
 
     showMessage(
       "adminMessage",
@@ -8942,6 +8967,7 @@ async function loadAdministrators(){
         const isMe =
           admin.user_id ===
           currentUser.id;
+        const activeNow = isAdminActiveValue(admin.active);
 
 
         return `
@@ -8977,7 +9003,7 @@ async function loadAdministrators(){
             <td>
 
               <span class="status ${
-                admin.active
+                activeNow
                 ? "active"
                 : "inactive"
               }">
@@ -9002,17 +9028,17 @@ async function loadAdministrators(){
                 : `
                   <button
                     class="btn ${
-                      admin.active
+                      activeNow
                       ? "btn-danger"
                       : "btn-success"
                     }"
                     onclick="toggleAdministrator(
                       '${escapeAttribute(admin.user_id)}',
-                      ${admin.active}
+                      ${activeNow}
                     )">
 
                     ${
-                      admin.active
+                      activeNow
                       ? "Deactivate"
                       : "Activate"
                     }
