@@ -2918,6 +2918,7 @@ function cfQuery(table, initial={}){
   Object.assign(state.params,initial);
   async function execute(single=false,allowEmpty=false){
     if(state.method==="GET") state.params.set("select",state.selection||"*");
+    if(state.upsert) state.params.set("upsert", "true");
     const url=`/api/db/${encodeURIComponent(table)}?${state.params.toString()}`;
     const res=await fetch(url,{method:state.method,credentials:"include",headers:{"Content-Type":"application/json","Accept":"application/json"},body:state.method==="GET"||state.method==="DELETE"?undefined:JSON.stringify(state.body)});
     const json=await res.json().catch(()=>({}));
@@ -4432,18 +4433,8 @@ async function uploadSong(){
 
   }
 
-  if(!songTermsAccepted){
-
-    showMessage(
-      "uploadMessage",
-      "Please read and accept the NileSoniQ Terms & Conditions before uploading.",
-      "error"
-    );
-
-    return;
-
-  }
-
+  // Submission is allowed whether or not terms are accepted.
+  // The actual checkbox value is saved for the admin review gate.
 
   const uploadButton =
     document.getElementById(
@@ -4573,9 +4564,9 @@ async function uploadSong(){
 
         location:songLocation || null,
 
-        terms_accepted:true,
+        terms_accepted:songTermsAccepted,
 
-        terms_accepted_at:new Date().toISOString(),
+        terms_accepted_at:songTermsAccepted ? new Date().toISOString() : null,
 
         plays:0,
 
@@ -7830,7 +7821,7 @@ async function updateWithdrawalStatus(
       throw new Error("Song submission was not found.");
     }
 
-    if(submittedSong.terms_accepted !== true){
+    if(submittedSong.terms_accepted !== true && submittedSong.terms_accepted !== 1 && submittedSong.terms_accepted !== "1"){
       throw new Error("This submission cannot be approved because the artist has not accepted the NileSoniQ Terms & Conditions.");
     }
 
@@ -8683,7 +8674,7 @@ async function previewAdminSong(songId){
             <p><strong>Featured artists:</strong> ${escapeHtml(song.featured_artists || "None listed")}</p>
             <p><strong>Record label:</strong> ${escapeHtml(song.label || "Not provided")}</p>
             <p><strong>Location:</strong> ${escapeHtml(song.location || "Not provided")}</p>
-            <p><strong>Terms accepted:</strong> ${song.terms_accepted === true ? "Yes" : "No"}</p>
+            <p><strong>Terms accepted:</strong> ${(song.terms_accepted === true || song.terms_accepted === 1 || song.terms_accepted === "1") ? "Yes" : "No"}</p>
             <p><strong>Status:</strong> ${song.approved === true ? "Approved" : "Pending review"}</p>
           </div>
         </div>
