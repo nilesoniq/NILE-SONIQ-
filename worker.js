@@ -1,4 +1,3 @@
-
 import bcrypt from "bcryptjs";
 
 const COOKIE_NAME = "nile_session";
@@ -8,6 +7,7 @@ const PUBLIC_READ_TABLES = new Set([
   "songs", "artists", "comments", "likes",
   "news", "news_comments", "news_reactions"
 ]);
+
 const APP_TABLES = new Set([
   "songs", "artists", "comments", "likes",
   "news", "news_comments", "news_reactions",
@@ -15,11 +15,13 @@ const APP_TABLES = new Set([
   "artist_payouts", "artist_wallets", "platform_deposits",
   "platform_payouts", "platform_wallet", "withdrawal_requests", "withdrawals"
 ]);
+
 const ADMIN_TABLES = new Set([
   "admins", "copyright_removals", "artist_payouts", "artist_wallets",
   "platform_deposits", "platform_payouts", "platform_wallet",
   "withdrawal_requests", "withdrawals"
 ]);
+
 const JSON_HEADERS = {
   "Content-Type": "application/json; charset=utf-8",
   "Cache-Control": "no-store"
@@ -31,42 +33,60 @@ function json(data, status = 200, headers = {}) {
     headers: { ...JSON_HEADERS, ...headers }
   });
 }
+
 function error(message, status = 400) {
   return json({ error: message }, status);
 }
+
 function makeCookie(token, maxAge) {
   return `${COOKIE_NAME}=${encodeURIComponent(token)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`;
 }
+
 function readCookie(request) {
   const header = request.headers.get("Cookie") || "";
   const match = header.match(/(?:^|;\s*)nile_session=([^;]*)/);
+
   if (!match) return null;
+
   try {
     return decodeURIComponent(match[1]);
   } catch {
     return null;
   }
 }
+
 function allowedOrigin(origin) {
   return origin === "https://nilesoniq.com" ||
     origin === "https://www.nilesoniq.com" ||
     /^https:\/\/[a-z0-9-]+\.nile-soniq-[a-z0-9-]+\.pages\.dev$/i.test(origin);
 }
+
 function withCors(request, response) {
   const headers = new Headers(response.headers);
   const origin = request.headers.get("Origin");
+
   if (origin && allowedOrigin(origin)) {
     headers.set("Access-Control-Allow-Origin", origin);
     headers.set("Access-Control-Allow-Credentials", "true");
     headers.set("Vary", "Origin");
   }
-  headers.set("Access-Control-Allow-Methods", "GET, POST, PATCH, PUT, DELETE, OPTIONS");
-  headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+
+  headers.set(
+    "Access-Control-Allow-Methods",
+    "GET, POST, PATCH, PUT, DELETE, OPTIONS"
+  );
+
+  headers.set(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization"
+  );
+
   return new Response(response.body, {
     status: response.status,
     headers
   });
 }
+
 async function readBody(request) {
   try {
     const body = await request.json();
@@ -75,56 +95,81 @@ async function readBody(request) {
     return {};
   }
 }
+
 function safeIdentifier(value) {
   return /^[A-Za-z_][A-Za-z0-9_]*$/.test(value || "");
 }
 
 async function currentUser(request, env) {
   const token = readCookie(request);
+
   if (!token) return null;
+
   return env.DB.prepare(`
     SELECT u.id, u.email, u.phone, u.raw_user_meta_data
-    FROM auth_sessions s JOIN auth_users u ON u.id = s.user_id
-    WHERE s.token = ? AND datetime(s.expires_at) > datetime('now')
+    FROM auth_sessions s
+    JOIN auth_users u ON u.id = s.user_id
+    WHERE s.token = ?
+      AND datetime(s.expires_at) > datetime('now')
       AND u.deleted_at IS NULL
-      AND (u.banned_until IS NULL OR datetime(u.banned_until) <= datetime('now'))
+      AND (
+        u.banned_until IS NULL
+        OR datetime(u.banned_until) <= datetime('now')
+      )
     LIMIT 1
   `).bind(token).first();
 }
 
 async function isAdmin(env, user) {
   if (!user) return false;
+
   const row = await env.DB.prepare(
     "SELECT id FROM admins WHERE user_id = ? AND active = 1 LIMIT 1"
   ).bind(user.id).first();
+
   return Boolean(row);
 }
 
 async function createSession(env, userId) {
   const token = crypto.randomUUID();
+
   await env.DB.prepare(`
-    INSERT INTO auth_sessions (token, user_id, created_at, expires_at)
+    INSERT INTO auth_sessions (
+      token, user_id, created_at, expires_at
+    )
     VALUES (?, ?, datetime('now'), datetime('now', '+30 days'))
   `).bind(token, userId).run();
+
   return token;
 }
 
 async function authRoute(request, env, path) {
   if (request.method === "GET" && path === "/api/auth/me") {
     const user = await currentUser(request, env);
-    if (!user) return json({ authenticated: false });
 
-    let artist = null, admin = null, metadata = {};
+    if (!user) {
+      return json({ authenticated: false });
+    }
+
+    let artist = null;
+    let admin = null;
+    let metadata = {};
+
     try {
       artist = await env.DB.prepare(
         "SELECT * FROM artists WHERE user_id = ? LIMIT 1"
       ).bind(user.id).first();
     } catch {}
+
     try {
-      admin = await env.DB.prepare(
-        "SELECT id, user_id, email, role, active FROM admins WHERE user_id = ? AND active = 1 LIMIT 1"
-      ).bind(user.id).first();
+      admin = await env.DB.prepare(`
+        SELECT id, user_id, email, role, active
+        FROM admins
+        WHERE user_id = ? AND active = 1
+        LIMIT 1
+      `).bind(user.id).first();
     } catch {}
+
     try {
       metadata = JSON.parse(user.raw_user_meta_data || "{}");
     } catch {}
@@ -144,11 +189,13 @@ async function authRoute(request, env, path) {
 
   if (request.method === "POST" && path === "/api/auth/logout") {
     const token = readCookie(request);
+
     if (token) {
       await env.DB.prepare(
         "DELETE FROM auth_sessions WHERE token = ?"
       ).bind(token).run();
     }
+
     return json(
       { success: true },
       200,
@@ -166,13 +213,19 @@ async function authRoute(request, env, path) {
 
   if (path === "/api/auth/register") {
     const phone = String(body.phone || "").trim();
-    const artistName = String(body.artist_name || body.name || "").trim();
+    const artistName = String(
+      body.artist_name || body.name || ""
+    ).trim();
 
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return error("Please enter a valid email address.", 422);
     }
+
     if (password.length < 6 || password.length > 128) {
-      return error("Password must be between 6 and 128 characters.", 422);
+      return error(
+        "Password must be between 6 and 128 characters.",
+        422
+      );
     }
 
     try {
@@ -181,11 +234,15 @@ async function authRoute(request, env, path) {
       ).bind(email).first();
 
       if (existing) {
-        return error("An account with that email already exists.", 409);
+        return error(
+          "An account with that email already exists.",
+          409
+        );
       }
 
       const id = crypto.randomUUID();
       const passwordHash = await bcrypt.hash(password, 10);
+
       const metadata = JSON.stringify({
         artist_name: artistName || email.split("@")[0]
       });
@@ -196,7 +253,13 @@ async function authRoute(request, env, path) {
           created_at, updated_at, is_anonymous, is_sso_user
         )
         VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'), 0, 0)
-      `).bind(id, email, passwordHash, phone || null, metadata).run();
+      `).bind(
+        id,
+        email,
+        passwordHash,
+        phone || null,
+        metadata
+      ).run();
 
       try {
         await env.DB.prepare(
@@ -211,6 +274,7 @@ async function authRoute(request, env, path) {
       }
 
       const token = await createSession(env, id);
+
       return json({
         success: true,
         user: {
@@ -245,18 +309,29 @@ async function authRoute(request, env, path) {
         !user ||
         !user.encrypted_password ||
         user.deleted_at ||
-        (user.banned_until &&
-          new Date(user.banned_until).getTime() > Date.now())
+        (
+          user.banned_until &&
+          new Date(user.banned_until).getTime() > Date.now()
+        )
       ) {
         return error("Invalid email or password.", 401);
       }
 
       if (!/^\$2[aby]\$\d\d\$/.test(user.encrypted_password)) {
-        return error("This account's password format is not supported.", 401);
+        return error(
+          "This account's password format is not supported.",
+          401
+        );
       }
 
-      const valid = await bcrypt.compare(password, user.encrypted_password);
-      if (!valid) return error("Invalid email or password.", 401);
+      const valid = await bcrypt.compare(
+        password,
+        user.encrypted_password
+      );
+
+      if (!valid) {
+        return error("Invalid email or password.", 401);
+      }
 
       await env.DB.prepare(
         "UPDATE auth_users SET last_sign_in_at = datetime('now') WHERE id = ?"
@@ -264,6 +339,7 @@ async function authRoute(request, env, path) {
 
       const token = await createSession(env, user.id);
       let metadata = {};
+
       try {
         metadata = JSON.parse(user.raw_user_meta_data || "{}");
       } catch {}
@@ -288,26 +364,86 @@ async function authRoute(request, env, path) {
   return error("Not found", 404);
 }
 
+/*
+ * Supports Supabase-style filters such as:
+ * user_id=eq.UUID and active=eq.true
+ *
+ * Also supports the older adapter format:
+ * eq.user_id=UUID
+ */
 function parseFilters(url) {
-  const filters = [], values = [];
+  const filters = [];
+  const values = [];
+
   const operators = {
-    eq: "=", neq: "!=", gt: ">", gte: ">=", lt: "<", lte: "<="
+    eq: "=",
+    neq: "!=",
+    gt: ">",
+    gte: ">=",
+    lt: "<",
+    lte: "<="
   };
 
-  for (const [key, value] of url.searchParams.entries()) {
+  for (const [key, rawValue] of url.searchParams.entries()) {
+    if ([
+      "select",
+      "order",
+      "limit",
+      "offset",
+      "on_conflict",
+      "upsert"
+    ].includes(key)) {
+      continue;
+    }
+
+    // Supabase format: column=operator.value
+    const valueMatch = String(rawValue).match(
+      /^(eq|neq|gt|gte|lt|lte)\.(.*)$/s
+    );
+
+    if (valueMatch && safeIdentifier(key)) {
+      const op = valueMatch[1];
+      const value = valueMatch[2];
+
+      if (!operators[op]) continue;
+
+      filters.push(`${key} ${operators[op]} ?`);
+
+      values.push(
+        key === "active" && (value === "true" || value === "false")
+          ? (value === "true" ? 1 : 0)
+          : value
+      );
+
+      continue;
+    }
+
+    // Legacy format: operator.column=value
     const dot = key.indexOf(".");
-    if (dot < 1) continue;
 
-    const op = key.slice(0, dot);
-    const column = key.slice(dot + 1);
-    if (!operators[op] || !safeIdentifier(column)) continue;
+    if (dot > 0) {
+      const op = key.slice(0, dot);
+      const column = key.slice(dot + 1);
 
-    filters.push(`${column} ${operators[op]} ?`);
-    values.push(value);
+      if (!operators[op] || !safeIdentifier(column)) {
+        continue;
+      }
+
+      filters.push(`${column} ${operators[op]} ?`);
+
+      values.push(
+        column === "active" &&
+        (rawValue === "true" || rawValue === "false")
+          ? (rawValue === "true" ? 1 : 0)
+          : rawValue
+      );
+    }
   }
 
   return {
-    sql: filters.length ? ` WHERE ${filters.join(" AND ")}` : "",
+    sql: filters.length
+      ? ` WHERE ${filters.join(" AND ")}`
+      : "",
     values,
     count: filters.length
   };
@@ -315,6 +451,7 @@ function parseFilters(url) {
 
 async function dbRoute(request, env, path) {
   const table = path.split("/")[3];
+
   if (!safeIdentifier(table) || !APP_TABLES.has(table)) {
     return error("Table not available", 404);
   }
@@ -324,7 +461,18 @@ async function dbRoute(request, env, path) {
   const user = await currentUser(request, env);
   const admin = user ? await isAdmin(env, user) : false;
 
-  if (ADMIN_TABLES.has(table) && !admin) {
+  /*
+   * Allow an authenticated user to query only their own admin record.
+   * This lets the website check administrator status without exposing
+   * the full administrators table to ordinary users.
+   */
+  const ownAdminLookup =
+    method === "GET" &&
+    table === "admins" &&
+    Boolean(user) &&
+    url.searchParams.get("user_id") === `eq.${user.id}`;
+
+  if (ADMIN_TABLES.has(table) && !admin && !ownAdminLookup) {
     return error("Admin access required", user ? 403 : 401);
   }
 
@@ -343,32 +491,46 @@ async function dbRoute(request, env, path) {
     }
 
     const { sql: where, values } = parseFilters(url);
+
     let query = `SELECT ${columns.join(",")} FROM ${table}${where}`;
     const order = url.searchParams.get("order");
 
     if (order) {
       const [column, direction] = order.split(".");
+
       if (safeIdentifier(column)) {
-        query += ` ORDER BY ${column} ${direction === "desc" ? "DESC" : "ASC"}`;
+        query += ` ORDER BY ${column} ${
+          direction === "desc" ? "DESC" : "ASC"
+        }`;
       }
     }
 
     const limit = Number(url.searchParams.get("limit") || 100);
+
     query += ` LIMIT ${Math.min(Math.max(limit || 100, 1), 500)}`;
 
     try {
       const result = await env.DB.prepare(query).bind(...values).all();
-      return json({ data: result.results || [], error: null });
+
+      return json({
+        data: result.results || [],
+        error: null
+      });
     } catch (e) {
       console.error("Database read failed:", e.message);
       return error("Database request failed", 500);
     }
   }
 
-  if (!user) return error("Authentication required", 401);
+  if (!user) {
+    return error("Authentication required", 401);
+  }
 
   const interactionTables = new Set([
-    "likes", "comments", "news_comments", "news_reactions"
+    "likes",
+    "comments",
+    "news_comments",
+    "news_reactions"
   ]);
 
   if (
@@ -382,7 +544,10 @@ async function dbRoute(request, env, path) {
 
   const { sql: where, values, count } = parseFilters(url);
 
-  if (["PATCH", "PUT", "DELETE"].includes(method) && count === 0) {
+  if (
+    ["PATCH", "PUT", "DELETE"].includes(method) &&
+    count === 0
+  ) {
     return error("A filter is required for this operation", 422);
   }
 
@@ -399,24 +564,37 @@ async function dbRoute(request, env, path) {
       const wantsUpsert = url.searchParams.get("upsert") === "true";
 
       for (const input of rows) {
-        const row = input && typeof input === "object" &&
-          !Array.isArray(input) ? input : null;
+        const row = input &&
+          typeof input === "object" &&
+          !Array.isArray(input)
+          ? input
+          : null;
 
-        if (!row) return error("Invalid row supplied", 422);
+        if (!row) {
+          return error("Invalid row supplied", 422);
+        }
 
         const keys = Object.keys(row);
+
         if (!keys.length || keys.some(k => !safeIdentifier(k))) {
           return error("Invalid fields supplied", 422);
         }
 
-        // FIX: Admins must use this profile update path too.
+        // Artist profile updates stay restricted to the signed-in user.
         if (table === "artists") {
           if (row.user_id !== user.id) {
-            return error("You may only edit your own artist profile", 403);
+            return error(
+              "You may only edit your own artist profile",
+              403
+            );
           }
 
           const allowed = new Set([
-            "user_id", "name", "bio", "location", "avatar_url"
+            "user_id",
+            "name",
+            "bio",
+            "location",
+            "avatar_url"
           ]);
 
           if (keys.some(k => !allowed.has(k))) {
@@ -432,7 +610,9 @@ async function dbRoute(request, env, path) {
 
             if (updateKeys.length) {
               await env.DB.prepare(
-                `UPDATE artists SET ${updateKeys.map(k => `${k} = ?`).join(", ")} WHERE user_id = ?`
+                `UPDATE artists SET ${
+                  updateKeys.map(k => `${k} = ?`).join(", ")
+                } WHERE user_id = ?`
               ).bind(
                 ...updateKeys.map(k => row[k] ?? null),
                 user.id
@@ -444,10 +624,13 @@ async function dbRoute(request, env, path) {
               ...row,
               user_id: user.id
             };
+
             const insertKeys = Object.keys(insertRow);
 
             await env.DB.prepare(
-              `INSERT INTO artists (${insertKeys.join(",")}) VALUES (${insertKeys.map(() => "?").join(",")})`
+              `INSERT INTO artists (${insertKeys.join(",")}) VALUES (${
+                insertKeys.map(() => "?").join(",")
+              })`
             ).bind(
               ...insertKeys.map(k => insertRow[k] ?? null)
             ).run();
@@ -462,14 +645,30 @@ async function dbRoute(request, env, path) {
 
         if (!admin && table === "songs") {
           if (row.artist_id !== user.id) {
-            return error("You may only submit songs for your own account", 403);
+            return error(
+              "You may only submit songs for your own account",
+              403
+            );
           }
 
           const allowed = new Set([
-            "title", "artist", "artist_id", "file_url", "audio_url",
-            "cover_url", "description", "genre", "release_date",
-            "producer", "featured_artists", "label", "location",
-            "terms_accepted", "terms_accepted_at", "plays", "likes",
+            "title",
+            "artist",
+            "artist_id",
+            "file_url",
+            "audio_url",
+            "cover_url",
+            "description",
+            "genre",
+            "release_date",
+            "producer",
+            "featured_artists",
+            "label",
+            "location",
+            "terms_accepted",
+            "terms_accepted_at",
+            "plays",
+            "likes",
             "approved"
           ]);
 
@@ -477,7 +676,8 @@ async function dbRoute(request, env, path) {
             return error("Invalid song fields", 422);
           }
 
-          const accepted = row.terms_accepted === true ||
+          const accepted =
+            row.terms_accepted === true ||
             row.terms_accepted === 1 ||
             row.terms_accepted === "true";
 
@@ -498,7 +698,9 @@ async function dbRoute(request, env, path) {
           const insertKeys = Object.keys(safeRow);
 
           await env.DB.prepare(
-            `INSERT INTO songs (${insertKeys.join(",")}) VALUES (${insertKeys.map(() => "?").join(",")})`
+            `INSERT INTO songs (${insertKeys.join(",")}) VALUES (${
+              insertKeys.map(() => "?").join(",")
+            })`
           ).bind(
             ...insertKeys.map(k => safeRow[k] ?? null)
           ).run();
@@ -518,7 +720,10 @@ async function dbRoute(request, env, path) {
           return error("Upsert is not supported for this table", 422);
         }
 
-        const sql = `INSERT INTO ${table} (${keys.join(",")}) VALUES (${keys.map(() => "?").join(",")})`;
+        const sql = `INSERT INTO ${table} (${keys.join(",")}) VALUES (${
+          keys.map(() => "?").join(",")
+        })`;
+
         await env.DB.prepare(sql).bind(
           ...keys.map(k => row[k] ?? null)
         ).run();
@@ -547,13 +752,19 @@ async function dbRoute(request, env, path) {
         return error("Invalid fields supplied", 422);
       }
 
-      const sql = `UPDATE ${table} SET ${keys.map(k => `${k} = ?`).join(", ")}${where}`;
+      const sql = `UPDATE ${table} SET ${
+        keys.map(k => `${k} = ?`).join(", ")
+      }${where}`;
+
       await env.DB.prepare(sql).bind(
         ...keys.map(k => body[k] ?? null),
         ...values
       ).run();
 
-      return json({ data: body, error: null });
+      return json({
+        data: body,
+        error: null
+      });
     }
 
     if (method === "DELETE") {
@@ -568,7 +779,10 @@ async function dbRoute(request, env, path) {
         `DELETE FROM ${table}${where}`
       ).bind(...values).run();
 
-      return json({ data: null, error: null });
+      return json({
+        data: null,
+        error: null
+      });
     }
 
     return error("Method not allowed", 405);
@@ -593,18 +807,27 @@ async function rpcRoute(request, env, name) {
         "SELECT COALESCE(SUM(amount), 0) AS total FROM withdrawal_requests WHERE status = 'completed'"
       ).first();
 
-      return json({ data: result?.total || 0, error: null });
+      return json({
+        data: result?.total || 0,
+        error: null
+      });
     }
 
     if (name === "record_song_play") {
       const id = body.song_id;
-      if (!id) return error("song_id is required", 422);
+
+      if (!id) {
+        return error("song_id is required", 422);
+      }
 
       await env.DB.prepare(
         "UPDATE songs SET plays = COALESCE(plays, 0) + 1 WHERE id = ?"
       ).bind(id).run();
 
-      return json({ data: true, error: null });
+      return json({
+        data: true,
+        error: null
+      });
     }
 
     if (name === "add_admin_by_email") {
@@ -612,7 +835,10 @@ async function rpcRoute(request, env, name) {
         return error("Admin access required", user ? 403 : 401);
       }
 
-      const target = String(body.target_email || "").trim().toLowerCase();
+      const target = String(
+        body.target_email || ""
+      ).trim().toLowerCase();
+
       const role = String(body.target_role || "admin");
 
       if (!target || !["admin", "super_admin"].includes(role)) {
@@ -623,18 +849,26 @@ async function rpcRoute(request, env, name) {
         "SELECT id, email FROM auth_users WHERE lower(email) = ? LIMIT 1"
       ).bind(target).first();
 
-      if (!targetUser) return error("User not found", 404);
+      if (!targetUser) {
+        return error("User not found", 404);
+      }
 
-      await env.DB.prepare(
-        "INSERT INTO admins (id, user_id, email, role, active, created_at) VALUES (?, ?, ?, ?, 1, datetime('now'))"
-      ).bind(
+      await env.DB.prepare(`
+        INSERT INTO admins (
+          id, user_id, email, role, active, created_at
+        )
+        VALUES (?, ?, ?, ?, 1, datetime('now'))
+      `).bind(
         crypto.randomUUID(),
         targetUser.id,
         targetUser.email,
         role
       ).run();
 
-      return json({ data: true, error: null });
+      return json({
+        data: true,
+        error: null
+      });
     }
 
     if (
@@ -644,6 +878,7 @@ async function rpcRoute(request, env, name) {
       if (!admin) {
         return error("Admin access required", user ? 403 : 401);
       }
+
       return error(
         "This RPC needs its original implementation restored before use.",
         501
@@ -673,7 +908,9 @@ async function storageRoute(request, env, path) {
   if (
     !bucket ||
     !objectPath ||
-    objectPath.split("/").some(part => part === ".." || part === ".")
+    objectPath.split("/").some(
+      part => part === ".." || part === "."
+    )
   ) {
     return error("Storage path missing or invalid", 400);
   }
@@ -683,8 +920,13 @@ async function storageRoute(request, env, path) {
   }
 
   if (request.method === "GET") {
-    const object = await env.MEDIA_BUCKET.get(`${bucket}/${objectPath}`);
-    if (!object) return error("File not found", 404);
+    const object = await env.MEDIA_BUCKET.get(
+      `${bucket}/${objectPath}`
+    );
+
+    if (!object) {
+      return error("File not found", 404);
+    }
 
     return new Response(object.body, {
       headers: {
@@ -697,29 +939,45 @@ async function storageRoute(request, env, path) {
 
   if (request.method === "POST" || request.method === "PUT") {
     const user = await currentUser(request, env);
-    if (!user) return error("Authentication required", 401);
+
+    if (!user) {
+      return error("Authentication required", 401);
+    }
 
     const admin = await isAdmin(env, user);
 
     if (bucket === "news" && !admin) {
       return error("Admin access required", 403);
     }
+
     if (!admin && !["audio", "covers", "avatars"].includes(bucket)) {
       return error("Upload not allowed", 403);
     }
+
     if (!admin && !objectPath.startsWith(`${user.id}/`)) {
-      return error("You may only upload files to your own folder", 403);
+      return error(
+        "You may only upload files to your own folder",
+        403
+      );
     }
 
     const bytes = await request.arrayBuffer();
-    await env.MEDIA_BUCKET.put(`${bucket}/${objectPath}`, bytes, {
-      httpMetadata: {
-        contentType: request.headers.get("Content-Type") ||
-          "application/octet-stream"
-      }
-    });
 
-    return json({ data: { path: objectPath }, error: null });
+    await env.MEDIA_BUCKET.put(
+      `${bucket}/${objectPath}`,
+      bytes,
+      {
+        httpMetadata: {
+          contentType: request.headers.get("Content-Type") ||
+            "application/octet-stream"
+        }
+      }
+    );
+
+    return json({
+      data: { path: objectPath },
+      error: null
+    });
   }
 
   return error("Method not allowed", 405);
@@ -727,16 +985,24 @@ async function storageRoute(request, env, path) {
 
 async function paymentRoute(request, env, type) {
   const user = await currentUser(request, env);
-  if (!user) return error("Authentication required", 401);
 
-  if (type === "disbursement" && !(await isAdmin(env, user))) {
+  if (!user) {
+    return error("Authentication required", 401);
+  }
+
+  if (
+    type === "disbursement" &&
+    !(await isAdmin(env, user))
+  ) {
     return error("Admin access required", 403);
   }
 
   const body = await readBody(request);
+
   const endpoint = type === "collection"
     ? env.PESAJET_COLLECTION_URL
     : env.PESAJET_DISBURSEMENT_URL;
+
   const token = env.PESAJET_TOKEN;
 
   if (!endpoint || !token) {
@@ -754,6 +1020,7 @@ async function paymentRoute(request, env, type) {
     });
 
     const result = await response.json().catch(() => ({}));
+
     return json(result, response.status);
   } catch (e) {
     console.error("Payment request failed:", e.message);
@@ -767,41 +1034,73 @@ export default {
 
     try {
       if (request.method === "OPTIONS") {
-        return withCors(request, new Response(null, { status: 204 }));
+        return withCors(
+          request,
+          new Response(null, { status: 204 })
+        );
       }
 
       let response;
 
       if (url.pathname.startsWith("/api/auth/")) {
-        response = await authRoute(request, env, url.pathname);
+        response = await authRoute(
+          request,
+          env,
+          url.pathname
+        );
       } else if (url.pathname.startsWith("/api/db/")) {
-        response = await dbRoute(request, env, url.pathname);
+        response = await dbRoute(
+          request,
+          env,
+          url.pathname
+        );
       } else if (url.pathname.startsWith("/api/rpc/")) {
         response = await rpcRoute(
           request,
           env,
           url.pathname.split("/")[3]
         );
-      } else if (url.pathname === "/api/payments/pesajet-collection") {
-        response = await paymentRoute(request, env, "collection");
-      } else if (url.pathname === "/api/payments/pesajet-disbursement") {
-        response = await paymentRoute(request, env, "disbursement");
-      } else if (url.pathname.startsWith("/api/storage/public/")) {
+      } else if (
+        url.pathname === "/api/payments/pesajet-collection"
+      ) {
+        response = await paymentRoute(
+          request,
+          env,
+          "collection"
+        );
+      } else if (
+        url.pathname === "/api/payments/pesajet-disbursement"
+      ) {
+        response = await paymentRoute(
+          request,
+          env,
+          "disbursement"
+        );
+      } else if (
+        url.pathname.startsWith("/api/storage/public/")
+      ) {
         response = await storageRoute(
           request,
           env,
-          url.pathname.replace("/api/storage/public", "/api/storage")
+          url.pathname.replace(
+            "/api/storage/public",
+            "/api/storage"
+          )
         );
       } else if (url.pathname === "/api/storage/upload") {
         const bucket = url.searchParams.get("bucket") || "audio";
         const objectPath = url.searchParams.get("path") || "file";
+
         response = await storageRoute(
           request,
           env,
           `/api/storage/${bucket}/${objectPath}`
         );
       } else if (url.pathname === "/api/health") {
-        response = json({ ok: true, service: "nilesoniq" });
+        response = json({
+          ok: true,
+          service: "nilesoniq"
+        });
       } else if (env.ASSETS) {
         response = await env.ASSETS.fetch(request);
       } else {
@@ -811,7 +1110,11 @@ export default {
       return withCors(request, response);
     } catch (e) {
       console.error("Worker error:", e.message);
-      return withCors(request, error("Internal server error", 500));
+
+      return withCors(
+        request,
+        error("Internal server error", 500)
+      );
     }
   }
 };
