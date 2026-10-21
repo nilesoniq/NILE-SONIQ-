@@ -2903,7 +2903,7 @@ const AUTH_REDIRECT_URL = `${window.location.origin}/`;
 
 function cfQuery(table, initial={}){
   const state={table,params:new URLSearchParams(),filters:[],method:"GET",body:null,selection:"*",singleMode:null};
-  function addFilter(op,col,val){state.params.set(`${op}.${col}`,String(val)); return api;}
+  function addFilter(op,col,val){const normalized=typeof val==="boolean"?(val?"1":"0"):val;state.params.set(`${op}.${col}`,String(normalized)); return api;}
   const api={
     select(columns="*", options){ state.selection=columns; if(state.method!=="GET") state.params.set("select",columns); else state.params.set("select",columns); return api; },
     eq:(c,v)=>addFilter("eq",c,v), neq:(c,v)=>addFilter("neq",c,v), gt:(c,v)=>addFilter("gt",c,v), gte:(c,v)=>addFilter("gte",c,v), lt:(c,v)=>addFilter("lt",c,v), lte:(c,v)=>addFilter("lte",c,v),
@@ -4001,6 +4001,12 @@ async function submitAuth(){
     if(currentAuthMode === "login"){
       const {error} = await authApi.signInWithPassword({email,password});
       if(error) throw error;
+
+      if(currentAuthContext === "admin" && !currentAdmin){
+        // Some Worker deployments return the signed-in user before including
+        // the admin record. Re-check through the authenticated D1 adapter.
+        await isCurrentUserAdmin();
+      }
 
       if(currentAuthContext === "admin" && !currentAdmin){
         await authApi.signOut();
