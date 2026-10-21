@@ -13,12 +13,14 @@ const APP_TABLES = new Set([
   "news", "news_comments", "news_reactions",
   "copyright_removals", "song_play_log",
   "artist_payouts", "artist_wallets", "platform_deposits",
-  "platform_payouts", "platform_wallet", "withdrawal_requests", "withdrawals"
+  "platform_payouts", "platform_wallet",
+  "withdrawal_requests", "withdrawals"
 ]);
 
 const ADMIN_TABLES = new Set([
-  "admins", "copyright_removals", "artist_payouts", "artist_wallets",
-  "platform_deposits", "platform_payouts", "platform_wallet",
+  "admins", "copyright_removals", "artist_payouts",
+  "artist_wallets", "platform_deposits",
+  "platform_payouts", "platform_wallet",
   "withdrawal_requests", "withdrawals"
 ]);
 
@@ -120,12 +122,24 @@ async function currentUser(request, env) {
   `).bind(token).first();
 }
 
+/*
+ * Check the administrator record directly in D1.
+ * Accept integer 1 and text "true" for the active field.
+ * This does not grant administrator access based on email alone.
+ */
 async function isAdmin(env, user) {
-  if (!user) return false;
+  if (!user || !user.id) return false;
 
-  const row = await env.DB.prepare(
-    "SELECT id FROM admins WHERE user_id = ? AND active = 1 LIMIT 1"
-  ).bind(user.id).first();
+  const row = await env.DB.prepare(`
+    SELECT id, user_id, email, role, active
+    FROM admins
+    WHERE user_id = ?
+      AND (
+        active = 1
+        OR LOWER(CAST(active AS TEXT)) = 'true'
+      )
+    LIMIT 1
+  `).bind(user.id).first();
 
   return Boolean(row);
 }
@@ -159,16 +173,24 @@ async function authRoute(request, env, path) {
       artist = await env.DB.prepare(
         "SELECT * FROM artists WHERE user_id = ? LIMIT 1"
       ).bind(user.id).first();
-    } catch {}
+    } catch (e) {
+      console.error("Artist lookup failed:", e.message);
+    }
 
     try {
       admin = await env.DB.prepare(`
         SELECT id, user_id, email, role, active
         FROM admins
-        WHERE user_id = ? AND active = 1
+        WHERE user_id = ?
+          AND (
+            active = 1
+            OR LOWER(CAST(active AS TEXT)) = 'true'
+          )
         LIMIT 1
       `).bind(user.id).first();
-    } catch {}
+    } catch (e) {
+      console.error("Admin lookup failed:", e.message);
+    }
 
     try {
       metadata = JSON.parse(user.raw_user_meta_data || "{}");
@@ -230,7 +252,7 @@ async function authRoute(request, env, path) {
 
     try {
       const existing = await env.DB.prepare(
-        "SELECT id FROM auth_users WHERE lower(email) = ? LIMIT 1"
+        "SELECT id FROM auth_users WHERE LOWER(email) = ? LIMIT 1"
       ).bind(email).first();
 
       if (existing) {
@@ -301,7 +323,7 @@ async function authRoute(request, env, path) {
         SELECT id, email, encrypted_password, phone,
                raw_user_meta_data, deleted_at, banned_until
         FROM auth_users
-        WHERE lower(email) = ?
+        WHERE LOWER(email) = ?
         LIMIT 1
       `).bind(email).first();
 
@@ -365,11 +387,11 @@ async function authRoute(request, env, path) {
 }
 
 /*
- * Supports Supabase-style filters such as:
- * user_id=eq.UUID and active=eq.true
+ * Supports both query formats:
+ *   user_id=eq.UUID
+ *   eq.user_id=UUID
  *
- * Also supports the older adapter format:
- * eq.user_id=UUID
+ * Also converts active=true/false to SQLite integer values.
  */
 function parseFilters(url) {
   const filters = [];
@@ -386,39 +408,34 @@ function parseFilters(url) {
 
   for (const [key, rawValue] of url.searchParams.entries()) {
     if ([
-      "select",
-      "order",
-      "limit",
-      "offset",
-      "on_conflict",
-      "upsert"
+      "select", "order", "limit", "offset",
+      "on_conflict", "upsert"
     ].includes(key)) {
       continue;
     }
 
-    // Supabase format: column=operator.value
-    const valueMatch = String(rawValue).match(
+    // Standard Supabase query style: column=eq.value
+    const match = String(rawValue).match(
       /^(eq|neq|gt|gte|lt|lte)\.(.*)$/s
     );
 
-    if (valueMatch && safeIdentifier(key)) {
-      const op = valueMatch[1];
-      const value = valueMatch[2];
+    if (match && safeIdentifier(key)) {
+      const op = match[1];
+      let value = match[2];
 
       if (!operators[op]) continue;
 
+      if (key === "active") {
+        if (value === "true") value = 1;
+        if (value === "false") value = 0;
+      }
+
       filters.push(`${key} ${operators[op]} ?`);
-
-      values.push(
-        key === "active" && (value === "true" || value === "false")
-          ? (value === "true" ? 1 : 0)
-          : value
-      );
-
+      values.push(value);
       continue;
     }
 
-    // Legacy format: operator.column=value
+    // Legacy query style: eq.column=value
     const dot = key.indexOf(".");
 
     if (dot > 0) {
@@ -429,14 +446,15 @@ function parseFilters(url) {
         continue;
       }
 
-      filters.push(`${column} ${operators[op]} ?`);
+      let value = rawValue;
 
-      values.push(
-        column === "active" &&
-        (rawValue === "true" || rawValue === "false")
-          ? (rawValue === "true" ? 1 : 0)
-          : rawValue
-      );
+      if (column === "active") {
+        if (value === "true") value = 1;
+        if (value === "false") value = 0;
+      }
+
+      filters.push(`${column} ${operators[op]} ?`);
+      values.push(value);
     }
   }
 
@@ -462,15 +480,18 @@ async function dbRoute(request, env, path) {
   const admin = user ? await isAdmin(env, user) : false;
 
   /*
-   * Allow an authenticated user to query only their own admin record.
-   * This lets the website check administrator status without exposing
-   * the full administrators table to ordinary users.
+   * An authenticated user may look up only their own admin record.
+   * The query must explicitly filter by that user's own ID.
+   * Ordinary users cannot read the full admins table.
    */
   const ownAdminLookup =
     method === "GET" &&
     table === "admins" &&
     Boolean(user) &&
-    url.searchParams.get("user_id") === `eq.${user.id}`;
+    (
+      url.searchParams.get("user_id") === `eq.${user.id}` ||
+      url.searchParams.get("eq.user_id") === user.id
+    );
 
   if (ADMIN_TABLES.has(table) && !admin && !ownAdminLookup) {
     return error("Admin access required", user ? 403 : 401);
@@ -506,7 +527,6 @@ async function dbRoute(request, env, path) {
     }
 
     const limit = Number(url.searchParams.get("limit") || 100);
-
     query += ` LIMIT ${Math.min(Math.max(limit || 100, 1), 500)}`;
 
     try {
@@ -527,10 +547,7 @@ async function dbRoute(request, env, path) {
   }
 
   const interactionTables = new Set([
-    "likes",
-    "comments",
-    "news_comments",
-    "news_reactions"
+    "likes", "comments", "news_comments", "news_reactions"
   ]);
 
   if (
@@ -580,7 +597,6 @@ async function dbRoute(request, env, path) {
           return error("Invalid fields supplied", 422);
         }
 
-        // Artist profile updates stay restricted to the signed-in user.
         if (table === "artists") {
           if (row.user_id !== user.id) {
             return error(
@@ -590,11 +606,7 @@ async function dbRoute(request, env, path) {
           }
 
           const allowed = new Set([
-            "user_id",
-            "name",
-            "bio",
-            "location",
-            "avatar_url"
+            "user_id", "name", "bio", "location", "avatar_url"
           ]);
 
           if (keys.some(k => !allowed.has(k))) {
@@ -652,23 +664,10 @@ async function dbRoute(request, env, path) {
           }
 
           const allowed = new Set([
-            "title",
-            "artist",
-            "artist_id",
-            "file_url",
-            "audio_url",
-            "cover_url",
-            "description",
-            "genre",
-            "release_date",
-            "producer",
-            "featured_artists",
-            "label",
-            "location",
-            "terms_accepted",
-            "terms_accepted_at",
-            "plays",
-            "likes",
+            "title", "artist", "artist_id", "file_url", "audio_url",
+            "cover_url", "description", "genre", "release_date",
+            "producer", "featured_artists", "label", "location",
+            "terms_accepted", "terms_accepted_at", "plays", "likes",
             "approved"
           ]);
 
@@ -761,10 +760,7 @@ async function dbRoute(request, env, path) {
         ...values
       ).run();
 
-      return json({
-        data: body,
-        error: null
-      });
+      return json({ data: body, error: null });
     }
 
     if (method === "DELETE") {
@@ -779,10 +775,7 @@ async function dbRoute(request, env, path) {
         `DELETE FROM ${table}${where}`
       ).bind(...values).run();
 
-      return json({
-        data: null,
-        error: null
-      });
+      return json({ data: null, error: null });
     }
 
     return error("Method not allowed", 405);
@@ -824,10 +817,7 @@ async function rpcRoute(request, env, name) {
         "UPDATE songs SET plays = COALESCE(plays, 0) + 1 WHERE id = ?"
       ).bind(id).run();
 
-      return json({
-        data: true,
-        error: null
-      });
+      return json({ data: true, error: null });
     }
 
     if (name === "add_admin_by_email") {
@@ -846,7 +836,7 @@ async function rpcRoute(request, env, name) {
       }
 
       const targetUser = await env.DB.prepare(
-        "SELECT id, email FROM auth_users WHERE lower(email) = ? LIMIT 1"
+        "SELECT id, email FROM auth_users WHERE LOWER(email) = ? LIMIT 1"
       ).bind(target).first();
 
       if (!targetUser) {
@@ -865,10 +855,7 @@ async function rpcRoute(request, env, name) {
         role
       ).run();
 
-      return json({
-        data: true,
-        error: null
-      });
+      return json({ data: true, error: null });
     }
 
     if (
@@ -990,10 +977,7 @@ async function paymentRoute(request, env, type) {
     return error("Authentication required", 401);
   }
 
-  if (
-    type === "disbursement" &&
-    !(await isAdmin(env, user))
-  ) {
+  if (type === "disbursement" && !(await isAdmin(env, user))) {
     return error("Admin access required", 403);
   }
 
