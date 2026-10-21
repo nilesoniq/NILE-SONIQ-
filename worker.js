@@ -254,8 +254,12 @@ async function rpcRoute(request, env, name) {
   } catch (e) { console.error("RPC failed:", e.message); return error("RPC request failed", 500); }
 }
 async function storageRoute(request, env, path) {
-  const parts = path.split("/"), bucket = parts[3], objectPath = parts.slice(4).join("/");
-  if (!bucket || !objectPath) return error("Storage path missing", 400);
+  const parts = path.split("/");
+  const bucket = parts[3];
+  let objectPath = parts.slice(4).join("/");
+  try { objectPath = objectPath.split("/").map(part => decodeURIComponent(part)).join("/"); }
+  catch { return error("Invalid storage path", 400); }
+  if (!bucket || !objectPath || objectPath.split("/").some(part => part === ".." || part === ".")) return error("Storage path missing or invalid", 400);
   if (!["audio", "covers", "avatars", "news"].includes(bucket)) return error("Bucket not allowed", 403);
   if (request.method === "GET") {
     const object = await env.MEDIA_BUCKET.get(`${bucket}/${objectPath}`);
