@@ -1204,6 +1204,53 @@ footer{
   color:var(--muted);
 }
 
+/* SONG PLACEHOLDERS: keep the music sections visibly populated while data loads */
+.song-skeleton{
+  width:100%;
+  min-height:82px;
+  display:flex;
+  align-items:center;
+  gap:14px;
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:14px;
+  padding:10px;
+  overflow:hidden;
+}
+.song-skeleton-cover,
+.song-skeleton-line{
+  background:linear-gradient(90deg,#202020 25%,#303030 50%,#202020 75%);
+  background-size:200% 100%;
+  animation:songSkeletonPulse 1.35s ease-in-out infinite;
+  border-radius:8px;
+}
+.song-skeleton-cover{
+  width:62px;
+  height:62px;
+  min-width:62px;
+}
+.song-skeleton-details{
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+.song-skeleton-line{
+  height:12px;
+  width:65%;
+}
+.song-skeleton-line.short{
+  width:38%;
+  height:10px;
+}
+@keyframes songSkeletonPulse{
+  0%{background-position:100% 0}
+  100%{background-position:-100% 0}
+}
+@media(prefers-reduced-motion:reduce){
+  .song-skeleton-cover,.song-skeleton-line{animation:none}
+}
+
 /* TABLET */
 
 @media(max-width:950px){
@@ -1718,11 +1765,10 @@ The latest approved music on NileSoniq.
 
 <div id="newReleasesContainer"
 class="song-grid">
-
-<div class="loading">
-Loading new releases...
-</div>
-
+<div class="song-skeleton" aria-hidden="true"><div class="song-skeleton-cover"></div><div class="song-skeleton-details"><div class="song-skeleton-line"></div><div class="song-skeleton-line short"></div></div></div>
+<div class="song-skeleton" aria-hidden="true"><div class="song-skeleton-cover"></div><div class="song-skeleton-details"><div class="song-skeleton-line"></div><div class="song-skeleton-line short"></div></div></div>
+<div class="song-skeleton" aria-hidden="true"><div class="song-skeleton-cover"></div><div class="song-skeleton-details"><div class="song-skeleton-line"></div><div class="song-skeleton-line short"></div></div></div>
+<div class="song-skeleton" aria-hidden="true"><div class="song-skeleton-cover"></div><div class="song-skeleton-details"><div class="song-skeleton-line"></div><div class="song-skeleton-line short"></div></div></div>
 </div>
 
 </section>
@@ -1745,11 +1791,10 @@ The most-played songs on NileSoniq.
 
 <div id="topChartsContainer"
 class="song-grid">
-
-<div class="loading">
-Loading top charts...
-</div>
-
+<div class="song-skeleton" aria-hidden="true"><div class="song-skeleton-cover"></div><div class="song-skeleton-details"><div class="song-skeleton-line"></div><div class="song-skeleton-line short"></div></div></div>
+<div class="song-skeleton" aria-hidden="true"><div class="song-skeleton-cover"></div><div class="song-skeleton-details"><div class="song-skeleton-line"></div><div class="song-skeleton-line short"></div></div></div>
+<div class="song-skeleton" aria-hidden="true"><div class="song-skeleton-cover"></div><div class="song-skeleton-details"><div class="song-skeleton-line"></div><div class="song-skeleton-line short"></div></div></div>
+<div class="song-skeleton" aria-hidden="true"><div class="song-skeleton-cover"></div><div class="song-skeleton-details"><div class="song-skeleton-line"></div><div class="song-skeleton-line short"></div></div></div>
 </div>
 
 </section>
@@ -1772,11 +1817,10 @@ Fresh music from NileSoniq artists.
 
 <div id="songsContainer"
 class="song-grid">
-
-<div class="loading">
-Loading music...
-</div>
-
+<div class="song-skeleton" aria-hidden="true"><div class="song-skeleton-cover"></div><div class="song-skeleton-details"><div class="song-skeleton-line"></div><div class="song-skeleton-line short"></div></div></div>
+<div class="song-skeleton" aria-hidden="true"><div class="song-skeleton-cover"></div><div class="song-skeleton-details"><div class="song-skeleton-line"></div><div class="song-skeleton-line short"></div></div></div>
+<div class="song-skeleton" aria-hidden="true"><div class="song-skeleton-cover"></div><div class="song-skeleton-details"><div class="song-skeleton-line"></div><div class="song-skeleton-line short"></div></div></div>
+<div class="song-skeleton" aria-hidden="true"><div class="song-skeleton-cover"></div><div class="song-skeleton-details"><div class="song-skeleton-line"></div><div class="song-skeleton-line short"></div></div></div>
 </div>
 
 </section>
@@ -4821,7 +4865,7 @@ async function loadSongs(){
   const container = document.getElementById("songsContainer");
   if (!container) return;
 
-  container.innerHTML = `<div class="loading">Loading music...</div>`;
+  // Keep the song-card placeholders visible until real songs arrive.
 
   try {
     const rows = await loadPublicTable("songs", { limit: 500 });
@@ -4862,7 +4906,7 @@ async function loadNewReleases(){
   const container = document.getElementById("newReleasesContainer");
   if (!container) return;
 
-  container.innerHTML = `<div class="loading">Loading new releases...</div>`;
+  // Keep the section clean while songs are fetched; do not show a loading message.
 
   try {
     const rows = await loadPublicTable("songs", { limit: 500 });
@@ -4898,7 +4942,7 @@ async function loadTopCharts(){
   const container = document.getElementById("topChartsContainer");
   if (!container) return;
 
-  container.innerHTML = `<div class="loading">Loading top charts...</div>`;
+  // Keep the section clean while songs are fetched; do not show a loading message.
 
   try {
     const rows = await loadPublicTable("songs", { limit: 500 });
