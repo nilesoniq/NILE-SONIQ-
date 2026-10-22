@@ -4570,7 +4570,7 @@ async function uploadSong(){
     }
 
 
-    let {
+    const {
       data:savedSong,
       error:songError
     } = await sb
@@ -4622,26 +4622,8 @@ async function uploadSong(){
       throw songError;
     }
 
-    // Recover the exact song record if the insert succeeded but the API response
-    // did not include the saved row. Match the signed-in artist and this upload's
-    // unique audio URL so an older song is not mistaken for this submission.
     if(!savedSong || !savedSong.id){
-      const {data:recoveredSong,error:recoverSongError}=await sb
-        .from("songs")
-        .select("*")
-        .eq("artist_id",currentUser.id)
-        .eq("file_url",audioUrl)
-        .order("created_at",{ascending:false})
-        .limit(1)
-        .maybeSingle();
-
-      if(recoverSongError) throw recoverSongError;
-
-      if(recoveredSong && recoveredSong.id){
-        savedSong=recoveredSong;
-      }else{
-        throw new Error("The server could not confirm this song record. Check your Artist Dashboard before trying again.");
-      }
+      throw new Error("The server did not confirm that the song record was saved. The upload has not been reported as successful.");
     }
 
     const savedStatus=String(savedSong.review_status || "").toLowerCase();
@@ -8418,16 +8400,58 @@ function renderNewsArticles(articles){
 }
 
 async function loadNews(){
-  const container=document.getElementById("newsPageContainer");
-  if(!container) return;
-  container.innerHTML=`<div class="loading">Loading NileSoniq News...</div>`;
-  try{
-    const {data,error}=await sb.from("news").select("id,title,slug,excerpt,content,image_url,published,published_at,created_at,updated_at").eq("published",true).order("published_at",{ascending:false,nullsFirst:false}).order("created_at",{ascending:false});
-    if(error) throw error;
-    renderNewsArticles(data || []);
-  }catch(error){
-    console.error("News load error:",error);
-    container.innerHTML=`<div class="empty"><h3>News is not available yet</h3><p style="margin-top:8px;">${escapeHtml(error.message || "Could not load News.")}</p></div>`;
+  const container = document.getElementById("newsPageContainer");
+  if (!container) return;
+
+  container.innerHTML = '<div class="loading">Loading NileSoniq News...</div>';
+
+  try {
+    const params = new URLSearchParams({
+      select: "id,title,slug,excerpt,content,image_url,published,published_at,created_at,updated_at",
+      "eq.published": "1",
+      order: "published_at.desc",
+      limit: "100"
+    });
+
+    const response = await fetch(
+      `/api/db/news?${params.toString()}`,
+      {
+        method: "GET",
+        credentials: "include",
+        headers: { Accept: "application/json" },
+        cache: "no-store"
+      }
+    );
+
+    const result = await response.json();
+
+    if (!response.ok || result.error) {
+      throw new Error(result.error || "Could not load news.");
+    }
+
+    if (!Array.isArray(result.data)) {
+      throw new Error("Invalid news response.");
+    }
+
+    const articles = result.data
+      .filter(article =>
+        Number(article.published) === 1 ||
+        String(article.published).toLowerCase() === "true"
+      )
+      .sort((a, b) =>
+        new Date(b.published_at || b.created_at || 0) -
+        new Date(a.published_at || a.created_at || 0)
+      );
+
+    renderNewsArticles(articles);
+  } catch (error) {
+    console.error("News load error:", error);
+
+    container.innerHTML =
+      `<div class="empty">
+        <h3>News is not available yet</h3>
+        <p style="margin-top:8px;">${escapeHtml(error.message || "Could not load News.")}</p>
+      </div>`;
   }
 }
 
