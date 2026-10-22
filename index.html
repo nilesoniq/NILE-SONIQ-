@@ -2920,18 +2920,55 @@ function cfQuery(table, initial={}){
     if(state.method==="GET") state.params.set("select",state.selection||"*");
     if(state.upsert) state.params.set("upsert","true");
     const url=`/api/db/${encodeURIComponent(table)}?${state.params.toString()}`;
-    const res=await fetch(url,{method:state.method,credentials:"include",headers:{"Content-Type":"application/json","Accept":"application/json"},body:state.method==="GET"||state.method==="DELETE"?undefined:JSON.stringify(state.body)});
-    const json=await res.json().catch(()=>({}));
-    if(!res.ok) return {data:null,error:new Error(json.error||`Request failed (${res.status})`)};
+    let res;
+    try{
+      res=await fetch(url,{method:state.method,credentials:"include",headers:{"Content-Type":"application/json","Accept":"application/json"},body:state.method==="GET"||state.method==="DELETE"?undefined:JSON.stringify(state.body)});
+    }catch(fetchError){
+      return {data:null,error:new Error(fetchError?.message || "Could not reach the NileSoniq server.")};
+    }
+    const responseText=await res.text();
+    let json;
+    try{
+      json=responseText ? JSON.parse(responseText) : null;
+    }catch(parseError){
+      json=null;
+    }
+    if(!res.ok){
+      return {data:null,error:new Error(json?.error || json?.message || `Request failed (${res.status})`)};
+    }
+    if(!json || typeof json!=="object"){
+      return {data:null,error:new Error("The server returned an empty or invalid response. No success was assumed.")};
+    }
+    if(json.error){
+      return {data:null,error:new Error(json.error)};
+    }
     let data=json.data;
-    if(single){ if(Array.isArray(data)) data=data[0]||null; if(!data && !allowEmpty) return {data:null,error:new Error("No rows returned")}; }
-    return {data,error:json.error?new Error(json.error):null};
+    if(single){
+      if(Array.isArray(data)) data=data[0]||null;
+      if((data===null || data===undefined) && !allowEmpty) return {data:null,error:new Error("The server did not return the saved record.")};
+    }
+    return {data,error:null};
   }
   return api;
 }
 
 const storageAdapter={from(bucket){return {
-  async upload(path,file){const res=await fetch(`/api/storage/upload?bucket=${encodeURIComponent(bucket)}&path=${encodeURIComponent(path)}`,{method:"POST",credentials:"include",headers:{"Content-Type":file.type||"application/octet-stream"},body:file}); const j=await res.json().catch(()=>({})); return {data:j.data||null,error:res.ok?null:new Error(j.error||"Upload failed")};},
+  async upload(path,file){
+    let res;
+    try{
+      res=await fetch(`/api/storage/upload?bucket=${encodeURIComponent(bucket)}&path=${encodeURIComponent(path)}`,{method:"POST",credentials:"include",headers:{"Content-Type":file.type||"application/octet-stream"},body:file});
+    }catch(fetchError){
+      return {data:null,error:new Error(fetchError?.message || "Could not reach the NileSoniq storage server.")};
+    }
+    const responseText=await res.text();
+    let j;
+    try{ j=responseText ? JSON.parse(responseText) : null; }catch(parseError){ j=null; }
+    if(!res.ok) return {data:null,error:new Error(j?.error || j?.message || `Storage upload failed (${res.status})`)};
+    if(!j || typeof j!=="object" || j.error || !j.data || !j.data.path){
+      return {data:null,error:new Error(j?.error || "The server did not confirm that the file was stored.")};
+    }
+    return {data:j.data,error:null};
+  },
   getPublicUrl(path){return {data:{publicUrl:`/api/storage/public/${encodeURIComponent(bucket)}/${path.split('/').map(encodeURIComponent).join('/')}`}}}
 };}};
 
@@ -4534,6 +4571,7 @@ async function uploadSong(){
 
 
     const {
+      data:savedSong,
       error:songError
     } = await sb
       .from("songs")
@@ -4575,11 +4613,33 @@ async function uploadSong(){
 
         approved:false
 
-      });
+      })
+      .select("*")
+      .single();
 
 
     if(songError){
       throw songError;
+    }
+
+    if(!savedSong || !savedSong.id){
+      throw new Error("The server did not confirm that the song record was saved. The upload has not been reported as successful.");
+    }
+
+    const savedStatus=String(savedSong.review_status || "").toLowerCase();
+    if(isSongApproved(savedSong) || savedStatus==="rejected"){
+      throw new Error("The song record was returned, but its review status is not pending. Please contact the administrator before retrying.");
+    }
+
+    const {data:verifiedSong,error:verifySongError}=await sb
+      .from("songs")
+      .select("id,title,approved,review_status")
+      .eq("id",savedSong.id)
+      .maybeSingle();
+
+    if(verifySongError) throw verifySongError;
+    if(!verifiedSong || isSongApproved(verifiedSong) || String(verifiedSong.review_status || "").toLowerCase()==="rejected"){
+      throw new Error("The database did not confirm a pending song submission. Please do not upload the same song again until the administrator checks the database.");
     }
 
 
