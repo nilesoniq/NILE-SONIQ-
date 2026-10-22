@@ -4727,96 +4727,80 @@ async function uploadSong(){
    LOAD PUBLIC SONGS
 ========================================================= */
 
+async function loadPublicTable(table, params = {}) {
+  const query = new URLSearchParams({
+    select: params.select || "*",
+    limit: String(params.limit || 500)
+  });
+
+  if (params.order) query.set("order", params.order);
+
+  const response = await fetch(
+    `/api/db/${encodeURIComponent(table)}?${query.toString()}`,
+    {
+      method: "GET",
+      credentials: "include",
+      headers: { "Accept": "application/json" },
+      cache: "no-store"
+    }
+  );
+
+  let result = {};
+  try { result = await response.json(); } catch (_) {}
+
+  if (!response.ok || result.error) {
+    throw new Error(
+      result.error || result.message ||
+      `Could not load ${table} (HTTP ${response.status}).`
+    );
+  }
+
+  if (!Array.isArray(result.data)) {
+    throw new Error(`The server returned an invalid ${table} list.`);
+  }
+
+  return result.data;
+}
+
+
+/* =========================================================
+   SONGS
+========================================================= */
+
 async function loadSongs(){
+  const container = document.getElementById("songsContainer");
+  if (!container) return;
 
-  const container =
-    document.getElementById(
-      "songsContainer"
-    );
+  container.innerHTML = `<div class="loading">Loading music...</div>`;
 
+  try {
+    const rows = await loadPublicTable("songs", { limit: 500 });
 
-  container.innerHTML =
-    `<div class="loading">Loading music...</div>`;
-
-
-  try{
-
-    const {
-      data,
-      error
-    } = await sb
-      .from("songs")
-      .select("*")
-      .eq(
-        "approved",
-        true
+    currentSongs = rows
+      .filter(song =>
+        Number(song.approved) === 1 ||
+        String(song.approved).toLowerCase() === "true"
       )
-      .order(
-        "plays",
-        {
-          ascending:false,
-          nullsFirst:false
-        }
-      )
-      .order(
-        "created_at",
-        {
-          ascending:false
-        }
+      .sort((a, b) =>
+        Number(b.plays || 0) - Number(a.plays || 0) ||
+        new Date(b.created_at || 0) - new Date(a.created_at || 0)
       );
 
+    renderSongs(currentSongs);
 
-    if(error){
-      throw error;
-    }
-
-
-    currentSongs = data || [];
-
-
-    renderSongs(
-      currentSongs
-    );
-
-
-    /*
-      If the visitor already has a search query,
-      refresh the search results using the newly
-      loaded Supabase songs.
-    */
-
-    const searchInput =
-      document.getElementById(
-        "searchInput"
-      );
-
-    if(
-      searchInput &&
-      searchInput.value.trim()
-    ){
-
+    const searchInput = document.getElementById("searchInput");
+    if (searchInput && searchInput.value.trim()) {
       performSearch();
-
     }
-
-  }catch(error){
-
-    console.error(error);
-
+  } catch (error) {
+    console.error("Public songs load error:", error);
     container.innerHTML = `
       <div class="empty">
         <h3>Could not load songs</h3>
-        <p style="margin-top:8px;">
-          ${escapeHtml(
-            error.message ||
-            "Unknown error"
-          )}
-        </p>
+        <p style="margin-top:8px;">${escapeHtml(error.message || "Unknown error")}</p>
       </div>
     `;
-
   }
-
 }
 
 
@@ -4825,72 +4809,34 @@ async function loadSongs(){
 ========================================================= */
 
 async function loadNewReleases(){
+  const container = document.getElementById("newReleasesContainer");
+  if (!container) return;
 
-  const container =
-    document.getElementById(
-      "newReleasesContainer"
-    );
+  container.innerHTML = `<div class="loading">Loading new releases...</div>`;
 
-
-  if(!container){
-    return;
-  }
-
-
-  container.innerHTML =
-    `<div class="loading">
-      Loading new releases...
-    </div>`;
-
-
-  try{
-
-    const {
-      data,
-      error
-    } = await sb
-      .from("songs")
-      .select("*")
-      .eq(
-        "approved",
-        true
+  try {
+    const rows = await loadPublicTable("songs", { limit: 500 });
+    newReleaseSongs = rows
+      .filter(song =>
+        Number(song.approved) === 1 ||
+        String(song.approved).toLowerCase() === "true"
       )
-      .order(
-        "created_at",
-        {
-          ascending:false
-        }
+      .sort((a, b) =>
+        new Date(b.created_at || b.release_date || 0) -
+        new Date(a.created_at || a.release_date || 0)
       )
-      .limit(8);
+      .slice(0, 8);
 
-
-    if(error){
-      throw error;
-    }
-
-
-    newReleaseSongs =
-      data || [];
-
-    renderNewReleases(
-      newReleaseSongs
-    );
-
-  }catch(error){
-
-    console.error(
-      "New releases error:",
-      error
-    );
-
+    renderNewReleases(newReleaseSongs);
+  } catch (error) {
+    console.error("New releases load error:", error);
     container.innerHTML = `
       <div class="empty">
         <h3>Could not load new releases</h3>
+        <p style="margin-top:8px;">${escapeHtml(error.message || "Unknown error")}</p>
       </div>
     `;
-
   }
-
 }
 
 
@@ -4899,85 +4845,41 @@ async function loadNewReleases(){
 ========================================================= */
 
 async function loadTopCharts(){
+  const container = document.getElementById("topChartsContainer");
+  if (!container) return;
 
-  const container =
-    document.getElementById(
-      "topChartsContainer"
-    );
+  container.innerHTML = `<div class="loading">Loading top charts...</div>`;
 
-
-  if(!container){
-    return;
-  }
-
-
-  container.innerHTML =
-    `<div class="loading">
-      Loading top charts...
-    </div>`;
-
-
-  try{
-
-    const {
-      data,
-      error
-    } = await sb
-      .from("songs")
-      .select("*")
-      .eq(
-        "approved",
-        true
+  try {
+    const rows = await loadPublicTable("songs", { limit: 500 });
+    topChartSongs = rows
+      .filter(song =>
+        Number(song.approved) === 1 ||
+        String(song.approved).toLowerCase() === "true"
       )
-      .order(
-        "plays",
-        {
-          ascending:false,
-          nullsFirst:false
-        }
+      .sort((a, b) =>
+        Number(b.plays || 0) - Number(a.plays || 0) ||
+        new Date(b.created_at || 0) - new Date(a.created_at || 0)
       )
-      .order(
-        "created_at",
-        {
-          ascending:false
-        }
-      )
-      .limit(8);
+      .slice(0, 8);
 
-
-    if(error){
-      throw error;
-    }
-
-
-    topChartSongs =
-      data || [];
-
-    renderTopCharts(
-      topChartSongs
-    );
-
-  }catch(error){
-
-    console.error(
-      "Top charts error:",
-      error
-    );
-
+    renderTopCharts(topChartSongs);
+  } catch (error) {
+    console.error("Top charts load error:", error);
     container.innerHTML = `
       <div class="empty">
         <h3>Could not load top charts</h3>
+        <p style="margin-top:8px;">${escapeHtml(error.message || "Unknown error")}</p>
       </div>
     `;
-
   }
-
 }
 
 
 /* =========================================================
    SONG RENDERING
 ========================================================= */
+
 
 window.__nileSongRegistry = window.__nileSongRegistry || {};
 
@@ -6923,53 +6825,61 @@ function safeDownloadName(name){
 ========================================================= */
 
 async function loadArtists(){
-
   const container = document.getElementById("artistsContainer");
-  if(!container){ return; }
+  if (!container) return;
 
   container.innerHTML = `<div class="loading">Loading artists...</div>`;
 
-  try{
-    const [{data:artists,error:artistError},{data:songs,error:songError}] = await Promise.all([
-      sb.from("artists").select("*"),
-      sb.from("songs").select("artist_id,artist,plays").eq("approved",true)
+  try {
+    const [artists, songs] = await Promise.all([
+      loadPublicTable("artists", { limit: 500 }),
+      loadPublicTable("songs", { select: "artist_id,artist,plays,approved", limit: 500 })
     ]);
 
-    if(artistError) throw artistError;
-    if(songError) throw songError;
+    const approvedSongs = songs.filter(song =>
+      Number(song.approved) === 1 ||
+      String(song.approved).toLowerCase() === "true"
+    );
 
-    if(!artists || artists.length === 0){
+    if (!artists.length) {
       container.innerHTML = `<div class="empty">No artists registered yet.</div>`;
       return;
     }
 
     const playsByArtistId = {};
     const playsByName = {};
-    (songs || []).forEach(song => {
+
+    approvedSongs.forEach(song => {
       const plays = Number(song.plays || 0);
-      if(song.artist_id){ playsByArtistId[String(song.artist_id)] = (playsByArtistId[String(song.artist_id)] || 0) + plays; }
+      if (song.artist_id) {
+        const id = String(song.artist_id);
+        playsByArtistId[id] = (playsByArtistId[id] || 0) + plays;
+      }
       const name = normalizeSearchText(song.artist || "");
-      if(name){ playsByName[name] = (playsByName[name] || 0) + plays; }
+      if (name) playsByName[name] = (playsByName[name] || 0) + plays;
     });
 
     const rankedArtists = artists.map(artist => ({
       ...artist,
-      __artistPlays: playsByArtistId[String(artist.user_id || artist.id)] || playsByName[normalizeSearchText(artist.name || "")] || 0
-    })).sort((a,b) => {
-      const playDiff = Number(b.__artistPlays || 0) - Number(a.__artistPlays || 0);
-      if(playDiff !== 0) return playDiff;
-      return String(a.name || "").localeCompare(String(b.name || ""));
-    });
+      __artistPlays:
+        playsByArtistId[String(artist.user_id || artist.id)] ||
+        playsByName[normalizeSearchText(artist.name || "")] || 0
+    })).sort((a, b) =>
+      Number(b.__artistPlays || 0) - Number(a.__artistPlays || 0) ||
+      String(a.name || "").localeCompare(String(b.name || ""))
+    );
 
-    container.innerHTML = rankedArtists.map((artist,index) => {
+    container.innerHTML = rankedArtists.map((artist, index) => {
       const avatar = artist.avatar_url
         ? `<img src="${escapeAttribute(artist.avatar_url)}" alt="${escapeAttribute(artist.name || "Artist")}" loading="lazy">`
         : `<div class="artist-avatar-placeholder">${getInitials(artist.name)}</div>`;
 
       return `
-        <div class="artist-card" role="button" tabindex="0" onclick="openArtistProfile('${escapeAttribute(artist.id)}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openArtistProfile('${escapeAttribute(artist.id)}');}">
+        <div class="artist-card" role="button" tabindex="0"
+          onclick="openArtistProfile('${escapeAttribute(artist.id)}')"
+          onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openArtistProfile('${escapeAttribute(artist.id)}');}">
           <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-            <div class="artist-rank-number">#${index+1}</div>
+            <div class="artist-rank-number">#${index + 1}</div>
             <div style="font-size:12px;color:#aaa;font-weight:700;">${formatNumber(artist.__artistPlays || 0)} views</div>
           </div>
           <div class="artist-avatar">${avatar}</div>
@@ -6978,10 +6888,14 @@ async function loadArtists(){
           <div style="margin-top:10px;color:var(--orange);font-size:12px;font-weight:700;">View Profile →</div>
         </div>`;
     }).join("");
-
-  }catch(error){
-    console.error("Artists error:",error);
-    container.innerHTML = `<div class="empty"><h3>Could not load artists</h3><p style="margin-top:8px;">${escapeHtml(error.message || "Unknown error")}</p></div>`;
+  } catch (error) {
+    console.error("Artists load error:", error);
+    container.innerHTML = `
+      <div class="empty">
+        <h3>Could not load artists</h3>
+        <p style="margin-top:8px;">${escapeHtml(error.message || "Unknown error")}</p>
+      </div>
+    `;
   }
 }
 
