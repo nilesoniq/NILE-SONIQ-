@@ -1,3 +1,4 @@
+
 import bcrypt from "bcryptjs";
 
 const COOKIE_NAME = "nile_session";
@@ -387,7 +388,14 @@ function parseFilters(url) {
     if (!operators[op] || !safeIdentifier(column)) continue;
 
     filters.push(`${column} ${operators[op]} ?`);
-    values.push(value);
+
+    // Convert Boolean URL filters to SQLite 0/1 values.
+    const normalizedValue =
+      value.toLowerCase() === "true" ? 1 :
+      value.toLowerCase() === "false" ? 0 :
+      value;
+
+    values.push(normalizedValue);
   }
 
   return {
