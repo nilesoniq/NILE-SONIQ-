@@ -462,8 +462,8 @@ nav button.active{
 }
 
 .artist-avatar{
-  width:100px;
-  height:100px;
+  width:58px;
+  height:58px;
   border-radius:50%;
   overflow:hidden;
   margin:0 auto 14px;
@@ -484,7 +484,7 @@ nav button.active{
   align-items:center;
   justify-content:center;
   color:var(--orange);
-  font-size:40px;
+  font-size:23px;
   font-weight:bold;
 }
 
@@ -1857,6 +1857,7 @@ Loading artists...
 </div>
 
 </div>
+<div id="artistsSeeMoreControls" style="display:flex;justify-content:center;margin:18px 0 0;"></div>
 </div>
 </section>
 
@@ -2483,6 +2484,11 @@ class="dashboard-card hidden news-editor">
     <input id="newsTitle" type="text" maxlength="180" placeholder="News headline">
   </div>
   <div class="field">
+    <label>Attach Featured News Photo (optional)</label>
+    <input id="newsImageFile" type="file" accept="image/*">
+    <small style="display:block;color:#888;margin-top:6px;">Choose an image from your phone or computer. You may also paste an image URL below.</small>
+  </div>
+  <div class="field">
     <label>Featured Image URL (optional)</label>
     <input id="newsImageUrl" type="url" placeholder="https://...">
   </div>
@@ -3043,6 +3049,8 @@ let currentArtist = null;
 let currentSongs = [];
 let newReleaseSongs = [];
 let topChartSongs = [];
+const expandedSongLists = new Set();
+let artistsListExpanded = false;
 
 let currentAuthMode = "login";
 let currentAuthContext = "artist";
@@ -3306,6 +3314,7 @@ function performSearch(){
   }
 
 
+  window.__nileSearchResults = results;
   renderSongCards(
     results,
     "searchResultsContainer",
@@ -4919,7 +4928,7 @@ async function loadNewReleases(){
         new Date(b.created_at || b.release_date || 0) -
         new Date(a.created_at || a.release_date || 0)
       )
-      .slice(0, 8);
+      .slice(0, 500);
 
     renderNewReleases(newReleaseSongs);
   } catch (error) {
@@ -4955,7 +4964,7 @@ async function loadTopCharts(){
         Number(b.plays || 0) - Number(a.plays || 0) ||
         new Date(b.created_at || 0) - new Date(a.created_at || 0)
       )
-      .slice(0, 8);
+      .slice(0, 100);
 
     renderTopCharts(topChartSongs);
   } catch (error) {
@@ -4977,129 +4986,41 @@ async function loadTopCharts(){
 
 window.__nileSongRegistry = window.__nileSongRegistry || {};
 
-function renderSongCards(
-  songs,
-  containerId,
-  emptyTitle,
-  emptyText
-){
-
-  const container =
-    document.getElementById(
-      containerId
-    );
-
-
-  if(!container){
+function renderSongCards(songs, containerId, emptyTitle, emptyText){
+  const container = document.getElementById(containerId);
+  if(!container) return;
+  const allSongs = Array.isArray(songs) ? songs : [];
+  if(!allSongs.length){
+    container.innerHTML = `<div class="empty"><h3>${escapeHtml(emptyTitle)}</h3><p style="margin-top:8px;">${escapeHtml(emptyText)}</p></div>`;
     return;
   }
+  const isCharts = containerId === "topChartsContainer";
+  const list = isCharts ? allSongs.slice(0,100) : allSongs.slice(0,500);
+  const expanded = expandedSongLists.has(containerId);
+  const visibleSongs = expanded ? list : list.slice(0,5);
+  const cards = visibleSongs.map(song => {
+    const isPlaying = currentPlayingSong && currentPlayingSong.id === song.id;
+    window.__nileSongRegistry[String(song.id)] = song;
+    const cover = song.cover_url ? `<img src="${escapeAttribute(song.cover_url)}" alt="" loading="lazy">` : `<div class="cover-placeholder">♪</div>`;
+    return `<div class="song-card ${isPlaying ? "playing" : ""}"><div class="cover" style="position:relative;">${Number(song.__rank) > 0 ? `<div class="chart-rank-badge">#${song.__rank}</div>` : ""}${cover}<button class="play-circle" onclick="playSong('${escapeAttribute(song.id)}')">${isPlaying && !document.getElementById("audioPlayer")?.paused ? "❚❚" : "▶"}</button></div><div class="song-info"><div class="song-title" style="cursor:pointer;" onclick="openSongLink(window.__nileSongRegistry['${escapeAttribute(song.id)}'])">${escapeHtml(song.title || "Untitled")}</div><div class="artist-name">${escapeHtml(song.artist || "Unknown Artist")}</div><div class="song-meta"><span>${formatNumber(song.plays || 0)} plays</span><span>${formatNumber(song.likes || 0)} likes</span></div></div><button class="download-btn" onclick="downloadSong('${escapeAttribute(song.id)}')">↓ Download</button></div>`;
+  }).join("");
+  const canExpand = list.length > 5;
+  const moreButton = canExpand ? `<div style="grid-column:1/-1;display:flex;justify-content:center;padding:12px;"><button class="btn btn-dark" onclick="toggleSongList('${containerId}')">${expanded ? "Show Less" : `See More (${list.length})`}</button></div>` : "";
+  container.innerHTML = cards + moreButton;
+}
 
-
-  if(!songs || songs.length === 0){
-
-    container.innerHTML = `
-      <div class="empty">
-        <h3>${escapeHtml(emptyTitle)}</h3>
-        <p style="margin-top:8px;">
-          ${escapeHtml(emptyText)}
-        </p>
-      </div>
-    `;
-
-    return;
-
-  }
-
-
-  container.innerHTML =
-    songs.map(song => {
-
-      const isPlaying =
-        currentPlayingSong &&
-        currentPlayingSong.id === song.id;
-
-      window.__nileSongRegistry[String(song.id)] = song;
-
-
-      const cover =
-        song.cover_url
-        ? `
-          <img
-            src="${escapeAttribute(song.cover_url)}"
-            alt=""
-            loading="lazy">
-        `
-        : `
-          <div class="cover-placeholder">
-            ♪
-          </div>
-        `;
-
-
-      return `
-        <div class="song-card ${isPlaying ? "playing" : ""}">
-
-          <div class="cover" style="position:relative;">
-
-            ${Number(song.__rank) > 0 ? `<div class="chart-rank-badge">#${song.__rank}</div>` : ""}
-
-            ${cover}
-
-            <button
-              class="play-circle"
-              onclick="playSong('${escapeAttribute(song.id)}')">
-              ${isPlaying && !document.getElementById("audioPlayer")?.paused ? "❚❚" : "▶"}
-            </button>
-
-          </div>
-
-          <div class="song-info">
-
-            <div class="song-title"
-              style="cursor:pointer;"
-              onclick="openSongLink(window.__nileSongRegistry['${escapeAttribute(song.id)}'])">
-              ${escapeHtml(
-                song.title ||
-                "Untitled"
-              )}
-            </div>
-
-            <div class="artist-name">
-              ${escapeHtml(
-                song.artist ||
-                "Unknown Artist"
-              )}
-            </div>
-
-            <div class="song-meta">
-
-              <span>
-                ${formatNumber(
-                  song.plays || 0
-                )} plays
-              </span>
-
-              <span>
-                ${formatNumber(
-                  song.likes || 0
-                )} likes
-              </span>
-
-            </div>
-
-          </div>
-
-          <button
-            class="download-btn"
-            onclick="downloadSong('${escapeAttribute(song.id)}')">
-            ↓ Download
-          </button>
-
-        </div>
-      `;
-
-    }).join("");
-
+function toggleSongList(containerId){
+  if(expandedSongLists.has(containerId)) expandedSongLists.delete(containerId);
+  else expandedSongLists.add(containerId);
+  const map = {
+    newReleasesContainer: [newReleaseSongs,"No new releases yet","New music will appear here after approval."],
+    topChartsContainer: [topChartSongs,"No chart data yet","Songs will appear here as they receive plays."],
+    songsContainer: [currentSongs,"No approved songs yet","New music will appear here after approval."],
+    songsPageContainer: [currentSongs,"No approved songs yet","New music will appear here after approval."],
+    searchResultsContainer: [window.__nileSearchResults || [],"No results found","Try another song or artist name."]
+  };
+  const item = map[containerId];
+  if(item) renderSongCards(item[0],containerId,item[1],item[2]);
 }
 
 
@@ -6963,7 +6884,8 @@ async function loadArtists(){
       String(a.name || "").localeCompare(String(b.name || ""))
     );
 
-    container.innerHTML = rankedArtists.map((artist, index) => {
+    const visibleArtists = artistsListExpanded ? rankedArtists : rankedArtists.slice(0,5);
+    container.innerHTML = visibleArtists.map((artist, index) => {
       const avatar = artist.avatar_url
         ? `<img src="${escapeAttribute(artist.avatar_url)}" alt="${escapeAttribute(artist.name || "Artist")}" loading="lazy">`
         : `<div class="artist-avatar-placeholder">${getInitials(artist.name)}</div>`;
@@ -6982,6 +6904,12 @@ async function loadArtists(){
           <div style="margin-top:10px;color:var(--orange);font-size:12px;font-weight:700;">View Profile →</div>
         </div>`;
     }).join("");
+    const controls = document.getElementById("artistsSeeMoreControls");
+    if(controls){
+      controls.innerHTML = rankedArtists.length > 5
+        ? `<button class="btn btn-dark" onclick="toggleArtistsList()">${artistsListExpanded ? "Show Less" : `See More (${rankedArtists.length})`}</button>`
+        : "";
+    }
   } catch (error) {
     console.error("Artists load error:", error);
     container.innerHTML = `
@@ -6991,6 +6919,11 @@ async function loadArtists(){
       </div>
     `;
   }
+}
+
+function toggleArtistsList(){
+  artistsListExpanded = !artistsListExpanded;
+  loadArtists();
 }
 
 /* =========================================================
@@ -7399,7 +7332,7 @@ async function updateAvailableBalance(withdrawals=null){
     }
     const {data:songs,error:songsError}=await sb.from("songs").select("plays,approved").eq("artist_id",currentUser.id);
     if(songsError) throw songsError;
-    const approvedPlays=(songs||[]).filter(s=>s.approved===true).reduce((sum,s)=>sum+Number(s.plays||0),0);
+    const approvedPlays=(songs||[]).filter(s=>isSongApproved(s)).reduce((sum,s)=>sum+Number(s.plays||0),0);
     const currentBalance=approvedPlays*EARNINGS_PER_PLAY;
     const reserved=(withdrawals||[]).reduce((sum,w)=>{const st=String(w.status||"").toLowerCase();return sum+((st==="pending"||st==="processing")?(Number(w.amount)||0):0);},0);
     const available=Math.max(0,currentBalance-reserved);
@@ -8046,9 +7979,9 @@ async function loadAdminAnalytics(){
 
   try{
     const [songsResult,artistsResult,withdrawalsResult]=await Promise.all([
-      sb.from("songs").select("title,artist,artist_id,plays,likes,approved,created_at"),
-      sb.from("artists").select("user_id,name"),
-      sb.from("withdrawal_requests").select("amount,status")
+      sb.from("songs").select("title,artist,artist_id,plays,likes,approved,review_status,created_at").limit(500),
+      sb.from("artists").select("user_id,name").limit(500),
+      sb.from("withdrawal_requests").select("amount,status").limit(500)
     ]);
 
     if(songsResult.error) throw songsResult.error;
@@ -8504,7 +8437,7 @@ async function loadAdminNews(){
 }
 
 function clearNewsEditor(){
-  ["newsEditId","newsTitle","newsImageUrl","newsExcerpt","newsContent"].forEach(id=>{const el=document.getElementById(id); if(el) el.value="";});
+  ["newsEditId","newsTitle","newsImageUrl","newsExcerpt","newsContent","newsImageFile"].forEach(id=>{const el=document.getElementById(id); if(el) el.value="";});
   const button=document.querySelector('#adminNewsPanel button[onclick="saveNewsArticle()"]');
   if(button) button.textContent="Save & Publish";
   clearMessage("adminNewsMessage");
@@ -8529,11 +8462,21 @@ async function saveNewsArticle(){
   if(!await isCurrentUserAdmin()){ alert("Only active administrators can manage News."); return; }
   const id=document.getElementById("newsEditId")?.value.trim();
   const title=document.getElementById("newsTitle")?.value.trim();
-  const imageUrl=document.getElementById("newsImageUrl")?.value.trim();
+  let imageUrl=document.getElementById("newsImageUrl")?.value.trim();
+  const imageFile=document.getElementById("newsImageFile")?.files?.[0] || null;
   const excerpt=document.getElementById("newsExcerpt")?.value.trim();
   const content=document.getElementById("newsContent")?.value.trim();
   if(!title || !content){ showMessage("adminNewsMessage","Headline and article content are required.","error"); return; }
   try{
+    if(imageFile){
+      if(!imageFile.type || !imageFile.type.startsWith("image/")) throw new Error("Please choose a valid image file.");
+      if(imageFile.size > 8 * 1024 * 1024) throw new Error("News photos must be 8 MB or smaller.");
+      const ext=(imageFile.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g,"") || "jpg";
+      const imagePath=`${currentUser.id}/news-${Date.now()}.${ext}`;
+      const {error:uploadError}=await sb.storage.from("news").upload(imagePath,imageFile,{upsert:true,contentType:imageFile.type});
+      if(uploadError) throw uploadError;
+      imageUrl=sb.storage.from("news").getPublicUrl(imagePath).data.publicUrl;
+    }
     let slug=newsSlugify(title);
     if(!id){
       const {data:existing}=await sb.from("news").select("id").eq("slug",slug).maybeSingle();
