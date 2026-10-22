@@ -4727,6 +4727,13 @@ async function uploadSong(){
    LOAD PUBLIC SONGS
 ========================================================= */
 
+// Short-lived successful-response cache plus request de-duplication.
+// The home page asks for the same songs list for Trending, New Releases,
+// and Top Charts. Reuse one successful result instead of repeatedly querying D1.
+const publicTableCache = new Map();
+const publicTableRequests = new Map();
+const PUBLIC_TABLE_CACHE_MS = 15000;
+
 async function loadPublicTable(table, params = {}) {
   const query = new URLSearchParams({
     select: params.select || "*",
@@ -4735,31 +4742,74 @@ async function loadPublicTable(table, params = {}) {
 
   if (params.order) query.set("order", params.order);
 
-  const response = await fetch(
-    `/api/db/${encodeURIComponent(table)}?${query.toString()}`,
-    {
-      method: "GET",
-      credentials: "include",
-      headers: { "Accept": "application/json" },
-      cache: "no-store"
+  const url = `/api/db/${encodeURIComponent(table)}?${query.toString()}`;
+  const cacheKey = url;
+  const cached = publicTableCache.get(cacheKey);
+  if (cached && Date.now() - cached.savedAt < PUBLIC_TABLE_CACHE_MS) {
+    return cached.data;
+  }
+
+  // If multiple sections request the same table at once, share the same fetch.
+  if (publicTableRequests.has(cacheKey)) {
+    return publicTableRequests.get(cacheKey);
+  }
+
+  const requestPromise = (async () => {
+    let lastError = null;
+
+    // Retry transient network, rate-limit, and server errors. Do not retry
+    // ordinary 4xx responses because they usually require a real code/config fix.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const response = await fetch(url, {
+          method: "GET",
+          credentials: "include",
+          headers: { "Accept": "application/json" },
+          cache: "no-store"
+        });
+
+        let result = {};
+        try { result = await response.json(); } catch (_) {}
+
+        if (!response.ok || result.error) {
+          const message = result.error || result.message ||
+            `Could not load ${table} (HTTP ${response.status}).`;
+          const error = new Error(message);
+          error.status = response.status;
+          if (!(response.status === 429 || response.status >= 500)) {
+            throw error;
+          }
+          lastError = error;
+        } else {
+          if (!Array.isArray(result.data)) {
+            throw new Error(`The server returned an invalid ${table} list.`);
+          }
+          publicTableCache.set(cacheKey, { data: result.data, savedAt: Date.now() });
+          return result.data;
+        }
+      } catch (error) {
+        lastError = error;
+        // A known non-transient HTTP error should be shown immediately.
+        if (error && Number.isInteger(error.status) &&
+            error.status !== 429 && error.status < 500) {
+          throw error;
+        }
+      }
+
+      if (attempt < 2) {
+        await new Promise(resolve => setTimeout(resolve, 300 * (attempt + 1)));
+      }
     }
-  );
 
-  let result = {};
-  try { result = await response.json(); } catch (_) {}
+    throw lastError || new Error(`Could not load ${table}. Please try again.`);
+  })();
 
-  if (!response.ok || result.error) {
-    throw new Error(
-      result.error || result.message ||
-      `Could not load ${table} (HTTP ${response.status}).`
-    );
+  publicTableRequests.set(cacheKey, requestPromise);
+  try {
+    return await requestPromise;
+  } finally {
+    publicTableRequests.delete(cacheKey);
   }
-
-  if (!Array.isArray(result.data)) {
-    throw new Error(`The server returned an invalid ${table} list.`);
-  }
-
-  return result.data;
 }
 
 
