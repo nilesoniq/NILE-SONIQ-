@@ -4570,7 +4570,7 @@ async function uploadSong(){
     }
 
 
-    const {
+    let {
       data:savedSong,
       error:songError
     } = await sb
@@ -4622,8 +4622,26 @@ async function uploadSong(){
       throw songError;
     }
 
+    // Recover the exact song record if the insert succeeded but the API response
+    // did not include the saved row. Match the signed-in artist and this upload's
+    // unique audio URL so an older song is not mistaken for this submission.
     if(!savedSong || !savedSong.id){
-      throw new Error("The server did not confirm that the song record was saved. The upload has not been reported as successful.");
+      const {data:recoveredSong,error:recoverSongError}=await sb
+        .from("songs")
+        .select("*")
+        .eq("artist_id",currentUser.id)
+        .eq("file_url",audioUrl)
+        .order("created_at",{ascending:false})
+        .limit(1)
+        .maybeSingle();
+
+      if(recoverSongError) throw recoverSongError;
+
+      if(recoveredSong && recoveredSong.id){
+        savedSong=recoveredSong;
+      }else{
+        throw new Error("The server could not confirm this song record. Check your Artist Dashboard before trying again.");
+      }
     }
 
     const savedStatus=String(savedSong.review_status || "").toLowerCase();
