@@ -8588,7 +8588,13 @@ async function loadAdminSongs(){
     const result = await response.json();
 
     if (!response.ok || result.error) {
-      throw new Error(result.error || "Could not load song submissions.");
+      const detail = result.error;
+      const message = typeof detail === "string"
+        ? detail
+        : (detail && typeof detail === "object"
+          ? (detail.message || detail.error_description || detail.error || JSON.stringify(detail))
+          : "Could not load song submissions.");
+      throw new Error(String(message));
     }
     if (!Array.isArray(result.data)) {
       throw new Error("The admin endpoint returned an invalid song list.");
@@ -8619,7 +8625,13 @@ async function loadAdminSongs(){
     `).join("");
   } catch (error) {
     console.error("Admin songs error:", error);
-    tbody.innerHTML = `<tr><td colspan="5"><div class="empty">${escapeHtml(error.message || "Could not load submissions.")}</div></td></tr>`;
+    const rawMessage = error && error.message != null ? error.message : error;
+    const visibleMessage = typeof rawMessage === "string"
+      ? rawMessage
+      : (rawMessage && typeof rawMessage === "object"
+        ? (rawMessage.message || rawMessage.error || JSON.stringify(rawMessage))
+        : "Could not load submissions.");
+    tbody.innerHTML = `<tr><td colspan="5"><div class="empty">${escapeHtml(String(visibleMessage))}</div></td></tr>`;
   }
 }
 
