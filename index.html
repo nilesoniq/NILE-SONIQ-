@@ -8561,78 +8561,164 @@ async function deleteNewsArticle(id){
 ========================================================= */
 
 async function loadAdminSongs(){
-  const tbody = document.getElementById("adminSongsTable");
-  if (!tbody) return;
 
-  if (!currentUser) {
-    tbody.innerHTML = '<tr><td colspan="5"><div class="empty">Please sign in to the administrator account.</div></td></tr>';
+  if(!currentUser){
     return;
   }
 
-  if (!await isCurrentUserAdmin()) {
-    tbody.innerHTML = '<tr><td colspan="5"><div class="empty">Administrator access is required to review songs.</div></td></tr>';
+
+  if(!await isCurrentUserAdmin()){
     return;
   }
 
-  tbody.innerHTML = '<tr><td colspan="5"><div class="loading">Loading submissions...</div></td></tr>';
 
-  try {
-    // Read submissions through the Cloudflare Worker admin endpoint.
-    // This endpoint returns pending D1 songs, including uploads awaiting review.
-    const response = await fetch("/api/admin/songs?status=pending", {
-      method: "GET",
-      credentials: "include",
-      headers: { Accept: "application/json" },
-      cache: "no-store"
-    });
-    const result = await response.json();
+  const tbody =
+    document.getElementById(
+      "adminSongsTable"
+    );
 
-    if (!response.ok || result.error) {
-      const detail = result.error;
-      const message = typeof detail === "string"
-        ? detail
-        : (detail && typeof detail === "object"
-          ? (detail.message || detail.error_description || detail.error || JSON.stringify(detail))
-          : "Could not load song submissions.");
-      throw new Error(String(message));
+
+  tbody.innerHTML = `
+    <tr>
+      <td colspan="5">
+        <div class="loading">
+          Loading submissions...
+        </div>
+      </td>
+    </tr>
+  `;
+
+
+  try{
+
+    const {
+      data,
+      error
+    } = await sb
+      .from("songs")
+      .select("*")
+      .order(
+        "created_at",
+        {
+          ascending:false
+        }
+      );
+
+
+    if(error){
+      throw error;
     }
-    if (!Array.isArray(result.data)) {
-      throw new Error("The admin endpoint returned an invalid song list.");
-    }
 
-    const pending = result.data.filter(song => {
-      const status = String(song.review_status || "pending").toLowerCase();
-      return !isSongApproved(song) && status !== "rejected";
-    });
 
-    if (!pending.length) {
-      tbody.innerHTML = '<tr><td colspan="5"><div class="empty">No pending songs.</div></td></tr>';
+    const pending =
+      (data || []).filter(song => {
+        const status = String(song.review_status || "").toLowerCase();
+        return !isSongApproved(song) && status !== "rejected";
+      });
+
+
+    if(!pending.length){
+
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="5">
+            <div class="empty">
+              No pending songs.
+            </div>
+          </td>
+        </tr>
+      `;
+
       return;
+
     }
 
-    tbody.innerHTML = pending.map(song => `
+
+    tbody.innerHTML =
+      pending.map(song => {
+
+        return `
+          <tr>
+
+            <td>
+              ${escapeHtml(
+                song.title ||
+                "Untitled"
+              )}
+            </td>
+
+            <td>
+              ${escapeHtml(
+                song.artist ||
+                "Unknown"
+              )}
+            </td>
+
+            <td>
+              ${formatNumber(
+                song.plays || 0
+              )}
+            </td>
+
+            <td>
+              <span class="status pending">
+                Pending
+              </span>
+            </td>
+
+            <td>
+
+              <button
+                class="btn btn-orange"
+                onclick="previewAdminSong('${escapeAttribute(song.id)}')">
+                Preview
+              </button>
+
+              <button
+                class="btn btn-success"
+                style="margin-left:5px;"
+                ${adminPreviewedSongs.has(String(song.id)) ? "" : "disabled"}
+                onclick="approveSong('${escapeAttribute(song.id)}')">
+                Approve
+              </button>
+
+              <button
+                class="btn btn-danger"
+                style="margin-left:5px;"
+                onclick="rejectSong('${escapeAttribute(song.id)}')">
+                Reject
+              </button>
+
+            </td>
+
+          </tr>
+        `;
+
+      }).join("");
+
+  }catch(error){
+
+    console.error(
+      "Admin songs error:",
+      error
+    );
+
+
+    tbody.innerHTML = `
       <tr>
-        <td>${escapeHtml(song.title || "Untitled")}</td>
-        <td>${escapeHtml(song.artist || "Unknown")}</td>
-        <td>${formatNumber(song.plays || 0)}</td>
-        <td><span class="status pending">Pending</span></td>
-        <td>
-          <button class="btn btn-orange" onclick="previewAdminSong('${escapeAttribute(song.id)}')">Preview</button>
-          <button class="btn btn-success" style="margin-left:5px;" ${adminPreviewedSongs.has(String(song.id)) ? "" : "disabled"} onclick="approveSong('${escapeAttribute(song.id)}')">Approve</button>
-          <button class="btn btn-danger" style="margin-left:5px;" onclick="rejectSong('${escapeAttribute(song.id)}')">Reject</button>
+        <td colspan="5">
+          <div class="empty">
+            ${escapeHtml(
+              error.message ||
+              "Could not load submissions."
+            )}
+          </div>
         </td>
       </tr>
-    `).join("");
-  } catch (error) {
-    console.error("Admin songs error:", error);
-    const rawMessage = error && error.message != null ? error.message : error;
-    const visibleMessage = typeof rawMessage === "string"
-      ? rawMessage
-      : (rawMessage && typeof rawMessage === "object"
-        ? (rawMessage.message || rawMessage.error || JSON.stringify(rawMessage))
-        : "Could not load submissions.");
-    tbody.innerHTML = `<tr><td colspan="5"><div class="empty">${escapeHtml(String(visibleMessage))}</div></td></tr>`;
+    `;
+
   }
+
 }
 
 
@@ -8731,87 +8817,63 @@ function confirmAdminSongPreview(songId){
 async function approveSong(songId){
 
   if(!currentUser){
-
-    alert(
-      "Please login first."
-    );
-
+    alert("Please login first.");
     return;
-
   }
-
 
   if(!await isCurrentUserAdmin()){
-
-    alert(
-      "You are not authorized."
-    );
-
+    alert("You are not authorized.");
     return;
-
   }
 
-
   try{
-
-    const {
-      error
-    } = await sb
-      .from("songs")
-      .update({
-        approved:1,
-        review_status:"approved"
-      })
-      .eq(
-        "id",
-        songId
-      );
-
-
-    if(error){
-      throw error;
-    }
-
-    const {data:verifiedSong,error:verifyError}=await sb
-      .from("songs")
-      .select("id,approved,review_status")
-      .eq("id",songId)
-      .maybeSingle();
-    if(verifyError) throw verifyError;
-    if(!verifiedSong || !isSongApproved(verifiedSong) || String(verifiedSong.review_status || "").toLowerCase() !== "approved"){
-      throw new Error("The database did not confirm the approval. Check the Cloudflare Worker deployment and D1 database.");
-    }
-
-    showMessage(
-      "adminMessage",
-      "Song approved successfully.",
-      "success"
+    const response = await fetch(
+      `/api/admin/songs/${encodeURIComponent(songId)}/review`,
+      {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        body: JSON.stringify({ status: "approved" }),
+        cache: "no-store"
+      }
     );
 
+    let result = {};
+    try {
+      result = await response.json();
+    } catch (_) {}
 
+    if(
+      !response.ok ||
+      result.success !== true ||
+      String(result.review_status || "").toLowerCase() !== "approved" ||
+      result.approved !== true
+    ){
+      throw new Error(
+        result.error || result.message ||
+        `Approval failed (HTTP ${response.status}).`
+      );
+    }
+
+    showMessage("adminMessage", "Song approved successfully.", "success");
     adminPreviewedSongs.delete(String(songId));
 
     await loadAdminSongs();
-
     await loadSongs();
-
     await loadNewReleases();
-
     await loadTopCharts();
 
   }catch(error){
-
-    console.error(error);
-
+    console.error("Song approval failed:", error);
     showMessage(
       "adminMessage",
-      error.message ||
-      "Could not approve song.",
+      error.message || "Could not approve song.",
       "error"
     );
-
   }
-
 }
 
 
@@ -8822,86 +8884,63 @@ async function approveSong(songId){
 async function rejectSong(songId){
 
   if(!currentUser){
-
-    alert(
-      "Please login first."
-    );
-
+    alert("Please login first.");
     return;
-
   }
-
 
   if(!await isCurrentUserAdmin()){
-
-    alert(
-      "You are not authorized."
-    );
-
-    return;
-
-  }
-
-
-  if(!confirm(
-    "Reject this song submission?"
-  )){
+    alert("You are not authorized.");
     return;
   }
 
+  if(!confirm("Reject this song submission?")){
+    return;
+  }
 
   try{
-
-    const {
-      error
-    } = await sb
-      .from("songs")
-      .update({
-        approved:0,
-        review_status:"rejected"
-      })
-      .eq(
-        "id",
-        songId
-      );
-
-
-    if(error){
-      throw error;
-    }
-
-    const {data:verifiedSong,error:verifyError}=await sb
-      .from("songs")
-      .select("id,approved,review_status")
-      .eq("id",songId)
-      .maybeSingle();
-    if(verifyError) throw verifyError;
-    if(!verifiedSong || isSongApproved(verifiedSong) || String(verifiedSong.review_status || "").toLowerCase() !== "rejected"){
-      throw new Error("The database did not confirm the rejection. Check the Cloudflare Worker deployment and D1 database.");
-    }
-
-    showMessage(
-      "adminMessage",
-      "Song rejected.",
-      "success"
+    const response = await fetch(
+      `/api/admin/songs/${encodeURIComponent(songId)}/review`,
+      {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        body: JSON.stringify({ status: "rejected" }),
+        cache: "no-store"
+      }
     );
 
+    let result = {};
+    try {
+      result = await response.json();
+    } catch (_) {}
 
+    if(
+      !response.ok ||
+      result.success !== true ||
+      String(result.review_status || "").toLowerCase() !== "rejected" ||
+      result.approved !== false
+    ){
+      throw new Error(
+        result.error || result.message ||
+        `Rejection failed (HTTP ${response.status}).`
+      );
+    }
+
+    showMessage("adminMessage", "Song rejected.", "success");
+    adminPreviewedSongs.delete(String(songId));
     await loadAdminSongs();
 
   }catch(error){
-
-    console.error(error);
-
+    console.error("Song rejection failed:", error);
     showMessage(
       "adminMessage",
-      error.message ||
-      "Could not reject song.",
+      error.message || "Could not reject song.",
       "error"
     );
-
   }
-
 }
 
 
