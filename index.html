@@ -8070,6 +8070,8 @@ async function loadPlatformWallet(){
   }
 
   try{
+    // Read the real D1 platform_wallet balance through the Cloudflare Worker.
+    // Do not calculate it from deposit totals; completed payouts must be reflected.
     const { data, error } = await sb.rpc("get_platform_completed_total");
     if(error) throw error;
 
@@ -8147,11 +8149,15 @@ async function startPlatformDeposit(){
   showMessage("platformWalletMessage","Sending deposit request to the secure payment backend...","success");
 
   try{
+    // Use the Cloudflare Worker payment route (not a Supabase Edge Function).
     const { data, error } = await sb.functions.invoke("pesajet-collection",{
       body:{
         phone_number:phone,
         amount:amount,
-        network:network
+        network:network,
+        provider: network.toLowerCase(),
+        reference: `PLATFORM-DEPOSIT-${Date.now()}`,
+        description: "NileSoniq platform wallet deposit"
       }
     });
 
@@ -8247,21 +8253,22 @@ async function withdrawPlatformMoney(){
       throw new Error(sessionError.message || "Could not verify your login session.");
     }
 
-    const accessToken = sessionData?.session?.access_token;
-    if(!accessToken){
+    // This Cloudflare build authenticates with the HttpOnly nile_session cookie,
+    // not a Supabase access token. authApi.getSession() intentionally returns
+    // no access_token; credentials: include in the adapter sends the real session.
+    if(!sessionData?.session?.user){
       throw new Error("Your Super Admin session has expired. Please log out and log in again.");
     }
 
+    // Use the Cloudflare Worker payment route (not a Supabase Edge Function).
     const { data, error } = await sb.functions.invoke("pesajet-disbursement",{
       body:{
         phone_number: phone,
         amount: amount,
         provider: provider,
+        network: network,
         reference: reference,
         description: "NileSoniq platform withdrawal"
-      },
-      headers:{
-        Authorization: `Bearer ${accessToken}`
       }
     });
 
