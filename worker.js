@@ -1,3 +1,4 @@
+
 import bcrypt from "bcryptjs";
 
 const COOKIE_NAME = "nile_session";
@@ -29,6 +30,24 @@ const ARTIST_OWNED_FINANCIAL_TABLES = new Set([
   "withdrawal_requests", "withdrawals"
 ]);
 
+const INTERACTION_TABLES = new Set([
+  "likes", "comments", "news_comments", "news_reactions"
+]);
+
+// Never expose these fields through ordinary, non-admin database reads.
+const SENSITIVE_COLUMNS = new Set([
+  "encrypted_password",
+  "password",
+  "password_hash",
+  "token",
+  "access_token",
+  "refresh_token",
+  "raw_user_meta_data",
+  "secret",
+  "api_key",
+  "private_key"
+]);
+
 const JSON_HEADERS = {
   "Content-Type": "application/json; charset=utf-8",
   "Cache-Control": "no-store"
@@ -52,7 +71,9 @@ function makeCookie(token, maxAge) {
 function readCookie(request) {
   const header = request.headers.get("Cookie") || "";
   const match = header.match(/(?:^|;\s*)nile_session=([^;]*)/);
+
   if (!match) return null;
+
   try {
     return decodeURIComponent(match[1]);
   } catch {
@@ -76,8 +97,15 @@ function withCors(request, response) {
     headers.set("Vary", "Origin");
   }
 
-  headers.set("Access-Control-Allow-Methods", "GET, POST, PATCH, PUT, DELETE, OPTIONS");
-  headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  headers.set(
+    "Access-Control-Allow-Methods",
+    "GET, POST, PATCH, PUT, DELETE, OPTIONS"
+  );
+
+  headers.set(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization"
+  );
 
   return new Response(response.body, {
     status: response.status,
@@ -99,12 +127,32 @@ function safeIdentifier(value) {
 }
 
 function isTruthyDb(value) {
-  return value === true || value === 1 || value === "1" ||
-    (typeof value === "string" && value.toLowerCase() === "true");
+  return value === true ||
+    value === 1 ||
+    value === "1" ||
+    (
+      typeof value === "string" &&
+      value.toLowerCase() === "true"
+    );
+}
+
+function redactSensitiveColumns(rows) {
+  return rows.map(row => {
+    const copy = { ...row };
+
+    for (const key of Object.keys(copy)) {
+      if (SENSITIVE_COLUMNS.has(key.toLowerCase())) {
+        delete copy[key];
+      }
+    }
+
+    return copy;
+  });
 }
 
 async function currentUser(request, env) {
   const token = readCookie(request);
+
   if (!token) return null;
 
   return env.DB.prepare(`
@@ -146,8 +194,12 @@ async function createSession(env, userId) {
   const token = crypto.randomUUID();
 
   await env.DB.prepare(`
-    INSERT INTO auth_sessions (token, user_id, created_at, expires_at)
-    VALUES (?, ?, datetime('now'), datetime('now', '+30 days'))
+    INSERT INTO auth_sessions (
+      token, user_id, created_at, expires_at
+    )
+    VALUES (
+      ?, ?, datetime('now'), datetime('now', '+30 days')
+    )
   `).bind(token, userId).run();
 
   return token;
@@ -156,6 +208,7 @@ async function createSession(env, userId) {
 async function authRoute(request, env, path) {
   if (request.method === "GET" && path === "/api/auth/me") {
     const user = await currentUser(request, env);
+
     if (!user) return json({ authenticated: false });
 
     let artist = null;
@@ -166,6 +219,10 @@ async function authRoute(request, env, path) {
       artist = await env.DB.prepare(
         "SELECT * FROM artists WHERE user_id = ? LIMIT 1"
       ).bind(user.id).first();
+
+      if (artist) {
+        artist = redactSensitiveColumns([artist])[0];
+      }
     } catch {}
 
     try {
@@ -215,14 +272,19 @@ async function authRoute(request, env, path) {
 
   if (path === "/api/auth/register") {
     const phone = String(body.phone || "").trim();
-    const artistName = String(body.artist_name || body.name || "").trim();
+    const artistName = String(
+      body.artist_name || body.name || ""
+    ).trim();
 
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return error("Please enter a valid email address.", 422);
     }
 
     if (password.length < 6 || password.length > 128) {
-      return error("Password must be between 6 and 128 characters.", 422);
+      return error(
+        "Password must be between 6 and 128 characters.",
+        422
+      );
     }
 
     try {
@@ -231,43 +293,68 @@ async function authRoute(request, env, path) {
       ).bind(email).first();
 
       if (existing) {
-        return error("An account with that email already exists.", 409);
+        return error(
+          "An account with that email already exists.",
+          409
+        );
       }
 
       const id = crypto.randomUUID();
       const passwordHash = await bcrypt.hash(password, 10);
       const displayName = artistName || email.split("@")[0];
-      const metadata = JSON.stringify({ artist_name: displayName });
+      const metadata = JSON.stringify({
+        artist_name: displayName
+      });
 
       await env.DB.prepare(`
         INSERT INTO auth_users (
           id, email, encrypted_password, phone, raw_user_meta_data,
           created_at, updated_at, is_anonymous, is_sso_user
         )
-        VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'), 0, 0)
+        VALUES (
+          ?, ?, ?, ?, ?, datetime('now'), datetime('now'), 0, 0
+        )
       `).bind(
-        id, email, passwordHash, phone || null, metadata
+        id,
+        email,
+        passwordHash,
+        phone || null,
+        metadata
       ).run();
 
       try {
         await env.DB.prepare(
           "INSERT INTO artists (id, user_id, name) VALUES (?, ?, ?)"
-        ).bind(crypto.randomUUID(), id, displayName).run();
+        ).bind(
+          crypto.randomUUID(),
+          id,
+          displayName
+        ).run();
       } catch (e) {
-        console.error("Artist profile creation failed:", e.message);
+        console.error(
+          "Artist profile creation failed:",
+          e.message
+        );
       }
 
       const token = await createSession(env, id);
 
       return json({
         success: true,
-        user: { id, email, artist_name: displayName }
+        user: {
+          id,
+          email,
+          artist_name: displayName
+        }
       }, 201, {
         "Set-Cookie": makeCookie(token, SESSION_SECONDS)
       });
     } catch (e) {
       console.error("Registration failed:", e.message);
-      return error("Account creation failed. Please try again.", 500);
+      return error(
+        "Account creation failed. Please try again.",
+        500
+      );
     }
   }
 
@@ -278,23 +365,30 @@ async function authRoute(request, env, path) {
 
     try {
       const user = await env.DB.prepare(`
-        SELECT id, email, encrypted_password, phone, raw_user_meta_data,
-               deleted_at, banned_until
+        SELECT id, email, encrypted_password, phone,
+               raw_user_meta_data, deleted_at, banned_until
         FROM auth_users
         WHERE lower(email) = ?
         LIMIT 1
       `).bind(email).first();
 
       if (
-        !user || !user.encrypted_password || user.deleted_at ||
-        (user.banned_until &&
-          new Date(user.banned_until).getTime() > Date.now())
+        !user ||
+        !user.encrypted_password ||
+        user.deleted_at ||
+        (
+          user.banned_until &&
+          new Date(user.banned_until).getTime() > Date.now()
+        )
       ) {
         return error("Invalid email or password.", 401);
       }
 
       if (!/^\$2[aby]\$\d\d\$/.test(user.encrypted_password)) {
-        return error("This account's password format is not supported.", 401);
+        return error(
+          "This account's password format is not supported.",
+          401
+        );
       }
 
       if (!(await bcrypt.compare(password, user.encrypted_password))) {
@@ -335,8 +429,14 @@ async function authRoute(request, env, path) {
 function parseFilters(url) {
   const filters = [];
   const values = [];
+
   const operators = {
-    eq: "=", neq: "!=", gt: ">", gte: ">=", lt: "<", lte: "<="
+    eq: "=",
+    neq: "!=",
+    gt: ">",
+    gte: ">=",
+    lt: "<",
+    lte: "<="
   };
 
   for (const [key, value] of url.searchParams.entries()) {
@@ -352,13 +452,16 @@ function parseFilters(url) {
 
     const normalizedValue =
       value.toLowerCase() === "true" ? 1 :
-      value.toLowerCase() === "false" ? 0 : value;
+      value.toLowerCase() === "false" ? 0 :
+      value;
 
     values.push(normalizedValue);
   }
 
   return {
-    sql: filters.length ? ` WHERE ${filters.join(" AND ")}` : "",
+    sql: filters.length
+      ? ` WHERE ${filters.join(" AND ")}`
+      : "",
     values,
     count: filters.length
   };
@@ -419,9 +522,11 @@ async function dbRoute(request, env, path) {
 
     let { sql: where, values } = parseFilters(url);
 
+    // Financial rows must always be scoped to the signed-in user.
     if (!admin && artistFinancialRead) {
       const ownerColumn =
-        table === "artist_wallets" || table === "artist_payouts"
+        table === "artist_wallets" ||
+        table === "artist_payouts"
           ? "user_id"
           : "artist_id";
 
@@ -429,9 +534,13 @@ async function dbRoute(request, env, path) {
       values = [...values, user.id];
     }
 
+    // Non-admin users may read approved songs and their own submissions.
     if (table === "songs" && !admin) {
       if (user) {
-        where = appendCondition(where, "(approved = 1 OR artist_id = ?)");
+        where = appendCondition(
+          where,
+          "(approved = 1 OR artist_id = ?)"
+        );
         values = [...values, user.id];
       } else {
         where = appendCondition(where, "approved = 1");
@@ -439,6 +548,7 @@ async function dbRoute(request, env, path) {
     }
 
     const publicArtistRead = table === "artists" && !admin;
+
     const effectiveColumns =
       publicArtistRead && selectInput === "*"
         ? "id, name, bio, avatar_url, location, total_plays, verified, created_at"
@@ -450,23 +560,41 @@ async function dbRoute(request, env, path) {
 
     if (order) {
       const [column, direction] = order.split(".");
+
       if (safeIdentifier(column)) {
-        query += ` ORDER BY ${column} ${direction === "desc" ? "DESC" : "ASC"}`;
+        query += ` ORDER BY ${column} ${
+          direction === "desc" ? "DESC" : "ASC"
+        }`;
       }
     }
 
-    const requestedLimit = Number(url.searchParams.get("limit") || 100);
-    query += ` LIMIT ${Math.min(Math.max(requestedLimit || 100, 1), 500)}`;
+    const requestedLimit = Number(
+      url.searchParams.get("limit") || 100
+    );
+
+    query += ` LIMIT ${Math.min(
+      Math.max(requestedLimit || 100, 1),
+      500
+    )}`;
 
     try {
       const result = await env.DB.prepare(query).bind(...values).all();
       let rows = result.results || [];
 
+      if (!admin) {
+        rows = redactSensitiveColumns(rows);
+      }
+
       if (publicArtistRead) {
         rows = rows.map(row => {
           const copy = { ...row };
+
           delete copy.earnings;
-          if (!user) delete copy.user_id;
+
+          if (!user) {
+            delete copy.user_id;
+          }
+
           return copy;
         });
       }
@@ -478,25 +606,34 @@ async function dbRoute(request, env, path) {
     }
   }
 
-  if (!user) return error("Authentication required", 401);
+  if (!user) {
+    return error("Authentication required", 401);
+  }
 
-  const interactionTables = new Set([
-    "likes", "comments", "news_comments", "news_reactions"
-  ]);
-
+  // Ordinary users may create interactions, but only for themselves.
+  // Editing and deleting database records remains administrator-only.
   if (
-    !interactionTables.has(table) &&
+    !INTERACTION_TABLES.has(table) &&
     table !== "artists" &&
     table !== "songs" &&
     !admin
   ) {
-    return error("Admin access required for this operation", 403);
+    return error(
+      "Admin access required for this operation",
+      403
+    );
   }
 
   const { sql: where, values, count } = parseFilters(url);
 
-  if (["PATCH", "PUT", "DELETE"].includes(method) && count === 0) {
-    return error("A filter is required for this operation", 422);
+  if (
+    ["PATCH", "PUT", "DELETE"].includes(method) &&
+    count === 0
+  ) {
+    return error(
+      "A filter is required for this operation",
+      422
+    );
   }
 
   try {
@@ -509,33 +646,60 @@ async function dbRoute(request, env, path) {
       }
 
       const output = [];
-      const wantsUpsert = url.searchParams.get("upsert") === "true";
+      const wantsUpsert =
+        url.searchParams.get("upsert") === "true";
+
+      if (wantsUpsert) {
+        return error("Upsert is not supported for this table", 422);
+      }
 
       for (const input of rows) {
-        const row =
-          input && typeof input === "object" && !Array.isArray(input)
-            ? input
+        let row =
+          input &&
+          typeof input === "object" &&
+          !Array.isArray(input)
+            ? { ...input }
             : null;
 
-        if (!row) return error("Invalid row supplied", 422);
+        if (!row) {
+          return error("Invalid row supplied", 422);
+        }
 
-        const keys = Object.keys(row);
-
-        if (!keys.length || keys.some(k => !safeIdentifier(k))) {
+        if (
+          !Object.keys(row).length ||
+          Object.keys(row).some(k => !safeIdentifier(k))
+        ) {
           return error("Invalid fields supplied", 422);
         }
 
+        // Never trust a client-supplied author ID.
+        if (INTERACTION_TABLES.has(table) && !admin) {
+          row.user_id = user.id;
+        }
+
+        const keys = Object.keys(row);
+
         if (table === "artists") {
           if (row.user_id !== user.id) {
-            return error("You may only edit your own artist profile", 403);
+            return error(
+              "You may only edit your own artist profile",
+              403
+            );
           }
 
           const allowed = new Set([
-            "user_id", "name", "bio", "location", "avatar_url"
+            "user_id",
+            "name",
+            "bio",
+            "location",
+            "avatar_url"
           ]);
 
           if (keys.some(k => !allowed.has(k))) {
-            return error("Invalid artist profile fields", 422);
+            return error(
+              "Invalid artist profile fields",
+              422
+            );
           }
 
           const existing = await env.DB.prepare(
@@ -567,7 +731,9 @@ async function dbRoute(request, env, path) {
             await env.DB.prepare(`
               INSERT INTO artists (${insertKeys.join(",")})
               VALUES (${insertKeys.map(() => "?").join(",")})
-            `).bind(...insertKeys.map(k => insertRow[k] ?? null)).run();
+            `).bind(
+              ...insertKeys.map(k => insertRow[k] ?? null)
+            ).run();
           }
 
           output.push(await env.DB.prepare(
@@ -579,14 +745,32 @@ async function dbRoute(request, env, path) {
 
         if (!admin && table === "songs") {
           if (row.artist_id !== user.id) {
-            return error("You may only submit songs for your own account", 403);
+            return error(
+              "You may only submit songs for your own account",
+              403
+            );
           }
 
           const allowed = new Set([
-            "title", "artist", "artist_id", "file_url", "audio_url",
-            "cover_url", "description", "genre", "release_date", "producer",
-            "featured_artists", "label", "location", "terms_accepted",
-            "terms_accepted_at", "plays", "likes", "approved", "review_status"
+            "title",
+            "artist",
+            "artist_id",
+            "file_url",
+            "audio_url",
+            "cover_url",
+            "description",
+            "genre",
+            "release_date",
+            "producer",
+            "featured_artists",
+            "label",
+            "location",
+            "terms_accepted",
+            "terms_accepted_at",
+            "plays",
+            "likes",
+            "approved",
+            "review_status"
           ]);
 
           if (keys.some(k => !allowed.has(k))) {
@@ -602,13 +786,17 @@ async function dbRoute(request, env, path) {
               row.terms_accepted.toLowerCase() === "true"
             );
 
+          // Ignore client-supplied approval, play and like counts.
           const safeRow = {
             ...row,
             id: crypto.randomUUID(),
             artist_id: user.id,
             terms_accepted: accepted ? 1 : 0,
             terms_accepted_at: accepted
-              ? (row.terms_accepted_at || new Date().toISOString())
+              ? (
+                  row.terms_accepted_at ||
+                  new Date().toISOString()
+                )
               : null,
             plays: 0,
             likes: 0,
@@ -621,7 +809,9 @@ async function dbRoute(request, env, path) {
           await env.DB.prepare(`
             INSERT INTO songs (${insertKeys.join(",")})
             VALUES (${insertKeys.map(() => "?").join(",")})
-          `).bind(...insertKeys.map(k => safeRow[k] ?? null)).run();
+          `).bind(
+            ...insertKeys.map(k => safeRow[k] ?? null)
+          ).run();
 
           output.push(await env.DB.prepare(
             "SELECT * FROM songs WHERE id = ? LIMIT 1"
@@ -631,13 +821,16 @@ async function dbRoute(request, env, path) {
         }
 
         if (table === "withdrawal_requests" && !admin) {
-          if (row.artist_id !== user.id) {
-            return error("You may only request a withdrawal for your own account", 403);
-          }
+          // Force ownership server-side, regardless of client input.
+          row.artist_id = user.id;
 
           const amount = Number(row.amount);
-          const paymentMethod = String(row.payment_method || "").trim();
-          const paymentDetails = String(row.payment_details || "").trim();
+          const paymentMethod = String(
+            row.payment_method || ""
+          ).trim();
+          const paymentDetails = String(
+            row.payment_details || ""
+          ).trim();
 
           if (
             !Number.isFinite(amount) ||
@@ -655,7 +848,9 @@ async function dbRoute(request, env, path) {
             "SELECT balance FROM artist_wallets WHERE user_id = ? LIMIT 1"
           ).bind(user.id).first();
 
-          if (!wallet) return error("Artist wallet was not found", 409);
+          if (!wallet) {
+            return error("Artist wallet was not found", 409);
+          }
 
           const reserved = await env.DB.prepare(`
             SELECT COALESCE(SUM(amount), 0) AS total
@@ -666,11 +861,15 @@ async function dbRoute(request, env, path) {
 
           const available = Math.max(
             0,
-            Number(wallet.balance || 0) - Number(reserved?.total || 0)
+            Number(wallet.balance || 0) -
+              Number(reserved?.total || 0)
           );
 
           if (amount > available) {
-            return error("Insufficient available artist wallet balance", 409);
+            return error(
+              "Insufficient available artist wallet balance",
+              409
+            );
           }
 
           const newRow = {
@@ -689,28 +888,42 @@ async function dbRoute(request, env, path) {
             await env.DB.prepare(`
               INSERT INTO withdrawal_requests (${insertKeys.join(",")})
               VALUES (${insertKeys.map(() => "?").join(",")})
-            `).bind(...insertKeys.map(k => newRow[k])).run();
+            `).bind(
+              ...insertKeys.map(k => newRow[k])
+            ).run();
           } catch (e) {
-            console.error("Artist withdrawal request failed:", e.message);
+            console.error(
+              "Artist withdrawal request failed:",
+              e.message
+            );
+
             return error(
               "Could not create withdrawal request. Please check the withdrawal table schema.",
               500
             );
           }
 
-          return json({ data: newRow, error: null }, 201);
+          return json(
+            { data: newRow, error: null },
+            201
+          );
         }
 
-        if (ARTIST_OWNED_FINANCIAL_TABLES.has(table) && !admin) {
-          return error("Admin access required for this operation", 403);
+        if (
+          ARTIST_OWNED_FINANCIAL_TABLES.has(table) &&
+          !admin
+        ) {
+          return error(
+            "Admin access required for this operation",
+            403
+          );
         }
 
-        if (!admin && !interactionTables.has(table)) {
-          return error("Admin access required for this operation", 403);
-        }
-
-        if (wantsUpsert) {
-          return error("Upsert is not supported for this table", 422);
+        if (!admin && !INTERACTION_TABLES.has(table)) {
+          return error(
+            "Admin access required for this operation",
+            403
+          );
         }
 
         const sql = `
@@ -718,7 +931,10 @@ async function dbRoute(request, env, path) {
           VALUES (${keys.map(() => "?").join(",")})
         `;
 
-        await env.DB.prepare(sql).bind(...keys.map(k => row[k] ?? null)).run();
+        await env.DB.prepare(sql).bind(
+          ...keys.map(k => row[k] ?? null)
+        ).run();
+
         output.push(row);
       }
 
@@ -729,17 +945,25 @@ async function dbRoute(request, env, path) {
     }
 
     if (method === "PATCH" || method === "PUT") {
-      if (!admin) return error("Admin access required", 403);
+      if (!admin) {
+        return error("Admin access required", 403);
+      }
 
       const body = await readBody(request);
       const keys = Object.keys(body || {});
 
-      if (!keys.length || keys.some(k => !safeIdentifier(k))) {
+      if (
+        !keys.length ||
+        keys.some(k => !safeIdentifier(k))
+      ) {
         return error("Invalid fields supplied", 422);
       }
 
       if (table === "songs") {
-        return error("Use the song approval endpoint to change song status.", 403);
+        return error(
+          "Use the song approval endpoint to change song status.",
+          403
+        );
       }
 
       const sql = `
@@ -757,7 +981,9 @@ async function dbRoute(request, env, path) {
     }
 
     if (method === "DELETE") {
-      if (!admin) return error("Admin access required", 403);
+      if (!admin) {
+        return error("Admin access required", 403);
+      }
 
       await env.DB.prepare(
         `DELETE FROM ${table}${where}`
@@ -775,16 +1001,24 @@ async function dbRoute(request, env, path) {
 
 async function adminRoute(request, env, path) {
   const user = await currentUser(request, env);
-  if (!user) return error("Authentication required", 401);
+
+  if (!user) {
+    return error("Authentication required", 401);
+  }
 
   const admin = await getAdmin(env, user);
-  if (!admin) return error("Admin access required", 403);
+
+  if (!admin) {
+    return error("Admin access required", 403);
+  }
 
   const superAdmin = admin.role === "super_admin";
   const url = new URL(request.url);
 
   if (request.method === "GET" && path === "/api/admins") {
-    if (!superAdmin) return error("Super Admin access required", 403);
+    if (!superAdmin) {
+      return error("Super Admin access required", 403);
+    }
 
     try {
       const result = await env.DB.prepare(`
@@ -793,7 +1027,10 @@ async function adminRoute(request, env, path) {
         ORDER BY created_at DESC
       `).all();
 
-      return json({ data: result.results || [], error: null });
+      return json({
+        data: result.results || [],
+        error: null
+      });
     } catch (e) {
       console.error("Admin listing failed:", e.message);
       return error("Could not load administrators", 500);
@@ -801,14 +1038,18 @@ async function adminRoute(request, env, path) {
   }
 
   if (request.method === "POST" && path === "/api/admins") {
-    if (!superAdmin) return error("Super Admin access required", 403);
+    if (!superAdmin) {
+      return error("Super Admin access required", 403);
+    }
 
     const body = await readBody(request);
     const targetEmail = String(
       body.email || body.target_email || ""
     ).trim().toLowerCase();
 
-    const role = String(body.role || body.target_role || "admin");
+    const role = String(
+      body.role || body.target_role || "admin"
+    );
 
     if (
       !targetEmail ||
@@ -827,7 +1068,10 @@ async function adminRoute(request, env, path) {
       `).bind(targetEmail).first();
 
       if (!target) {
-        return error("No registered account exists for that email.", 404);
+        return error(
+          "No registered account exists for that email.",
+          404
+        );
       }
 
       const existing = await env.DB.prepare(
@@ -839,13 +1083,22 @@ async function adminRoute(request, env, path) {
           UPDATE admins
           SET email = ?, role = ?, active = 1
           WHERE user_id = ?
-        `).bind(target.email, role, target.id).run();
+        `).bind(
+          target.email,
+          role,
+          target.id
+        ).run();
       } else {
         await env.DB.prepare(`
-          INSERT INTO admins (id, user_id, email, role, active, created_at)
+          INSERT INTO admins (
+            id, user_id, email, role, active, created_at
+          )
           VALUES (?, ?, ?, ?, 1, datetime('now'))
         `).bind(
-          crypto.randomUUID(), target.id, target.email, role
+          crypto.randomUUID(),
+          target.id,
+          target.email,
+          role
         ).run();
       }
 
@@ -856,10 +1109,17 @@ async function adminRoute(request, env, path) {
     }
   }
 
-  if (request.method === "PATCH" && path.startsWith("/api/admins/")) {
-    if (!superAdmin) return error("Super Admin access required", 403);
+  if (
+    request.method === "PATCH" &&
+    path.startsWith("/api/admins/")
+  ) {
+    if (!superAdmin) {
+      return error("Super Admin access required", 403);
+    }
 
-    const adminId = decodeURIComponent(path.slice("/api/admins/".length));
+    const adminId = decodeURIComponent(
+      path.slice("/api/admins/".length)
+    );
 
     if (!adminId || adminId.includes("/")) {
       return error("Invalid administrator ID", 422);
@@ -869,7 +1129,10 @@ async function adminRoute(request, env, path) {
     const active = body.active;
 
     if (![true, false, 0, 1, "0", "1"].includes(active)) {
-      return error("active must be true, false, 1 or 0", 422);
+      return error(
+        "active must be true, false, 1 or 0",
+        422
+      );
     }
 
     try {
@@ -877,19 +1140,30 @@ async function adminRoute(request, env, path) {
         "SELECT id, user_id, role FROM admins WHERE id = ? LIMIT 1"
       ).bind(adminId).first();
 
-      if (!target) return error("Administrator not found", 404);
+      if (!target) {
+        return error("Administrator not found", 404);
+      }
 
       if (target.user_id === user.id) {
-        return error("You cannot deactivate your own account", 422);
+        return error(
+          "You cannot deactivate your own account",
+          422
+        );
       }
 
       if (target.role === "super_admin") {
-        return error("This endpoint cannot deactivate a Super Admin.", 403);
+        return error(
+          "This endpoint cannot deactivate a Super Admin.",
+          403
+        );
       }
 
       await env.DB.prepare(
         "UPDATE admins SET active = ? WHERE id = ?"
-      ).bind(isTruthyDb(active) ? 1 : 0, adminId).run();
+      ).bind(
+        isTruthyDb(active) ? 1 : 0,
+        adminId
+      ).run();
 
       return json({ success: true, error: null });
     } catch (e) {
@@ -925,9 +1199,16 @@ async function adminRoute(request, env, path) {
         `).all();
       }
 
-      return json({ data: result.results || [], error: null });
+      return json({
+        data: result.results || [],
+        error: null
+      });
     } catch (e) {
-      console.error("Song submissions listing failed:", e.message);
+      console.error(
+        "Song submissions listing failed:",
+        e.message
+      );
+
       return error("Could not load song submissions", 500);
     }
   }
@@ -938,6 +1219,7 @@ async function adminRoute(request, env, path) {
     path.endsWith("/review")
   ) {
     const prefix = "/api/admin/songs/";
+
     const songId = decodeURIComponent(
       path.slice(prefix.length, -"/review".length)
     );
@@ -950,7 +1232,10 @@ async function adminRoute(request, env, path) {
     const status = String(body.status || "").toLowerCase();
 
     if (!["approved", "rejected", "pending"].includes(status)) {
-      return error("Status must be approved, rejected or pending.", 422);
+      return error(
+        "Status must be approved, rejected or pending.",
+        422
+      );
     }
 
     try {
@@ -958,13 +1243,19 @@ async function adminRoute(request, env, path) {
         "SELECT id FROM songs WHERE id = ? LIMIT 1"
       ).bind(songId).first();
 
-      if (!song) return error("Song not found", 404);
+      if (!song) {
+        return error("Song not found", 404);
+      }
 
       await env.DB.prepare(`
         UPDATE songs
         SET approved = ?, review_status = ?
         WHERE id = ?
-      `).bind(status === "approved" ? 1 : 0, status, songId).run();
+      `).bind(
+        status === "approved" ? 1 : 0,
+        status,
+        songId
+      ).run();
 
       return json({
         success: true,
@@ -1058,9 +1349,55 @@ async function rpcRoute(request, env, name) {
     }
 
     if (name === "record_song_play") {
-      const id = body.song_id;
+      const id = String(body.song_id || "").trim();
 
-      if (!id) return error("song_id is required", 422);
+      if (!id) {
+        return error("song_id is required", 422);
+      }
+
+      // Use Cloudflare's client IP header for a basic repeat-play
+      // guard. Do not trust a client-supplied IP in the JSON body.
+      const ip = request.headers.get("CF-Connecting-IP");
+
+      if (!ip) {
+        return error(
+          "Unable to verify this play request. Please try again.",
+          400
+        );
+      }
+
+      const song = await env.DB.prepare(`
+        SELECT id
+        FROM songs
+        WHERE id = ? AND approved = 1
+        LIMIT 1
+      `).bind(id).first();
+
+      if (!song) {
+        // Do not increment plays for missing or unapproved songs.
+        return json({ data: true, error: null });
+      }
+
+      // Count a given IP's play for a song at most once per 10 minutes.
+      const recentPlay = await env.DB.prepare(`
+        SELECT id
+        FROM song_play_log
+        WHERE song_id = ?
+          AND ip_address = ?
+          AND datetime(played_at) >= datetime('now', '-10 minutes')
+        LIMIT 1
+      `).bind(id, ip).first();
+
+      if (recentPlay) {
+        return json({ data: true, error: null });
+      }
+
+      await env.DB.prepare(`
+        INSERT INTO song_play_log (
+          song_id, ip_address, played_at
+        )
+        VALUES (?, ?, datetime('now'))
+      `).bind(id, ip).run();
 
       await env.DB.prepare(`
         UPDATE songs
@@ -1076,10 +1413,17 @@ async function rpcRoute(request, env, name) {
         return error("Super Admin access required", 403);
       }
 
-      const target = String(body.target_email || "").trim().toLowerCase();
+      const target = String(
+        body.target_email || ""
+      ).trim().toLowerCase();
+
       const role = String(body.target_role || "admin");
 
-      if (!target || !["admin", "super_admin"].includes(role)) {
+      if (
+        !target ||
+        !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(target) ||
+        !["admin", "super_admin"].includes(role)
+      ) {
         return error("Invalid admin details", 422);
       }
 
@@ -1087,10 +1431,13 @@ async function rpcRoute(request, env, name) {
         SELECT id, email
         FROM auth_users
         WHERE lower(email) = ?
+          AND deleted_at IS NULL
         LIMIT 1
       `).bind(target).first();
 
-      if (!targetUser) return error("User not found", 404);
+      if (!targetUser) {
+        return error("User not found", 404);
+      }
 
       const existing = await env.DB.prepare(
         "SELECT id FROM admins WHERE user_id = ? LIMIT 1"
@@ -1101,13 +1448,22 @@ async function rpcRoute(request, env, name) {
           UPDATE admins
           SET email = ?, role = ?, active = 1
           WHERE user_id = ?
-        `).bind(targetUser.email, role, targetUser.id).run();
+        `).bind(
+          targetUser.email,
+          role,
+          targetUser.id
+        ).run();
       } else {
         await env.DB.prepare(`
-          INSERT INTO admins (id, user_id, email, role, active, created_at)
+          INSERT INTO admins (
+            id, user_id, email, role, active, created_at
+          )
           VALUES (?, ?, ?, ?, 1, datetime('now'))
         `).bind(
-          crypto.randomUUID(), targetUser.id, targetUser.email, role
+          crypto.randomUUID(),
+          targetUser.id,
+          targetUser.email,
+          role
         ).run();
       }
 
@@ -1118,8 +1474,12 @@ async function rpcRoute(request, env, name) {
       name === "remove_copyright_song" ||
       name === "remove_copyright_artist"
     ) {
-      if (!admin) return error("Admin access required", 403);
+      if (!admin) {
+        return error("Admin access required", 403);
+      }
 
+      // This operation is deliberately not simulated. The original
+      // Worker did not contain the implementation or its schema rules.
       return error(
         "Copyright removal implementation needs to be restored separately.",
         501
@@ -1150,7 +1510,9 @@ async function storageRoute(request, env, path) {
   if (
     !bucket ||
     !objectPath ||
-    objectPath.split("/").some(part => part === ".." || part === ".")
+    objectPath.split("/").some(
+      part => part === ".." || part === "."
+    )
   ) {
     return error("Storage path missing or invalid", 400);
   }
@@ -1160,23 +1522,33 @@ async function storageRoute(request, env, path) {
   }
 
   if (request.method === "GET") {
-    const object = await env.MEDIA_BUCKET.get(`${bucket}/${objectPath}`);
+    const object = await env.MEDIA_BUCKET.get(
+      `${bucket}/${objectPath}`
+    );
 
-    if (!object) return error("File not found", 404);
+    if (!object) {
+      return error("File not found", 404);
+    }
 
     return new Response(object.body, {
       headers: {
         "Content-Type":
-          object.httpMetadata?.contentType || "application/octet-stream",
+          object.httpMetadata?.contentType ||
+          "application/octet-stream",
         "Cache-Control": "public, max-age=31536000"
       }
     });
   }
 
-  if (request.method === "POST" || request.method === "PUT") {
+  if (
+    request.method === "POST" ||
+    request.method === "PUT"
+  ) {
     const user = await currentUser(request, env);
 
-    if (!user) return error("Authentication required", 401);
+    if (!user) {
+      return error("Authentication required", 401);
+    }
 
     const admin = await isAdmin(env, user);
 
@@ -1184,24 +1556,41 @@ async function storageRoute(request, env, path) {
       return error("Admin access required", 403);
     }
 
-    if (!admin && !["audio", "covers", "avatars"].includes(bucket)) {
+    if (
+      !admin &&
+      !["audio", "covers", "avatars"].includes(bucket)
+    ) {
       return error("Upload not allowed", 403);
     }
 
-    if (!admin && !objectPath.startsWith(`${user.id}/`)) {
-      return error("You may only upload files to your own folder", 403);
+    if (
+      !admin &&
+      !objectPath.startsWith(`${user.id}/`)
+    ) {
+      return error(
+        "You may only upload files to your own folder",
+        403
+      );
     }
 
     const bytes = await request.arrayBuffer();
 
-    await env.MEDIA_BUCKET.put(`${bucket}/${objectPath}`, bytes, {
-      httpMetadata: {
-        contentType:
-          request.headers.get("Content-Type") || "application/octet-stream"
+    await env.MEDIA_BUCKET.put(
+      `${bucket}/${objectPath}`,
+      bytes,
+      {
+        httpMetadata: {
+          contentType:
+            request.headers.get("Content-Type") ||
+            "application/octet-stream"
+        }
       }
-    });
+    );
 
-    return json({ data: { path: objectPath }, error: null });
+    return json({
+      data: { path: objectPath },
+      error: null
+    });
   }
 
   return error("Method not allowed", 405);
@@ -1214,7 +1603,9 @@ async function paymentRoute(request, env, type) {
 
   const user = await currentUser(request, env);
 
-  if (!user) return error("Authentication required", 401);
+  if (!user) {
+    return error("Authentication required", 401);
+  }
 
   if (
     type === "disbursement" &&
@@ -1227,7 +1618,11 @@ async function paymentRoute(request, env, type) {
   const amount = Number(body.amount);
   const phone = String(body.phone_number || "").trim();
 
-  if (!Number.isFinite(amount) || amount < 1000 || !phone) {
+  if (
+    !Number.isFinite(amount) ||
+    amount < 1000 ||
+    !phone
+  ) {
     return error(
       "A valid amount of at least UGX 1,000 and a phone number are required",
       422
@@ -1238,8 +1633,7 @@ async function paymentRoute(request, env, type) {
     ? env.PESAJET_COLLECTION_URL
     : env.PESAJET_DISBURSEMENT_URL;
 
-  // Accept the API-key variable already used by this deployment,
-  // while preserving compatibility with the older token variable.
+  // Preserve compatibility with the existing deployment variables.
   const token = env.PESAJET_API_KEY || env.PESAJET_TOKEN;
 
   if (!endpoint || !token) {
@@ -1263,6 +1657,7 @@ async function paymentRoute(request, env, type) {
     });
 
     const result = await response.json().catch(() => ({}));
+
     return json(result, response.status);
   } catch (e) {
     console.error("Payment request failed:", e.message);
@@ -1302,15 +1697,30 @@ export default {
           env,
           path.split("/")[3]
         );
-      } else if (path === "/api/payments/pesajet-collection") {
-        response = await paymentRoute(request, env, "collection");
-      } else if (path === "/api/payments/pesajet-disbursement") {
-        response = await paymentRoute(request, env, "disbursement");
+      } else if (
+        path === "/api/payments/pesajet-collection"
+      ) {
+        response = await paymentRoute(
+          request,
+          env,
+          "collection"
+        );
+      } else if (
+        path === "/api/payments/pesajet-disbursement"
+      ) {
+        response = await paymentRoute(
+          request,
+          env,
+          "disbursement"
+        );
       } else if (path.startsWith("/api/storage/public/")) {
         response = await storageRoute(
           request,
           env,
-          path.replace("/api/storage/public", "/api/storage")
+          path.replace(
+            "/api/storage/public",
+            "/api/storage"
+          )
         );
       } else if (path === "/api/storage/upload") {
         const bucket = url.searchParams.get("bucket") || "audio";
