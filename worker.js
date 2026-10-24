@@ -3,6 +3,8 @@ import bcrypt from "bcryptjs";
 
 const COOKIE_NAME = "nile_session";
 const SESSION_SECONDS = 30 * 24 * 60 * 60;
+const EARNINGS_PER_PLAY = 0.5;
+const WITHDRAWAL_MINIMUM = 10000;
 
 const PUBLIC_READ_TABLES = new Set([
   "songs", "artists", "comments", "likes",
@@ -549,8 +551,40 @@ async function dbRoute(request, env, path) {
 
     const publicArtistRead = table === "artists" && !admin;
 
+    // Public artist reads may expose only these explicitly approved fields.
+    // This applies even when a caller supplies a custom `select` parameter.
+    const publicArtistColumns = new Set([
+      "id", "name", "bio", "avatar_url", "location",
+      "total_plays", "verified", "created_at"
+    ]);
+
+    if (
+      publicArtistRead &&
+      columns.some(column =>
+        column !== "*" && !publicArtistColumns.has(column)
+      )
+    ) {
+      return error("One or more requested artist fields are not public", 403);
+    }
+
+    // Copyright takedowns are soft removals: keep the records for audit,
+    // but never expose removed songs or artist profiles to ordinary users.
+    if (table === "songs" && !admin) {
+      where = appendCondition(
+        where,
+        "NOT EXISTS (SELECT 1 FROM copyright_removals cr WHERE cr.content_type = 'song' AND cr.content_id = songs.id)"
+      );
+    }
+
+    if (publicArtistRead) {
+      where = appendCondition(
+        where,
+        "NOT EXISTS (SELECT 1 FROM copyright_removals cr WHERE cr.content_type = 'artist' AND (cr.content_id = artists.id OR cr.content_id = artists.user_id))"
+      );
+    }
+
     const effectiveColumns =
-      publicArtistRead && selectInput === "*"
+      publicArtistRead && columns.includes("*")
         ? "id, name, bio, avatar_url, location, total_plays, verified, created_at"
         : columns.join(",");
 
@@ -590,10 +624,8 @@ async function dbRoute(request, env, path) {
           const copy = { ...row };
 
           delete copy.earnings;
-
-          if (!user) {
-            delete copy.user_id;
-          }
+          // Never disclose account linkage, even to another signed-in user.
+          delete copy.user_id;
 
           return copy;
         });
@@ -672,8 +704,19 @@ async function dbRoute(request, env, path) {
           return error("Invalid fields supplied", 422);
         }
 
-        // Never trust a client-supplied author ID.
+        // Never trust a client-supplied author ID or moderation fields.
         if (INTERACTION_TABLES.has(table) && !admin) {
+          const serverControlledFields = new Set([
+            "approved", "is_approved", "moderation_status", "moderated_by",
+            "is_admin", "role", "status", "deleted_at", "is_deleted",
+            "hidden", "is_hidden", "is_pinned", "pinned",
+            "created_by", "like_count", "likes_count", "reaction_count"
+          ]);
+
+          if (Object.keys(row).some(key => serverControlledFields.has(key.toLowerCase()))) {
+            return error("Moderation and system fields cannot be set by users", 422);
+          }
+
           row.user_id = user.id;
         }
 
@@ -834,41 +877,13 @@ async function dbRoute(request, env, path) {
 
           if (
             !Number.isFinite(amount) ||
-            amount < 10000 ||
+            amount < WITHDRAWAL_MINIMUM ||
             !paymentMethod ||
             !paymentDetails
           ) {
             return error(
               "A valid amount of at least UGX 10,000, payment method, and payment details are required",
               422
-            );
-          }
-
-          const wallet = await env.DB.prepare(
-            "SELECT balance FROM artist_wallets WHERE user_id = ? LIMIT 1"
-          ).bind(user.id).first();
-
-          if (!wallet) {
-            return error("Artist wallet was not found", 409);
-          }
-
-          const reserved = await env.DB.prepare(`
-            SELECT COALESCE(SUM(amount), 0) AS total
-            FROM withdrawal_requests
-            WHERE artist_id = ?
-              AND lower(status) IN ('pending', 'processing')
-          `).bind(user.id).first();
-
-          const available = Math.max(
-            0,
-            Number(wallet.balance || 0) -
-              Number(reserved?.total || 0)
-          );
-
-          if (amount > available) {
-            return error(
-              "Insufficient available artist wallet balance",
-              409
             );
           }
 
@@ -882,15 +897,49 @@ async function dbRoute(request, env, path) {
             created_at: new Date().toISOString()
           };
 
-          const insertKeys = Object.keys(newRow);
-
+          // Check available earnings and create the reservation in one SQL
+          // statement. Concurrent requests cannot both spend the same balance.
           try {
-            await env.DB.prepare(`
-              INSERT INTO withdrawal_requests (${insertKeys.join(",")})
-              VALUES (${insertKeys.map(() => "?").join(",")})
+            const inserted = await env.DB.prepare(`
+              INSERT INTO withdrawal_requests
+                (id, artist_id, amount, payment_method, payment_details, status, created_at)
+              SELECT ?, ?, ?, ?, ?, 'pending', ?
+              WHERE ? <= MAX(
+                0,
+                COALESCE((
+                  SELECT SUM(COALESCE(plays, 0))
+                  FROM songs
+                  WHERE artist_id = ? AND approved = 1
+                ), 0) * ?
+                - COALESCE((
+                  SELECT SUM(amount)
+                  FROM withdrawal_requests
+                  WHERE artist_id = ?
+                    AND lower(status) IN (
+                      'pending', 'processing', 'paid', 'completed',
+                      'success', 'successful'
+                    )
+                ), 0)
+              )
             `).bind(
-              ...insertKeys.map(k => newRow[k])
+              newRow.id,
+              user.id,
+              amount,
+              paymentMethod,
+              paymentDetails,
+              newRow.created_at,
+              amount,
+              user.id,
+              EARNINGS_PER_PLAY,
+              user.id
             ).run();
+
+            if (Number(inserted?.meta?.changes || 0) === 0) {
+              return error(
+                "Insufficient available artist earnings. Refresh your dashboard and try again.",
+                409
+              );
+            }
           } catch (e) {
             console.error(
               "Artist withdrawal request failed:",
@@ -926,16 +975,24 @@ async function dbRoute(request, env, path) {
           );
         }
 
+        // Return the actual row inserted by SQLite, including generated/default
+        // values such as the database-generated id. The frontend relies on this
+        // id to confirm uploads and avoid retrying a successful insert.
         const sql = `
           INSERT INTO ${table} (${keys.join(",")})
           VALUES (${keys.map(() => "?").join(",")})
+          RETURNING *
         `;
 
-        await env.DB.prepare(sql).bind(
+        const insertedResult = await env.DB.prepare(sql).bind(
           ...keys.map(k => row[k] ?? null)
-        ).run();
+        ).all();
+        const insertedRow = insertedResult?.results?.[0];
+        if (!insertedRow) {
+          return error("The database did not return the inserted record", 500);
+        }
 
-        output.push(row);
+        output.push(insertedRow);
       }
 
       return json({
@@ -996,6 +1053,112 @@ async function dbRoute(request, env, path) {
   } catch (e) {
     console.error("Database write failed:", e.message);
     return error("Database request failed", 500);
+  }
+}
+
+async function removeCopyrightContent(env, user, body) {
+  const admin = user ? await getAdmin(env, user) : null;
+  if (!admin || admin.role !== "super_admin") {
+    return error("Super Admin access required", 403);
+  }
+
+  const contentType = String(body.content_type || "").trim().toLowerCase();
+  const contentId = String(
+    body.content_id || body.song_id || body.artist_id || ""
+  ).trim();
+  const reason = String(body.reason || "").trim();
+
+  if (!["song", "artist"].includes(contentType) || !contentId || reason.length < 5) {
+    return error(
+      "Choose a song or artist, and provide a copyright-removal reason of at least 5 characters.",
+      422
+    );
+  }
+
+  try {
+    let contentTitle = "";
+    let statements = [];
+
+    if (contentType === "song") {
+      const song = await env.DB.prepare(
+        "SELECT id, title FROM songs WHERE id = ? LIMIT 1"
+      ).bind(contentId).first();
+
+      if (!song) {
+        return error("Song not found", 404);
+      }
+
+      contentTitle = String(song.title || "Untitled song");
+      statements = [
+        env.DB.prepare(`
+          UPDATE songs
+          SET approved = 0, review_status = 'rejected', rejection_reason = ?
+          WHERE id = ?
+        `).bind(`Copyright removal: ${reason}`, song.id),
+        env.DB.prepare(`
+          INSERT INTO copyright_removals
+            (id, removed_by, content_type, content_id, content_title, reason, created_at)
+          VALUES (?, ?, 'song', ?, ?, ?, ?)
+        `).bind(
+          crypto.randomUUID(),
+          user.id,
+          song.id,
+          contentTitle,
+          reason,
+          new Date().toISOString()
+        )
+      ];
+    } else {
+      const artist = await env.DB.prepare(`
+        SELECT id, user_id, name
+        FROM artists
+        WHERE id = ? OR user_id = ?
+        LIMIT 1
+      `).bind(contentId, contentId).first();
+
+      if (!artist) {
+        return error("Artist profile not found", 404);
+      }
+
+      const artistUserId = String(artist.user_id || artist.id);
+      contentTitle = String(artist.name || "Artist profile");
+
+      statements = [
+        env.DB.prepare(`
+          UPDATE songs
+          SET approved = 0, review_status = 'rejected', rejection_reason = ?
+          WHERE artist_id = ?
+        `).bind(`Copyright removal: ${reason}`, artistUserId),
+        env.DB.prepare(`
+          INSERT INTO copyright_removals
+            (id, removed_by, content_type, content_id, content_title, reason, created_at)
+          VALUES (?, ?, 'artist', ?, ?, ?, ?)
+        `).bind(
+          crypto.randomUUID(),
+          user.id,
+          artist.id,
+          contentTitle,
+          reason,
+          new Date().toISOString()
+        )
+      ];
+    }
+
+    await env.DB.batch(statements);
+
+    return json({
+      success: true,
+      data: {
+        content_type: contentType,
+        content_id: contentId,
+        content_title: contentTitle,
+        reason
+      },
+      error: null
+    }, 201);
+  } catch (e) {
+    console.error("Copyright removal failed:", e.message);
+    return error("Could not record the copyright removal", 500);
   }
 }
 
@@ -1172,6 +1335,31 @@ async function adminRoute(request, env, path) {
     }
   }
 
+  if (request.method === "GET" && path === "/api/admin/copyright-removals") {
+    if (!superAdmin) {
+      return error("Super Admin access required", 403);
+    }
+
+    try {
+      const result = await env.DB.prepare(`
+        SELECT id, content_type, content_id, content_title, reason, created_at
+        FROM copyright_removals
+        ORDER BY created_at DESC
+        LIMIT 500
+      `).all();
+
+      return json({ data: result.results || [], error: null });
+    } catch (e) {
+      console.error("Copyright removal history failed:", e.message);
+      return error("Could not load copyright removal history", 500);
+    }
+  }
+
+  if (request.method === "POST" && path === "/api/admin/copyright-removals") {
+    const body = await readBody(request);
+    return removeCopyrightContent(env, user, body);
+  }
+
   if (request.method === "GET" && path === "/api/admin/songs") {
     try {
       const status = url.searchParams.get("status") || "pending";
@@ -1296,9 +1484,17 @@ async function rpcRoute(request, env, name) {
         const result = await env.DB.prepare(
           "SELECT COALESCE(SUM(balance), 0) AS total FROM platform_wallet"
         ).first();
+        const reserved = await env.DB.prepare(`
+          SELECT COALESCE(SUM(amount), 0) AS total
+          FROM platform_payouts
+          WHERE lower(status) IN ('pending', 'processing')
+        `).first();
 
         return json({
-          data: Number(result?.total || 0),
+          data: Math.max(
+            0,
+            Number(result?.total || 0) - Number(reserved?.total || 0)
+          ),
           error: null
         });
       }
@@ -1355,8 +1551,8 @@ async function rpcRoute(request, env, name) {
         return error("song_id is required", 422);
       }
 
-      // Use Cloudflare's client IP header for a basic repeat-play
-      // guard. Do not trust a client-supplied IP in the JSON body.
+      // Use Cloudflare's client IP header for a basic repeat-play guard.
+      // Never trust a client-supplied IP in the JSON body.
       const ip = request.headers.get("CF-Connecting-IP");
 
       if (!ip) {
@@ -1366,46 +1562,37 @@ async function rpcRoute(request, env, name) {
         );
       }
 
-      const song = await env.DB.prepare(`
-        SELECT id
-        FROM songs
-        WHERE id = ? AND approved = 1
-        LIMIT 1
-      `).bind(id).first();
+      // Insert the play log and increment the song in one D1 batch. The
+      // second statement runs only when the first statement inserted a row.
+      const results = await env.DB.batch([
+        env.DB.prepare(`
+          INSERT INTO song_play_log (song_id, ip_address, played_at)
+          SELECT ?, ?, datetime('now')
+          WHERE EXISTS (
+            SELECT 1 FROM songs WHERE id = ? AND approved = 1
+          )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM song_play_log
+            WHERE song_id = ?
+              AND ip_address = ?
+              AND datetime(played_at) >= datetime('now', '-10 minutes')
+          )
+        `).bind(id, ip, id, id, ip),
+        env.DB.prepare(`
+          UPDATE songs
+          SET plays = COALESCE(plays, 0) + 1
+          WHERE id = ? AND approved = 1 AND changes() > 0
+        `).bind(id)
+      ]);
 
-      if (!song) {
-        // Do not increment plays for missing or unapproved songs.
-        return json({ data: true, error: null });
-      }
+      const inserted = Number(results?.[0]?.meta?.changes || 0) > 0;
+      const incremented = Number(results?.[1]?.meta?.changes || 0) > 0;
 
-      // Count a given IP's play for a song at most once per 10 minutes.
-      const recentPlay = await env.DB.prepare(`
-        SELECT id
-        FROM song_play_log
-        WHERE song_id = ?
-          AND ip_address = ?
-          AND datetime(played_at) >= datetime('now', '-10 minutes')
-        LIMIT 1
-      `).bind(id, ip).first();
-
-      if (recentPlay) {
-        return json({ data: true, error: null });
-      }
-
-      await env.DB.prepare(`
-        INSERT INTO song_play_log (
-          song_id, ip_address, played_at
-        )
-        VALUES (?, ?, datetime('now'))
-      `).bind(id, ip).run();
-
-      await env.DB.prepare(`
-        UPDATE songs
-        SET plays = COALESCE(plays, 0) + 1
-        WHERE id = ? AND approved = 1
-      `).bind(id).run();
-
-      return json({ data: true, error: null });
+      return json({
+        data: inserted && incremented,
+        error: null
+      });
     }
 
     if (name === "add_admin_by_email") {
@@ -1474,16 +1661,11 @@ async function rpcRoute(request, env, name) {
       name === "remove_copyright_song" ||
       name === "remove_copyright_artist"
     ) {
-      if (!admin) {
-        return error("Admin access required", 403);
-      }
-
-      // This operation is deliberately not simulated. The original
-      // Worker did not contain the implementation or its schema rules.
-      return error(
-        "Copyright removal implementation needs to be restored separately.",
-        501
-      );
+      return removeCopyrightContent(env, user, {
+        content_type: name === "remove_copyright_song" ? "song" : "artist",
+        content_id: body.content_id || body.song_id || body.artist_id,
+        reason: body.reason
+      });
     }
 
     return error("RPC not implemented", 404);
@@ -1596,75 +1778,406 @@ async function storageRoute(request, env, path) {
   return error("Method not allowed", 405);
 }
 
+function normalizeUgandanPhone(value) {
+  const cleaned = String(value || "").replace(/[\s\-()]/g, "");
+  if (cleaned.startsWith("+256")) return cleaned;
+  if (cleaned.startsWith("256")) return `+${cleaned}`;
+  if (cleaned.startsWith("0")) return `+256${cleaned.slice(1)}`;
+  return cleaned;
+}
+
+function isSuccessfulPaymentStatus(status) {
+  return ["COMPLETED", "SUCCESS", "SUCCESSFUL", "PAID"].includes(
+    String(status || "").toUpperCase()
+  );
+}
+
+async function applyPlatformPaymentStatus(
+  env,
+  type,
+  reference,
+  status,
+  transactionId = ""
+) {
+  const normalized = String(status || "").toUpperCase();
+
+  if (type === "collection") {
+    await env.DB.batch([
+      env.DB.prepare(`
+        UPDATE platform_deposits
+        SET status = ?
+        WHERE reference = ?
+          AND lower(status) NOT IN ('completed', 'success', 'successful', 'paid')
+      `).bind(normalized.toLowerCase(), reference),
+      env.DB.prepare(`
+        UPDATE platform_wallet
+        SET balance = balance + (
+          SELECT amount FROM platform_deposits WHERE reference = ?
+        ),
+        updated_at = datetime('now')
+        WHERE id = (SELECT id FROM platform_wallet ORDER BY created_at LIMIT 1)
+          AND changes() > 0
+          AND ? IN ('COMPLETED', 'SUCCESS', 'SUCCESSFUL', 'PAID')
+      `).bind(reference, normalized)
+    ]);
+    return;
+  }
+
+  await env.DB.batch([
+    env.DB.prepare(`
+      UPDATE platform_payouts
+      SET status = ?,
+          pesajet_transaction_id = COALESCE(NULLIF(?, ''), pesajet_transaction_id),
+          completed_at = CASE
+            WHEN ? IN ('COMPLETED', 'SUCCESS', 'SUCCESSFUL', 'PAID')
+            THEN datetime('now') ELSE completed_at END,
+          failed_at = CASE
+            WHEN ? IN ('FAILED', 'EXPIRED', 'REJECTED')
+            THEN datetime('now') ELSE failed_at END
+      WHERE reference = ?
+        AND lower(status) NOT IN ('completed', 'success', 'successful', 'paid')
+    `).bind(normalized, transactionId, normalized, normalized, reference),
+    env.DB.prepare(`
+      UPDATE platform_wallet
+      SET balance = MAX(0, balance - (
+        SELECT amount FROM platform_payouts WHERE reference = ?
+      )),
+      updated_at = datetime('now')
+      WHERE id = (SELECT id FROM platform_wallet ORDER BY created_at LIMIT 1)
+        AND changes() > 0
+        AND ? IN ('COMPLETED', 'SUCCESS', 'SUCCESSFUL', 'PAID')
+    `).bind(reference, normalized)
+  ]);
+}
+
+async function verifyPesaJetWebhook(rawBody, signature, secret) {
+  if (!signature || !secret) return false;
+
+  // PesaJet's verification example signs the original request body.
+  // Do not parse and re-serialize JSON before calculating the HMAC:
+  // whitespace and property ordering are part of the signed bytes.
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+
+  const digest = new Uint8Array(await crypto.subtle.sign(
+    "HMAC",
+    key,
+    new TextEncoder().encode(rawBody)
+  ));
+
+  const expectedHex = Array.from(digest)
+    .map(byte => byte.toString(16).padStart(2, "0"))
+    .join("");
+
+  const expectedBase64 = btoa(
+    String.fromCharCode(...digest)
+  );
+
+  const received = String(signature).trim().replace(/^sha256=/i, "");
+
+  // Accept either common HMAC-SHA256 digest encoding (hex or Base64),
+  // while comparing in constant time once lengths match.
+  for (const expected of [expectedHex, expectedBase64]) {
+    const candidate = expected === expectedHex
+      ? received.toLowerCase()
+      : received;
+
+    if (candidate.length !== expected.length) continue;
+
+    let mismatch = 0;
+    for (let i = 0; i < expected.length; i++) {
+      mismatch |= expected.charCodeAt(i) ^ candidate.charCodeAt(i);
+    }
+    if (mismatch === 0) return true;
+  }
+
+  return false;
+}
+
+async function paymentWebhookRoute(request, env) {
+  if (request.method !== "POST") {
+    return error("Method not allowed", 405);
+  }
+
+  const secret = env.PESAJET_WEBHOOK_SECRET;
+  if (!secret) {
+    console.error("PesaJet webhook secret is not configured.");
+    return error("Payment webhook verification is not configured.", 503);
+  }
+
+  const rawBody = await request.text();
+  const signature = request.headers.get("X-Webhook-Signature");
+
+  if (!(await verifyPesaJetWebhook(rawBody, signature, secret))) {
+    return error("Invalid PesaJet webhook signature", 401);
+  }
+
+  let payload;
+  try {
+    payload = JSON.parse(rawBody);
+  } catch {
+    return error("Invalid webhook payload", 400);
+  }
+
+  const event = String(payload.event || "").toLowerCase();
+  if (event === "webhook.test") {
+    return json({ received: true, test: true });
+  }
+
+  const eventStatus = {
+    "payment.completed": "COMPLETED",
+    "payment.failed": "FAILED",
+    "payment.expired": "EXPIRED"
+  };
+  const status = eventStatus[event];
+
+  if (!status) {
+    return json({ received: true, ignored: true });
+  }
+
+  const reference = String(payload.reference || "").trim();
+  const transactionId = String(payload.transactionId || "").trim();
+
+  if (!reference) {
+    return error("Webhook reference is required", 422);
+  }
+
+  try {
+    // A reference belongs to one transaction table; the unmatched update is a no-op.
+    await applyPlatformPaymentStatus(
+      env,
+      "collection",
+      reference,
+      status,
+      transactionId
+    );
+    await applyPlatformPaymentStatus(
+      env,
+      "disbursement",
+      reference,
+      status,
+      transactionId
+    );
+
+    return json({ received: true });
+  } catch (e) {
+    console.error("PesaJet webhook processing failed:", e.message);
+    return error("Could not process the payment webhook", 500);
+  }
+}
+
 async function paymentRoute(request, env, type) {
   if (request.method !== "POST") {
     return error("Method not allowed", 405);
   }
 
   const user = await currentUser(request, env);
-
   if (!user) {
     return error("Authentication required", 401);
   }
 
-  if (
-    type === "disbursement" &&
-    !(await isSuperAdmin(env, user))
-  ) {
+  if (!(await isSuperAdmin(env, user))) {
     return error("Super Admin access required", 403);
   }
 
   const body = await readBody(request);
   const amount = Number(body.amount);
-  const phone = String(body.phone_number || "").trim();
+  const phone = normalizeUgandanPhone(body.phone_number || body.phoneNumber);
+  const provider = String(body.provider || body.network || "").trim().toLowerCase();
 
   if (
     !Number.isFinite(amount) ||
     amount < 1000 ||
-    !phone
+    !/^\+256\d{9}$/.test(phone)
   ) {
     return error(
-      "A valid amount of at least UGX 1,000 and a phone number are required",
+      "A valid amount of at least UGX 1,000 and a valid Ugandan mobile-money number are required",
       422
     );
   }
 
-  const endpoint = type === "collection"
-    ? env.PESAJET_COLLECTION_URL
-    : env.PESAJET_DISBURSEMENT_URL;
+  if (!["mtn", "airtel"].includes(provider)) {
+    return error("Provider must be MTN or Airtel", 422);
+  }
 
-  // Preserve compatibility with the existing deployment variables.
-  const token = env.PESAJET_API_KEY || env.PESAJET_TOKEN;
+  const apiKey = env.PESAJET_API_KEY || env.PESAJET_TOKEN;
+  const baseUrl = String(
+    env.PESAJET_API_BASE_URL || "https://payments.pesajet.com/api/v1"
+  ).replace(/\/+$/, "");
 
-  if (!endpoint || !token) {
-    console.error("PesaJet configuration missing:", {
-      endpointConfigured: Boolean(endpoint),
-      apiKeyConfigured: Boolean(env.PESAJET_API_KEY),
-      tokenConfigured: Boolean(env.PESAJET_TOKEN)
-    });
-
+  if (!apiKey) {
+    console.error("PesaJet API key is not configured.");
     return error("Payment service is not configured.", 503);
   }
 
+  const reference = String(
+    body.reference || `NILESONIQ-${type.toUpperCase()}-${crypto.randomUUID()}`
+  ).trim().slice(0, 120);
+
+  if (!reference) {
+    return error("A payment reference is required", 422);
+  }
+
+  const transactionId = crypto.randomUUID();
+  const description = String(
+    body.description ||
+    (type === "collection"
+      ? "NileSoniq platform wallet deposit"
+      : "NileSoniq platform wallet withdrawal")
+  ).slice(0, 250);
+
   try {
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}`
-      },
-      body: JSON.stringify(body)
-    });
+    if (type === "collection") {
+      await env.DB.prepare(`
+        INSERT INTO platform_deposits
+          (id, amount, currency, provider, phone_number, reference, status, created_at)
+        VALUES (?, ?, 'UGX', ?, ?, ?, 'pending', ?)
+      `).bind(
+        transactionId,
+        amount,
+        provider,
+        phone,
+        reference,
+        new Date().toISOString()
+      ).run();
+    } else {
+      // Reserve the amount in the same atomic INSERT that checks the available
+      // platform wallet balance, so concurrent requests cannot spend the same funds.
+      const reservation = await env.DB.prepare(`
+        INSERT INTO platform_payouts
+          (id, amount, currency, phone_number, provider, reference, description, status, created_by, created_at)
+        SELECT ?, ?, 'UGX', ?, ?, ?, ?, 'PENDING', ?, datetime('now')
+        WHERE COALESCE(
+          (SELECT SUM(balance) FROM platform_wallet), 0
+        ) - COALESCE(
+          (SELECT SUM(amount) FROM platform_payouts
+           WHERE lower(status) IN ('pending', 'processing')), 0
+        ) >= ?
+      `).bind(
+        transactionId,
+        amount,
+        phone,
+        provider,
+        reference,
+        description,
+        user.id,
+        amount
+      ).run();
 
-    const result = await response.json().catch(() => ({}));
+      if (Number(reservation?.meta?.changes || 0) === 0) {
+        return error("Insufficient available platform wallet balance", 409);
+      }
+    }
 
-    return json(result, response.status);
+    const payload = {
+      type: type === "collection" ? "COLLECTION" : "DISBURSEMENT",
+      amount,
+      currency: "UGX",
+      phoneNumber: phone,
+      provider,
+      reference,
+      description,
+      idempotencyKey: `nilesoniq-${reference}`
+    };
+
+    let response;
+    let result;
+
+    try {
+      response = await fetch(`${baseUrl}/payments`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-API-Key": apiKey
+        },
+        body: JSON.stringify(payload)
+      });
+
+      result = await response.json().catch(() => ({}));
+    } catch (e) {
+      // The provider may have received the request even if the response was lost.
+      // Leave it pending/reserved so a retry cannot silently double-spend funds.
+      console.error("PesaJet request outcome is uncertain:", e.message);
+      return error(
+        "PesaJet could not confirm the request. The transaction was left pending to prevent duplicate payment. Check the PesaJet dashboard before retrying.",
+        502
+      );
+    }
+
+    const transaction =
+      result?.transaction && typeof result.transaction === "object"
+        ? result.transaction
+        : result?.data && typeof result.data === "object"
+          ? result.data
+          : result;
+
+    const status = String(transaction?.status || result?.status || "").toUpperCase();
+    const providerTransactionId = String(
+      transaction?.transactionId ||
+      transaction?.transaction_id ||
+      result?.transactionId ||
+      result?.transaction_id ||
+      ""
+    );
+
+    if (!response.ok || result?.success === false) {
+      const definitiveFailure =
+        (response.status >= 400 && response.status < 500) ||
+        result?.success === false;
+
+      if (definitiveFailure) {
+        await applyPlatformPaymentStatus(
+          env,
+          type,
+          reference,
+          "FAILED",
+          providerTransactionId
+        );
+      }
+
+      const message = String(
+        result?.error?.message ||
+        result?.message ||
+        result?.error ||
+        "PesaJet rejected the transaction request."
+      );
+
+      return error(
+        message,
+        response.status >= 400 && response.status < 500
+          ? response.status
+          : 502
+      );
+    }
+
+    await applyPlatformPaymentStatus(
+      env,
+      type,
+      reference,
+      status || "PENDING",
+      providerTransactionId
+    );
+
+    return json({
+      success: true,
+      ...transaction,
+      transactionId: providerTransactionId || transaction?.transactionId || null,
+      status: status || "PENDING",
+      reference
+    }, response.status);
   } catch (e) {
-    console.error("Payment request failed:", e.message);
-    return error("Payment service request failed", 502);
+    console.error("Payment request processing failed:", e.message);
+    return error(
+      "Could not safely record the payment request. Check the platform wallet and PesaJet dashboard before retrying.",
+      500
+    );
   }
 }
-
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -1688,7 +2201,8 @@ export default {
         path === "/api/admins" ||
         path.startsWith("/api/admins/") ||
         path === "/api/admin/songs" ||
-        path.startsWith("/api/admin/songs/")
+        path.startsWith("/api/admin/songs/") ||
+        path === "/api/admin/copyright-removals"
       ) {
         response = await adminRoute(request, env, path);
       } else if (path.startsWith("/api/rpc/")) {
@@ -1697,6 +2211,10 @@ export default {
           env,
           path.split("/")[3]
         );
+      } else if (
+        path === "/api/payments/pesajet-webhook"
+      ) {
+        response = await paymentWebhookRoute(request, env);
       } else if (
         path === "/api/payments/pesajet-collection"
       ) {
