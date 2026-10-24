@@ -2382,6 +2382,12 @@ onclick="showAdminTab('admins')">
 Administrators
 </button>
 
+<button id="adminTabCopyright"
+class="hidden"
+onclick="showAdminTab('copyright')">
+Copyright Removal
+</button>
+
 </div>
 
 <div id="adminAnalyticsPanel"
@@ -2677,7 +2683,49 @@ class="table-wrap">
 
 </div>
 
+<div id="adminCopyrightPanel" class="dashboard-card hidden">
+  <h2>Copyright Removal</h2>
+  <p>Remove infringing songs or artist profiles from public pages. Each action is recorded in the removal history; source files and account records are retained for audit.</p>
+
+  <div id="copyrightRemovalMessage"></div>
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;">
+    <div class="field">
+      <label for="copyrightContentType">Content type</label>
+      <select id="copyrightContentType" onchange="loadCopyrightCandidates()">
+        <option value="song">Song</option>
+        <option value="artist">Artist profile</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="copyrightContentId">Content to remove</label>
+      <select id="copyrightContentId">
+        <option value="">Choose content...</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="field">
+    <label for="copyrightRemovalReason">Copyright removal reason</label>
+    <textarea id="copyrightRemovalReason" rows="3" placeholder="Explain the copyright concern and the basis for removal"></textarea>
+  </div>
+
+  <div style="display:flex;flex-wrap:wrap;gap:10px;margin:12px 0 24px;">
+    <button id="copyrightRemoveButton" class="btn btn-orange" onclick="submitCopyrightRemoval()">Remove Content</button>
+    <button class="btn" onclick="loadCopyrightRemovals()">Refresh History</button>
+  </div>
+
+  <h3>Removal History</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Content</th><th>Type</th><th>Reason</th><th>Date</th></tr></thead>
+      <tbody id="copyrightRemovalTable">
+        <tr><td colspan="4">Open this tab to load removal history.</td></tr>
+      </tbody>
+    </table>
+  </div>
 </div>
+
 </div>
 </section>
 
@@ -2963,7 +3011,7 @@ function cfQuery(table, initial={}){
     insert:row=>{state.method="POST";state.body=row;return api;},
     update:row=>{state.method="PATCH";state.body=row;return api;},
     delete:()=>{state.method="DELETE";return api;},
-    upsert:row=>{state.method="POST";state.body=row;state.upsert=true;return api;}
+    upsert:row=>{state.method="POST";state.body=row;state.upsert=table!=="artists";return api;}
   };
   Object.assign(state.params,initial);
   async function execute(single=false,allowEmpty=false){
@@ -3858,6 +3906,7 @@ function updateAdminTabs(){
   const superAdmin = isCurrentUserSuperAdmin();
   const analyticsTab = document.getElementById("adminTabAnalytics");
   const adminTab = document.getElementById("adminTabAdmins");
+  const copyrightTab = document.getElementById("adminTabCopyright");
   const newsTab = document.getElementById("adminTabNews");
   const walletTab = document.getElementById("adminTabWallet");
   const platformWithdrawPanel = document.getElementById("platformWithdrawPanel");
@@ -3865,6 +3914,7 @@ function updateAdminTabs(){
   // Regular admins may manage artist songs and artist withdrawals only.
   if(analyticsTab) analyticsTab.classList.toggle("hidden", !superAdmin);
   if(adminTab) adminTab.classList.toggle("hidden", !superAdmin);
+  if(copyrightTab) copyrightTab.classList.toggle("hidden", !superAdmin);
   if(walletTab) walletTab.classList.toggle("hidden", !superAdmin);
   if(platformWithdrawPanel) platformWithdrawPanel.classList.toggle("hidden", !superAdmin);
 
@@ -3879,6 +3929,7 @@ async function showAdminTab(tab){
   const walletPanel = document.getElementById("adminWalletPanel");
   const managementPanel = document.getElementById("adminManagementPanel");
   const newsPanel = document.getElementById("adminNewsPanel");
+  const copyrightPanel = document.getElementById("adminCopyrightPanel");
 
   const analyticsTab = document.getElementById("adminTabAnalytics");
   const songTab = document.getElementById("adminTabSongs");
@@ -3886,10 +3937,11 @@ async function showAdminTab(tab){
   const walletTab = document.getElementById("adminTabWallet");
   const adminTab = document.getElementById("adminTabAdmins");
   const newsTab = document.getElementById("adminTabNews");
+  const copyrightTab = document.getElementById("adminTabCopyright");
 
-  [analyticsPanel,songsPanel,withdrawalsPanel,walletPanel,managementPanel].forEach(el=>{if(el)el.classList.add("hidden")});
-  [analyticsTab,songTab,newsTab,withdrawalTab,walletTab,adminTab].forEach(el=>{if(el)el.classList.remove("active")});
-  [analyticsPanel,songsPanel,newsPanel,withdrawalsPanel,walletPanel,managementPanel].forEach(el=>{if(el)el.classList.add("hidden")});
+  [analyticsPanel,songsPanel,withdrawalsPanel,walletPanel,managementPanel,copyrightPanel].forEach(el=>{if(el)el.classList.add("hidden")});
+  [analyticsTab,songTab,newsTab,withdrawalTab,walletTab,adminTab,copyrightTab].forEach(el=>{if(el)el.classList.remove("active")});
+  [analyticsPanel,songsPanel,newsPanel,withdrawalsPanel,walletPanel,managementPanel,copyrightPanel].forEach(el=>{if(el)el.classList.add("hidden")});
 
   if(tab === "analytics"){
     if(!isCurrentUserSuperAdmin()){
@@ -3949,6 +4001,18 @@ async function showAdminTab(tab){
     walletPanel.classList.remove("hidden");
     walletTab.classList.add("active");
     loadPlatformWallet();
+  }
+
+
+  if(tab === "copyright"){
+    if(!isCurrentUserSuperAdmin()){
+      alert("Only the Super Admin can access Copyright Removal.");
+      return;
+    }
+    if(copyrightPanel) copyrightPanel.classList.remove("hidden");
+    if(copyrightTab) copyrightTab.classList.add("active");
+    await loadCopyrightCandidates();
+    await loadCopyrightRemovals();
   }
 
 
@@ -4525,6 +4589,26 @@ async function uploadSong(){
 
     return;
 
+  }
+
+  if(!coverFile){
+    showMessage("uploadMessage","Please select cover artwork before uploading.","error");
+    return;
+  }
+
+  if(!songDescription){
+    showMessage("uploadMessage","Please add a description for the song before uploading.","error");
+    return;
+  }
+
+  if(!songGenre){
+    showMessage("uploadMessage","Please enter the song genre before uploading.","error");
+    return;
+  }
+
+  if(!songTermsAccepted){
+    showMessage("uploadMessage","Please accept the Terms & Conditions and confirm you have the rights to upload this song.","error");
+    return;
   }
 
   const uploadButton =
@@ -5660,6 +5744,7 @@ async function recordSongPlay(songId){
   try{
 
     const {
+      data:counted,
       error
     } = await sb.rpc(
       "record_song_play",
@@ -5671,10 +5756,12 @@ async function recordSongPlay(songId){
 
     if(!error){
 
-      updateLocalPlayCount(
-        songId
-      );
+      if(counted === true){
+        updateLocalPlayCount(songId);
+      }
 
+      // The request was handled successfully, even if this IP's play was
+      // deduplicated. Stop retrying this playback without inflating the UI.
       return true;
 
     }else{
@@ -7115,8 +7202,13 @@ function updateDashboardStats(
     songs.length;
 
 
+  const eligiblePlays =
+    songs
+      .filter(song=>isSongApproved(song))
+      .reduce((sum,song)=>sum+Number(song.plays||0),0);
+
   const earnings =
-    totalPlays *
+    eligiblePlays *
     EARNINGS_PER_PLAY;
 
 
@@ -7159,7 +7251,7 @@ async function updateAmountWithdrawn(withdrawals=null){
     }
     const withdrawn=(withdrawals||[]).reduce((sum,w)=>{
       const status=String(w.status||"").toLowerCase();
-      return sum + ((status === "paid" || status === "completed") ? Number(w.amount)||0 : 0);
+      return sum + (["paid","completed","success","successful"].includes(status) ? Number(w.amount)||0 : 0);
     },0);
     const el=document.getElementById("amountWithdrawn");
     if(el) el.textContent="UGX "+formatNumber(Math.floor(withdrawn));
@@ -7334,7 +7426,7 @@ async function updateAvailableBalance(withdrawals=null){
     if(songsError) throw songsError;
     const approvedPlays=(songs||[]).filter(s=>isSongApproved(s)).reduce((sum,s)=>sum+Number(s.plays||0),0);
     const currentBalance=approvedPlays*EARNINGS_PER_PLAY;
-    const reserved=(withdrawals||[]).reduce((sum,w)=>{const st=String(w.status||"").toLowerCase();return sum+((st==="pending"||st==="processing")?(Number(w.amount)||0):0);},0);
+    const reserved=(withdrawals||[]).reduce((sum,w)=>{const st=String(w.status||"").toLowerCase();return sum+((["pending","processing","paid","completed","success","successful"].includes(st))?(Number(w.amount)||0):0);},0);
     const available=Math.max(0,currentBalance-reserved);
     const a=document.getElementById("availableBalance");
     if(a)a.textContent="UGX "+formatNumber(Math.floor(available));
@@ -7430,47 +7522,10 @@ async function requestWithdrawal(){
   button.disabled = true;
 
   button.textContent =
-    "Checking balance...";
+    "Submitting...";
 
 
   try{
-
-    const {
-      data:wallet,
-      error:walletError
-    } = await sb
-      .from("artist_wallets")
-      .select("balance")
-      .eq(
-        "user_id",
-        currentUser.id
-      )
-      .maybeSingle();
-
-    if(walletError){
-      throw walletError;
-    }
-
-    const available =
-      Number(
-        wallet?.balance || 0
-      );
-
-    if(amount > available){
-
-      showMessage(
-        "withdrawalMessage",
-        "You do not have enough available balance for this withdrawal.",
-        "error"
-      );
-
-      return;
-
-    }
-
-
-    button.textContent =
-      "Submitting...";
 
 
     const {
@@ -7799,55 +7854,7 @@ async function updateWithdrawalStatus(
 
   }
 
-  if(!adminPreviewedSongs.has(String(songId))){
-    showMessage(
-      "adminMessage",
-      "Preview and mark this song as reviewed before approving it.",
-      "error"
-    );
-    return;
-  }
-
   try{
-
-    const { data: submittedSong, error: submittedSongError } = await sb
-      .from("songs")
-      .select("id,title,artist,file_url,audio_url,cover_url,description,genre,terms_accepted")
-      .eq("id",songId)
-      .maybeSingle();
-
-    if(submittedSongError) throw submittedSongError;
-
-    if(!submittedSong){
-      throw new Error("Song submission was not found.");
-    }
-
-    const termsAccepted = submittedSong.terms_accepted === true || submittedSong.terms_accepted === 1 || submittedSong.terms_accepted === "1" || submittedSong.terms_accepted === "true";
-    if(!termsAccepted){
-      throw new Error("This submission cannot be approved because the artist has not accepted the NileSoniQ Terms & Conditions.");
-    }
-
-    if(!String(submittedSong.title || "").trim() || !String(submittedSong.artist || "").trim()){
-      throw new Error("This submission needs a song title and artist name before approval.");
-    }
-
-    if(!String(submittedSong.file_url || submittedSong.audio_url || "").trim()){
-      throw new Error("This submission does not have an audio file.");
-    }
-
-    if(!String(submittedSong.cover_url || "").trim()){
-      throw new Error("This submission does not have cover artwork.");
-    }
-
-    if(!String(submittedSong.description || "").trim() || !String(submittedSong.genre || "").trim()){
-      throw new Error("Please require a meaningful song description and genre before approval.");
-    }
-
-    const confirmed = confirm("Approve this song for public display? Confirm that you reviewed the audio, artwork, song information, rights confirmation, and Terms acceptance.");
-    if(!confirmed){
-      return;
-    }
-
 
     const updateData = {
       status
@@ -8124,6 +8131,11 @@ function savePlatformWallet(){
 }
 
 async function startPlatformDeposit(){
+  if(!currentUser || !await isCurrentUserSuperAdmin()){
+    showMessage("platformWalletMessage","Only the Super Admin can deposit into the platform wallet.","error");
+    return;
+  }
+
   const phone=(document.getElementById("platformWalletPhone")?.value||"").trim();
   const network=(document.getElementById("platformWalletNetwork")?.value||"MTN").trim();
   const amount=Number(document.getElementById("platformDepositAmount")?.value||0);
@@ -8134,12 +8146,10 @@ async function startPlatformDeposit(){
     return;
   }
 
-  if(network !== "MTN"){
-    showMessage("platformWalletMessage","PesaJet collection is currently configured here for MTN Mobile Money.","error");
+  if(network !== "MTN" && network !== "AIRTEL"){
+    showMessage("platformWalletMessage","Select MTN or Airtel.","error");
     return;
   }
-
-  
 
   if(button){
     button.disabled=true;
@@ -8186,10 +8196,13 @@ async function startPlatformDeposit(){
     if(data.success === false){
       throw new Error(data.message || data.error || "PesaJet rejected the collection request.");
     }
+    if(["FAILED","EXPIRED","REJECTED"].includes(status)){
+      throw new Error(`PesaJet could not complete the deposit. Status: ${status}.`);
+    }
 
     if(status === "PENDING"){
       const txText=transactionId ? ` Transaction ID: ${transactionId}` : "";
-      showMessage("platformWalletMessage",`Deposit request accepted and is PENDING. Check the MTN phone for the payment prompt.${txText}`,"success");
+      showMessage("platformWalletMessage",`Deposit request accepted and is PENDING. Check the ${network} phone for the payment prompt.${txText}`,"success");
       const amountInput=document.getElementById("platformDepositAmount");
       if(amountInput) amountInput.value="";
       return;
@@ -8292,7 +8305,10 @@ async function withdrawPlatformMoney(){
     }
 
     const status = String(data.status || "PENDING").toUpperCase();
-    const transactionId = data.pesajet_transaction_id || "";
+    const transactionId = data.transactionId || data.transaction_id || data.pesajet_transaction_id || "";
+    if(["FAILED","EXPIRED","REJECTED"].includes(status)){
+      throw new Error(`PesaJet could not complete the platform withdrawal. Status: ${status}.`);
+    }
 
     showMessage(
       "platformWithdrawMessage",
@@ -8854,6 +8870,163 @@ async function rejectSong(songId){
 
 
 /* =========================================================
+   COPYRIGHT REMOVAL
+========================================================= */
+
+async function loadCopyrightCandidates(){
+  if(!isCurrentUserSuperAdmin()) return;
+
+  const typeSelect = document.getElementById("copyrightContentType");
+  const contentSelect = document.getElementById("copyrightContentId");
+  if(!typeSelect || !contentSelect) return;
+
+  const type = typeSelect.value === "artist" ? "artist" : "song";
+  contentSelect.innerHTML = `<option value="">Loading...</option>`;
+
+  try{
+    let data = [];
+    let error = null;
+
+    if(type === "song"){
+      ({data,error} = await sb
+        .from("songs")
+        .select("id,title,artist,approved,review_status")
+        .order("created_at",{ascending:false})
+        .limit(500));
+    }else{
+      ({data,error} = await sb
+        .from("artists")
+        .select("id,name")
+        .order("created_at",{ascending:false})
+        .limit(500));
+    }
+
+    if(error) throw error;
+
+    const items = Array.isArray(data) ? data : [];
+    if(!items.length){
+      contentSelect.innerHTML = `<option value="">No content found</option>`;
+      return;
+    }
+
+    contentSelect.innerHTML = `<option value="">Choose content...</option>` +
+      items.map(item=>{
+        const title = type === "song"
+          ? `${item.title || "Untitled song"} — ${item.artist || "Unknown artist"}${isSongApproved(item) ? "" : " (not approved)"}`
+          : (item.name || "Unnamed artist");
+        return `<option value="${escapeAttribute(item.id)}">${escapeHtml(title)}</option>`;
+      }).join("");
+  }catch(error){
+    console.error("Copyright candidates failed:",error);
+    contentSelect.innerHTML = `<option value="">Could not load content</option>`;
+    showMessage("copyrightRemovalMessage",error.message || "Could not load content.","error");
+  }
+}
+
+async function loadCopyrightRemovals(){
+  if(!isCurrentUserSuperAdmin()) return;
+
+  const tbody = document.getElementById("copyrightRemovalTable");
+  if(!tbody) return;
+  tbody.innerHTML = `<tr><td colspan="4"><div class="loading">Loading removal history...</div></td></tr>`;
+
+  try{
+    const response = await fetch("/api/admin/copyright-removals",{
+      method:"GET",
+      credentials:"include",
+      headers:{"Accept":"application/json"},
+      cache:"no-store"
+    });
+    const result = await response.json().catch(()=>({}));
+    if(!response.ok || result.error){
+      throw new Error(result.error || result.message || "Could not load copyright removal history.");
+    }
+
+    const rows = Array.isArray(result.data) ? result.data : [];
+    if(!rows.length){
+      tbody.innerHTML = `<tr><td colspan="4"><div class="empty">No copyright removals recorded.</div></td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = rows.map(row=>`
+      <tr>
+        <td>${escapeHtml(row.content_title || "Unknown content")}</td>
+        <td>${escapeHtml(row.content_type || "")}</td>
+        <td>${escapeHtml(row.reason || "")}</td>
+        <td>${escapeHtml(row.created_at ? new Date(row.created_at).toLocaleString() : "")}</td>
+      </tr>
+    `).join("");
+  }catch(error){
+    console.error("Copyright removal history failed:",error);
+    tbody.innerHTML = `<tr><td colspan="4"><div class="empty">${escapeHtml(error.message || "Could not load copyright removal history.")}</div></td></tr>`;
+  }
+}
+
+async function submitCopyrightRemoval(){
+  if(!isCurrentUserSuperAdmin()){
+    showMessage("copyrightRemovalMessage","Only the Super Admin can remove content.","error");
+    return;
+  }
+
+  const contentType = document.getElementById("copyrightContentType")?.value || "song";
+  const contentId = document.getElementById("copyrightContentId")?.value || "";
+  const reason = document.getElementById("copyrightRemovalReason")?.value.trim() || "";
+  const button = document.getElementById("copyrightRemoveButton");
+
+  if(!contentId){
+    showMessage("copyrightRemovalMessage","Choose the song or artist profile to remove.","error");
+    return;
+  }
+  if(reason.length < 5){
+    showMessage("copyrightRemovalMessage","Enter a copyright-removal reason of at least 5 characters.","error");
+    return;
+  }
+  if(!confirm("Remove this content from public pages and record the copyright removal? This keeps the source files and audit record.")){
+    return;
+  }
+
+  if(button){
+    button.disabled = true;
+    button.textContent = "Removing...";
+  }
+
+  try{
+    const response = await fetch("/api/admin/copyright-removals",{
+      method:"POST",
+      credentials:"include",
+      headers:{
+        "Content-Type":"application/json",
+        "Accept":"application/json"
+      },
+      body:JSON.stringify({
+        content_type:contentType,
+        content_id:contentId,
+        reason
+      })
+    });
+    const result = await response.json().catch(()=>({}));
+    if(!response.ok || result.error || result.success !== true){
+      throw new Error(result.error || result.message || "Copyright removal failed.");
+    }
+
+    document.getElementById("copyrightRemovalReason").value = "";
+    showMessage("copyrightRemovalMessage","Content removed from public pages and the action was recorded.","success");
+    await loadCopyrightCandidates();
+    await loadCopyrightRemovals();
+    await loadAdminSongs();
+  }catch(error){
+    console.error("Copyright removal failed:",error);
+    showMessage("copyrightRemovalMessage",error.message || "Copyright removal failed.","error");
+  }finally{
+    if(button){
+      button.disabled = false;
+      button.textContent = "Remove Content";
+    }
+  }
+}
+
+
+/* =========================================================
    ADMINISTRATORS
 ========================================================= */
 
@@ -8883,29 +9056,18 @@ async function loadAdministrators(){
 
   try{
 
-    const {
-      data,
-      error
-    } = await sb
-      .from("admins")
-      .select(
-        "id,user_id,email,role,active"
-      )
-      .order(
-        "created_at",
-        {
-          ascending:true
-        }
-      );
-
-
-    if(error){
-      throw error;
+    const response = await fetch("/api/admins", {
+      method: "GET",
+      credentials: "include",
+      headers: { "Accept": "application/json" },
+      cache: "no-store"
+    });
+    const result = await response.json().catch(()=>({}));
+    if(!response.ok || result.error){
+      throw new Error(result.error || result.message || "Could not load administrators.");
     }
 
-
-    const admins =
-      data || [];
+    const admins = Array.isArray(result.data) ? result.data : [];
 
 
     if(!admins.length){
@@ -8973,7 +9135,7 @@ async function loadAdministrators(){
               }">
 
                 ${
-                  admin.active
+                  activeNow
                   ? "Active"
                   : "Inactive"
                 }
@@ -8986,29 +9148,23 @@ async function loadAdministrators(){
 
               ${
                 isMe
-                ? `<span style="color:#777;">
-                    Your account
-                   </span>`
-                : `
-                  <button
-                    class="btn ${
-                      activeNow
-                      ? "btn-danger"
-                      : "btn-success"
-                    }"
-                    onclick="toggleAdministrator(
-                      '${escapeAttribute(admin.user_id)}',
-                      ${activeNow}
-                    )">
-
-                    ${
-                      activeNow
-                      ? "Deactivate"
-                      : "Activate"
-                    }
-
-                  </button>
-                `
+                ? `<span style="color:#777;">Your account</span>`
+                : normalizeAdminRole(admin.role) === "super_admin"
+                  ? `<span style="color:#777;">Protected Super Admin</span>`
+                  : `
+                    <button
+                      class="btn ${
+                        activeNow
+                        ? "btn-danger"
+                        : "btn-success"
+                      }"
+                      onclick="toggleAdministrator(
+                        '${escapeAttribute(admin.id)}',
+                        ${activeNow}
+                      )">
+                      ${activeNow ? "Deactivate" : "Activate"}
+                    </button>
+                  `
               }
 
             </td>
@@ -9145,7 +9301,7 @@ async function addAdministrator(){
 ========================================================= */
 
 async function toggleAdministrator(
-  userId,
+  adminId,
   currentStatus
 ){
 
@@ -9179,21 +9335,22 @@ async function toggleAdministrator(
 
   try{
 
-    const {
-      error
-    } = await sb
-      .from("admins")
-      .update({
-        active:newStatus
-      })
-      .eq(
-        "user_id",
-        userId
-      );
-
-
-    if(error){
-      throw error;
+    const response = await fetch(
+      `/api/admins/${encodeURIComponent(adminId)}`,
+      {
+        method: "PATCH",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        body: JSON.stringify({ active: newStatus }),
+        cache: "no-store"
+      }
+    );
+    const result = await response.json().catch(()=>({}));
+    if(!response.ok || result.error || result.success !== true){
+      throw new Error(result.error || result.message || "Could not update administrator.");
     }
 
 
