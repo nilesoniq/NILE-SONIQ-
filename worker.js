@@ -101,12 +101,17 @@ function withCors(request, response) {
 
   headers.set(
     "Access-Control-Allow-Methods",
-    "GET, POST, PATCH, PUT, DELETE, OPTIONS"
+    "GET, HEAD, POST, PATCH, PUT, DELETE, OPTIONS"
   );
 
   headers.set(
     "Access-Control-Allow-Headers",
-    "Content-Type, Authorization"
+    "Content-Type, Authorization, Range, If-Range"
+  );
+
+  headers.set(
+    "Access-Control-Expose-Headers",
+    "Accept-Ranges, Content-Range, Content-Length, Content-Type"
   );
 
   return new Response(response.body, {
@@ -1703,23 +1708,95 @@ async function storageRoute(request, env, path) {
     return error("Bucket not allowed", 403);
   }
 
-  if (request.method === "GET") {
-    const object = await env.MEDIA_BUCKET.get(
-      `${bucket}/${objectPath}`
-    );
+  if (request.method === "GET" || request.method === "HEAD") {
+    const key = `${bucket}/${objectPath}`;
+    const isHead = request.method === "HEAD";
+    const rangeHeader = request.headers.get("Range");
+    const metadata = await env.MEDIA_BUCKET.head(key);
 
-    if (!object) {
+    if (!metadata) {
       return error("File not found", 404);
     }
 
-    return new Response(object.body, {
-      headers: {
-        "Content-Type":
-          object.httpMetadata?.contentType ||
-          "application/octet-stream",
-        "Cache-Control": "public, max-age=31536000"
-      }
+    const size = metadata.size;
+    const extension = objectPath.split(".").pop().toLowerCase();
+    const mimeTypes = {
+      mp3: "audio/mpeg",
+      m4a: "audio/mp4",
+      mp4: "audio/mp4",
+      aac: "audio/aac",
+      wav: "audio/wav",
+      wave: "audio/wav",
+      ogg: "audio/ogg",
+      oga: "audio/ogg",
+      opus: "audio/ogg",
+      flac: "audio/flac",
+      webm: "audio/webm",
+      jpg: "image/jpeg",
+      jpeg: "image/jpeg",
+      png: "image/png",
+      webp: "image/webp",
+      gif: "image/gif",
+      svg: "image/svg+xml",
+      avif: "image/avif"
+    };
+    const headers = new Headers({
+      "Content-Type": metadata.httpMetadata?.contentType || mimeTypes[extension] || "application/octet-stream",
+      "Cache-Control": "public, max-age=31536000",
+      "Accept-Ranges": "bytes",
+      "Content-Length": String(size)
     });
+
+    if (rangeHeader && !isHead) {
+      // Support one byte range, including open-ended and suffix ranges.
+      const match = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader.trim());
+      if (!match || (!match[1] && !match[2]) || size === 0) {
+        headers.set("Content-Range", `bytes */${size}`);
+        return new Response(null, { status: 416, headers });
+      }
+
+      let offset;
+      let length;
+      let start;
+      let end;
+      if (!match[1]) {
+        const suffixLength = Number(match[2]);
+        if (!Number.isSafeInteger(suffixLength) || suffixLength <= 0) {
+          headers.set("Content-Range", `bytes */${size}`);
+          return new Response(null, { status: 416, headers });
+        }
+        length = Math.min(suffixLength, size);
+        offset = size - length;
+        start = offset;
+        end = size - 1;
+      } else {
+        start = Number(match[1]);
+        end = match[2] ? Number(match[2]) : size - 1;
+        if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start >= size || end < start) {
+          headers.set("Content-Range", `bytes */${size}`);
+          return new Response(null, { status: 416, headers });
+        }
+        end = Math.min(end, size - 1);
+        offset = start;
+        length = end - start + 1;
+      }
+
+      const object = await env.MEDIA_BUCKET.get(key, {
+        range: { offset, length }
+      });
+      if (!object) return error("File not found", 404);
+      headers.set("Content-Length", String(length));
+      headers.set("Content-Range", `bytes ${start}-${end}/${size}`);
+      return new Response(object.body, { status: 206, headers });
+    }
+
+    if (isHead) {
+      return new Response(null, { headers });
+    }
+
+    const object = await env.MEDIA_BUCKET.get(key);
+    if (!object) return error("File not found", 404);
+    return new Response(object.body, { headers });
   }
 
   if (
