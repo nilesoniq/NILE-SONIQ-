@@ -2418,8 +2418,6 @@ class="dashboard-card">
   <div class="analytics-card"><span>Total Artists</span><strong id="analyticsTotalArtists">0</strong></div>
   <div class="analytics-card"><span>Total Plays</span><strong id="analyticsTotalPlays">0</strong></div>
   <div class="analytics-card"><span>Total Likes</span><strong id="analyticsTotalLikes">0</strong></div>
-  <div class="analytics-card"><span>Total Withdrawals</span><strong id="analyticsTotalWithdrawals">0</strong></div>
-  <div class="analytics-card"><span>Pending Withdrawals</span><strong id="analyticsPendingWithdrawals">0</strong></div>
 </div>
 
 <div class="analytics-two">
@@ -2594,7 +2592,7 @@ class="dashboard-card hidden">
   For safety, this screen only stores the payout account settings locally in this browser. Actual deposits and automatic artist payouts require a secure payment backend/payment provider so your secret API keys are never exposed to website visitors.
 </div>
 
-</div>
+
 
 <div id="platformWithdrawPanel" class="dashboard-card" style="margin-top:18px;">
 <h3>Withdraw Platform Money</h3>
@@ -2606,6 +2604,8 @@ class="dashboard-card hidden">
 </div>
 <button id="platformWithdrawButton" class="btn btn-orange" onclick="withdrawPlatformMoney()">Withdraw Platform Money</button>
 <div id="platformWithdrawMessage" class="message" style="margin-top:15px;"></div>
+</div>
+
 </div>
 
 <div id="adminManagementPanel"
@@ -8071,25 +8071,21 @@ async function loadAdminAnalytics(){
   if(topArtistsEl) topArtistsEl.innerHTML='<div class="analytics-chart-empty">Loading graph…</div>';
 
   try{
-    const [songsResult,artistsResult,withdrawalsResult]=await Promise.all([
+    const [songsResult,artistsResult]=await Promise.all([
       sb.from("songs").select("title,artist,artist_id,plays,likes,approved,review_status,created_at").limit(500),
-      sb.from("artists").select("user_id,name").limit(500),
-      sb.from("withdrawal_requests").select("amount,status").limit(500)
+      sb.from("artists").select("user_id,name").limit(500)
     ]);
 
     if(songsResult.error) throw songsResult.error;
     if(artistsResult.error) throw artistsResult.error;
-    if(withdrawalsResult.error) throw withdrawalsResult.error;
 
     const songs=songsResult.data || [];
     const artists=artistsResult.data || [];
-    const withdrawals=withdrawalsResult.data || [];
 
     const approved=songs.filter(s=>isSongApproved(s));
     const pending=songs.filter(s=>!isSongApproved(s) && String(s.review_status || "").toLowerCase() !== "rejected");
     const plays=songs.reduce((n,s)=>n+Number(s.plays||0),0);
     const likes=songs.reduce((n,s)=>n+Number(s.likes||0),0);
-    const pendingWithdrawals=withdrawals.filter(w=>["pending","processing"].includes(String(w.status||"pending").toLowerCase()));
 
     setAnalyticsValue("analyticsTotalSongs",songs.length);
     setAnalyticsValue("analyticsApprovedSongs",approved.length);
@@ -8097,8 +8093,6 @@ async function loadAdminAnalytics(){
     setAnalyticsValue("analyticsTotalArtists",artists.length);
     setAnalyticsValue("analyticsTotalPlays",plays);
     setAnalyticsValue("analyticsTotalLikes",likes);
-    setAnalyticsValue("analyticsTotalWithdrawals",withdrawals.length);
-    setAnalyticsValue("analyticsPendingWithdrawals",pendingWithdrawals.length);
 
     const topSongs=[...songs].sort((a,b)=>Number(b.plays||0)-Number(a.plays||0)).slice(0,10);
     if(topSongsEl){
