@@ -2062,11 +2062,11 @@ Request Withdrawal
       <p id="dashboardArtistLocation" style="color:var(--muted);margin:0 0 8px;">Add your location</p>
       <p id="dashboardArtistBio" style="white-space:pre-wrap;line-height:1.6;margin:0;color:#bbb;">Your biography will appear here.</p>
     </div>
-    <button class="btn btn-orange" type="button" onclick="document.getElementById('artistProfileEditForm').scrollIntoView({behavior:'smooth',block:'center'});document.getElementById('artistName').focus();">Edit Profile</button>
+    <button class="btn btn-orange" id="toggleArtistProfileEdit" type="button" aria-expanded="false" onclick="toggleArtistProfileEdit()">Edit Profile</button>
   </div>
 </div>
 
-<div class="dashboard-card" id="artistProfileEditForm">
+<div class="dashboard-card hidden" id="artistProfileEditForm" style="margin-top:0;">
 
 <h2>Edit Artist Profile</h2>
 
@@ -2127,9 +2127,10 @@ Save Profile
 
 </div>
 
-<div class="dashboard-card">
-
-<h2>Upload New Song</h2>
+<div class="dashboard-card" id="songUploadCard">
+<button class="btn btn-orange" id="toggleSongUpload" type="button" aria-expanded="false" onclick="toggleSongUpload()">Upload a Song</button>
+<div id="songUploadForm" class="hidden" style="margin-top:18px;">
+<h2>Upload a Song</h2>
 
 <div id="uploadMessage"
 class="message"></div>
@@ -2294,7 +2295,7 @@ Upload Song
 <p style="color:#777;font-size:12px;margin-top:12px;">
 Uploaded songs are sent for admin approval before appearing publicly.
 </p>
-
+</div>
 </div>
 
 <div class="dashboard-card">
@@ -4240,6 +4241,30 @@ async function logout(){
    ARTIST PROFILE
 ========================================================= */
 
+/* =========================================================
+   DASHBOARD COLLAPSIBLE FORMS
+========================================================= */
+function toggleArtistProfileEdit(){
+  const form=document.getElementById("artistProfileEditForm");
+  const button=document.getElementById("toggleArtistProfileEdit");
+  if(!form || !button) return;
+  const opening=form.classList.contains("hidden");
+  form.classList.toggle("hidden",!opening);
+  button.setAttribute("aria-expanded",String(opening));
+  button.textContent=opening ? "Cancel Edit" : "Edit Profile";
+  if(opening){ form.scrollIntoView({behavior:"smooth",block:"center"}); document.getElementById("artistName")?.focus({preventScroll:true}); }
+}
+function toggleSongUpload(){
+  const form=document.getElementById("songUploadForm");
+  const button=document.getElementById("toggleSongUpload");
+  if(!form || !button) return;
+  const opening=form.classList.contains("hidden");
+  form.classList.toggle("hidden",!opening);
+  button.setAttribute("aria-expanded",String(opening));
+  button.textContent=opening ? "Close Song Upload" : "Upload a Song";
+  if(opening) form.scrollIntoView({behavior:"smooth",block:"start"});
+}
+
 function renderDashboardArtistProfile(artist){
   const name = (artist && artist.name) || document.getElementById("artistName")?.value?.trim() || "Your artist profile";
   const location = (artist && artist.location) || document.getElementById("artistLocation")?.value?.trim() || "Add your location";
@@ -4483,6 +4508,10 @@ async function saveArtistProfile(){
 
     currentArtist = data;
     renderDashboardArtistProfile(data);
+    const editForm = document.getElementById("artistProfileEditForm");
+    const editButton = document.getElementById("toggleArtistProfileEdit");
+    if (editForm) editForm.classList.add("hidden");
+    if (editButton) { editButton.textContent = "Edit Profile"; editButton.setAttribute("aria-expanded", "false"); }
 
     showMessage(
       "profileMessage",
@@ -5051,21 +5080,47 @@ async function loadNewReleases(){
         Number(song.approved) === 1 ||
         String(song.approved).toLowerCase() === "true"
       )
-      .sort((a, b) =>
-        new Date(b.created_at || b.release_date || 0) -
-        new Date(a.created_at || a.release_date || 0)
-      )
+      .sort((a, b) => {
+        const stamp = song => {
+          const raw = song.release_date || song.created_at || song.updated_at || "";
+          if (!raw) return 0;
+          // Safari/macOS is stricter about non-ISO date strings; normalize date-only values.
+          const normalized = /^\d{4}-\d{2}-\d{2}$/.test(String(raw)) ? String(raw) + "T00:00:00Z" : String(raw);
+          const parsed = Date.parse(normalized);
+          return Number.isFinite(parsed) ? parsed : 0;
+        };
+        return stamp(b) - stamp(a);
+      })
       .slice(0, 500);
 
     renderNewReleases(newReleaseSongs);
   } catch (error) {
     console.error("New releases load error:", error);
-    container.innerHTML = `
-      <div class="empty">
-        <h3>Could not load new releases</h3>
-        <p style="margin-top:8px;">${escapeHtml(error.message || "Unknown error")}</p>
-      </div>
-    `;
+    // If another homepage section already loaded approved songs, still show them here.
+    const fallback = Array.isArray(currentSongs) ? currentSongs.filter(song =>
+      Number(song.approved) === 1 || String(song.approved).toLowerCase() === "true"
+    ) : [];
+    if (fallback.length) {
+      newReleaseSongs = fallback.slice().sort((a, b) => {
+        const stamp = song => {
+          const raw = song.release_date || song.created_at || song.updated_at || "";
+          if (!raw) return 0;
+          const normalized = /^\d{4}-\d{2}-\d{2}$/.test(String(raw)) ? String(raw) + "T00:00:00Z" : String(raw);
+          const parsed = Date.parse(normalized);
+          return Number.isFinite(parsed) ? parsed : 0;
+        };
+        return stamp(b) - stamp(a);
+      });
+      renderNewReleases(newReleaseSongs);
+    } else {
+      container.innerHTML = `
+        <div class="empty">
+          <h3>Could not load new releases</h3>
+          <p style="margin-top:8px;">${escapeHtml(error.message || "Unknown error")}</p>
+          <button class="btn btn-dark" type="button" onclick="loadNewReleases()">Try Again</button>
+        </div>
+      `;
+    }
   }
 }
 
