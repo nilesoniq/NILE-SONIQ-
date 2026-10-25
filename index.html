@@ -1529,7 +1529,13 @@ footer{
 .analytics-two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 .analytics-list{width:100%;border-collapse:collapse}
 .analytics-list th,.analytics-list td{padding:10px 8px;border-bottom:1px solid var(--border);text-align:left}
-.analytics-list th{font-size:11px;color:#888}
+ .analytics-list th{font-size:11px;color:#888}
+.analytics-chart{display:flex;align-items:flex-end;gap:10px;min-height:220px;padding:18px 8px 8px;overflow-x:auto;border-bottom:1px solid var(--border)}
+.analytics-bar-item{flex:1;min-width:48px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:200px;gap:7px}
+.analytics-bar-value{font-size:11px;color:var(--text);text-align:center;overflow-wrap:anywhere}
+.analytics-bar{width:min(34px,75%);min-height:3px;border-radius:6px 6px 0 0;background:linear-gradient(180deg,#ffb347,#f07824);transition:height .25s}
+.analytics-bar-label{font-size:10px;color:#999;text-align:center;max-width:76px;overflow-wrap:anywhere}
+.analytics-chart-empty{color:#888;font-size:13px;padding:20px 4px}
 .wallet-box{background:linear-gradient(135deg,#171717,#111);border:1px solid var(--border);border-radius:18px;padding:22px}
 .wallet-balance{font-size:34px;font-weight:900;margin:8px 0 18px}
 .wallet-note{color:#888;font-size:12px;line-height:1.5;margin-top:10px}
@@ -2418,30 +2424,13 @@ class="dashboard-card">
 
 <div class="analytics-two">
   <div class="analytics-card">
-    <h3>Top Songs</h3>
-    <div class="table-wrap">
-      <table class="analytics-list">
-        <thead><tr><th>Song</th><th>Artist</th><th>Plays</th></tr></thead>
-        <tbody id="analyticsTopSongs"></tbody>
-      </table>
-    </div>
+    <h3>Top Songs by Plays</h3>
+    <div id="analyticsTopSongs" class="analytics-chart" role="img" aria-label="Graph of top songs by plays"><div class="analytics-chart-empty">Loading graph…</div></div>
   </div>
   <div class="analytics-card">
-    <h3>Top Artists</h3>
-    <div class="table-wrap">
-      <table class="analytics-list">
-        <thead><tr><th>Artist</th><th>Songs</th><th>Plays</th></tr></thead>
-        <tbody id="analyticsTopArtists"></tbody>
-      </table>
-    </div>
+    <h3>Top Artists by Plays</h3>
+    <div id="analyticsTopArtists" class="analytics-chart" role="img" aria-label="Graph of top artists by plays"><div class="analytics-chart-empty">Loading graph…</div></div>
   </div>
-</div>
-
-<div class="analytics-card" style="margin-top:16px;">
-  <h3>Withdrawal Money</h3>
-  <p style="color:#888;font-size:13px;line-height:1.5;margin-top:8px;">
-    Artists can request withdrawals, but real mobile-money transfers must be processed through a secure payment backend. Your mobile-money number and payment API secret must never be placed in this HTML file.
-  </p>
 </div>
 
 </div>
@@ -8078,8 +8067,8 @@ async function loadAdminAnalytics(){
 
   const topSongsEl=document.getElementById("analyticsTopSongs");
   const topArtistsEl=document.getElementById("analyticsTopArtists");
-  if(topSongsEl) topSongsEl.innerHTML='<tr><td colspan="3">Loading...</td></tr>';
-  if(topArtistsEl) topArtistsEl.innerHTML='<tr><td colspan="3">Loading...</td></tr>';
+  if(topSongsEl) topSongsEl.innerHTML='<div class="analytics-chart-empty">Loading graph…</div>';
+  if(topArtistsEl) topArtistsEl.innerHTML='<div class="analytics-chart-empty">Loading graph…</div>';
 
   try{
     const [songsResult,artistsResult,withdrawalsResult]=await Promise.all([
@@ -8113,7 +8102,8 @@ async function loadAdminAnalytics(){
 
     const topSongs=[...songs].sort((a,b)=>Number(b.plays||0)-Number(a.plays||0)).slice(0,10);
     if(topSongsEl){
-      topSongsEl.innerHTML=topSongs.length ? topSongs.map(song=>`<tr><td>${escapeHtml(song.title||"Untitled")}</td><td>${escapeHtml(song.artist||"Unknown")}</td><td>${formatNumber(song.plays||0)}</td></tr>`).join("") : '<tr><td colspan="3">No songs yet.</td></tr>';
+      const maxPlays=Math.max(1,...topSongs.map(song=>Number(song.plays||0)));
+      topSongsEl.innerHTML=topSongs.length ? topSongs.map(song=>{const value=Number(song.plays||0);const height=Math.max(3,Math.round(value/maxPlays*150));return `<div class="analytics-bar-item" title="${escapeAttribute(song.title||"Untitled")}: ${formatNumber(value)} plays"><div class="analytics-bar-value">${formatNumber(value)}</div><div class="analytics-bar" style="height:${height}px"></div><div class="analytics-bar-label">${escapeHtml(song.title||"Untitled")}</div></div>`;}).join("") : '<div class="analytics-chart-empty">No songs yet.</div>';
     }
 
     const artistNames={};
@@ -8127,7 +8117,8 @@ async function loadAdminAnalytics(){
     });
     const topArtists=Object.values(artistStats).sort((a,b)=>b.plays-a.plays).slice(0,10);
     if(topArtistsEl){
-      topArtistsEl.innerHTML=topArtists.length ? topArtists.map(a=>`<tr><td>${escapeHtml(a.name)}</td><td>${formatNumber(a.songs)}</td><td>${formatNumber(a.plays)}</td></tr>`).join("") : '<tr><td colspan="3">No artist data yet.</td></tr>';
+      const maxPlays=Math.max(1,...topArtists.map(a=>Number(a.plays||0)));
+      topArtistsEl.innerHTML=topArtists.length ? topArtists.map(a=>{const value=Number(a.plays||0);const height=Math.max(3,Math.round(value/maxPlays*150));return `<div class="analytics-bar-item" title="${escapeAttribute(a.name)}: ${formatNumber(value)} plays"><div class="analytics-bar-value">${formatNumber(value)}</div><div class="analytics-bar" style="height:${height}px"></div><div class="analytics-bar-label">${escapeHtml(a.name)}</div></div>`;}).join("") : '<div class="analytics-chart-empty">No artist data yet.</div>';
     }
 
     if(!adminAnalyticsTimer){
@@ -8138,8 +8129,8 @@ async function loadAdminAnalytics(){
     }
   }catch(error){
     console.error("Analytics error:",error);
-    if(topSongsEl) topSongsEl.innerHTML=`<tr><td colspan="3">${escapeHtml(error.message||"Could not load analytics.")}</td></tr>`;
-    if(topArtistsEl) topArtistsEl.innerHTML=`<tr><td colspan="3">${escapeHtml(error.message||"Could not load analytics.")}</td></tr>`;
+    if(topSongsEl) topSongsEl.innerHTML=`<div class="analytics-chart-empty">${escapeHtml(error.message||"Could not load analytics.")}</div>`;
+    if(topArtistsEl) topArtistsEl.innerHTML=`<div class="analytics-chart-empty">${escapeHtml(error.message||"Could not load analytics.")}</div>`;
   }
 }
 
