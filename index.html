@@ -1940,118 +1940,6 @@ Artist Login
 
 <div id="dashboardContent" class="hidden">
 
-<div class="stats-grid">
-<div class="stat-card"><span>Total Plays</span><strong id="totalPlays">0</strong></div>
-<div class="stat-card"><span>Estimated Earnings</span><strong id="totalEarnings">UGX 0</strong></div>
-<div class="stat-card"><span>Your Songs</span><strong id="totalSongs">0</strong></div>
-
-</div>
-
-<div class="stats-grid" style="margin-top:16px;">
-<div class="stat-card balance-card"><span>Available Balance</span><strong id="availableBalance">UGX 0</strong><p style="color:#777;font-size:12px;margin-top:8px;">Amount currently available for withdrawal. Minimum withdrawal: UGX 10,000</p></div>
-<div class="stat-card balance-card"><span>Amount Withdrawn</span><strong id="amountWithdrawn">UGX 0</strong><p style="color:#777;font-size:12px;margin-top:8px;">Total amount from completed withdrawals.</p></div>
-</div>
-
-<div class="dashboard-card">
-
-<h2>Withdraw Earnings</h2>
-
-<p class="withdrawal-minimum">
-You can request a withdrawal when your available balance
-is at least <strong>UGX 10,000</strong>.
-</p>
-
-<div id="withdrawalMessage"
-class="message"></div>
-
-<div class="form-grid">
-
-<div class="field">
-
-<label>Amount to Withdraw</label>
-
-<input
-id="withdrawAmount"
-type="number"
-placeholder="e.g. 10000"
-min="10000"
-step="1000">
-
-</div>
-
-<div class="field">
-
-<label>Payment Method</label>
-
-<select id="paymentMethod">
-
-<option value="">
-Select payment method
-</option>
-
-<option value="MTN Mobile Money">
-MTN Mobile Money
-</option>
-
-<option value="Airtel Money">
-Airtel Money
-</option>
-
-<option value="Bank Transfer">
-Bank Transfer
-</option>
-
-</select>
-
-</div>
-
-<div class="field full">
-
-<label>Payment Details</label>
-
-<textarea
-id="paymentDetails"
-rows="3"
-placeholder="For Mobile Money enter your phone number. For bank transfer enter your account details."></textarea>
-
-</div>
-
-</div>
-
-<button
-id="withdrawButton"
-class="btn btn-orange"
-onclick="requestWithdrawal()">
-Request Withdrawal
-</button>
-
-</div>
-
-<div class="dashboard-card">
-
-<h2>My Withdrawal Requests</h2>
-
-<div class="table-wrap">
-
-<table>
-
-<thead>
-<tr>
-<th>Amount</th>
-<th>Payment Method</th>
-<th>Status</th>
-<th>Date</th>
-</tr>
-</thead>
-
-<tbody id="myWithdrawalsTable"></tbody>
-
-</table>
-
-</div>
-
-</div>
-
 <div class="dashboard-card" id="artistProfileSummaryCard" style="margin-bottom:18px;">
   <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
     <div id="dashboardArtistAvatar" style="width:96px;height:96px;flex:0 0 96px;border-radius:50%;overflow:hidden;background:#242424;border:3px solid var(--orange);display:flex;align-items:center;justify-content:center;color:var(--orange);font-size:30px;font-weight:800;">
@@ -2124,6 +2012,121 @@ accept="image/*">
 onclick="saveArtistProfile()">
 Save Profile
 </button>
+
+</div>
+
+
+
+<div class="stats-grid">
+<div class="stat-card"><span>Total Plays</span><strong id="totalPlays">0</strong></div>
+<div class="stat-card"><span>Estimated Earnings</span><strong id="totalEarnings">UGX 0</strong></div>
+<div class="stat-card"><span>Your Songs</span><strong id="totalSongs">0</strong></div>
+
+</div>
+
+<div class="stats-grid" style="margin-top:16px;">
+<div class="stat-card balance-card"><span>Available Balance</span><strong id="availableBalance">UGX 0</strong><p style="color:#777;font-size:12px;margin-top:8px;">Amount currently available for withdrawal. Minimum withdrawal: UGX 10,000</p></div>
+<div class="stat-card balance-card"><span>Amount Withdrawn</span><strong id="amountWithdrawn">UGX 0</strong><p style="color:#777;font-size:12px;margin-top:8px;">Total amount from completed withdrawals.</p></div>
+</div>
+
+<div class="dashboard-card" id="withdrawalCard">
+<button class="btn btn-orange" id="toggleWithdrawalForm" type="button" aria-expanded="false" onclick="toggleWithdrawalForm()">Request Withdrawal</button>
+<div id="withdrawalFormPanel" class="hidden" style="margin-top:18px;">
+<h2>Withdraw Earnings</h2>
+
+<p class="withdrawal-minimum">
+You can request a withdrawal when your available balance
+is at least <strong>UGX 10,000</strong>.
+</p>
+
+<div id="withdrawalMessage"
+class="message"></div>
+
+<div class="form-grid">
+
+<div class="field">
+
+<label>Amount to Withdraw</label>
+
+<input
+id="withdrawAmount"
+type="number"
+placeholder="e.g. 10000"
+min="10000"
+step="1000">
+
+</div>
+
+<div class="field">
+
+<label>Payment Method</label>
+
+<select id="paymentMethod">
+
+<option value="">
+Select payment method
+</option>
+
+<option value="MTN Mobile Money">
+MTN Mobile Money
+</option>
+
+<option value="Airtel Money">
+Airtel Money
+</option>
+
+<option value="Bank Transfer">
+Bank Transfer
+</option>
+
+</select>
+
+</div>
+
+<div class="field full">
+
+<label>Payment Details</label>
+
+<textarea
+id="paymentDetails"
+rows="3"
+placeholder="For Mobile Money enter your phone number. For bank transfer enter your account details."></textarea>
+
+</div>
+
+</div>
+
+<button
+id="withdrawButton"
+class="btn btn-orange"
+onclick="requestWithdrawal()">
+Submit Withdrawal Request
+</button>
+</div>
+</div>
+
+<div class="dashboard-card">
+
+<h2>My Withdrawal Requests</h2>
+
+<div class="table-wrap">
+
+<table>
+
+<thead>
+<tr>
+<th>Amount</th>
+<th>Payment Method</th>
+<th>Status</th>
+<th>Date</th>
+</tr>
+</thead>
+
+<tbody id="myWithdrawalsTable"></tbody>
+
+</table>
+
+</div>
 
 </div>
 
@@ -4244,6 +4247,17 @@ async function logout(){
 /* =========================================================
    DASHBOARD COLLAPSIBLE FORMS
 ========================================================= */
+function toggleWithdrawalForm(){
+  const panel=document.getElementById("withdrawalFormPanel");
+  const button=document.getElementById("toggleWithdrawalForm");
+  if(!panel || !button) return;
+  const opening=panel.classList.contains("hidden");
+  panel.classList.toggle("hidden",!opening);
+  button.setAttribute("aria-expanded",String(opening));
+  button.textContent=opening ? "Close Withdrawal Form" : "Request Withdrawal";
+  if(opening) panel.scrollIntoView({behavior:"smooth",block:"center"});
+}
+
 function toggleArtistProfileEdit(){
   const form=document.getElementById("artistProfileEditForm");
   const button=document.getElementById("toggleArtistProfileEdit");
