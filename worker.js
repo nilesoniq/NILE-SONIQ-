@@ -1986,6 +1986,66 @@ async function verifyPesaJetWebhook(rawBody, signature, secret) {
   return false;
 }
 
+async function premiumSubscriptionRoute(request, env) {
+  const user = await currentUser(request, env);
+  if (!user) return error("Authentication required", 401);
+  if (request.method === "GET") {
+    const row = await env.DB.prepare(`
+      SELECT status, expires_at FROM premium_subscriptions
+      WHERE user_id = ? AND lower(status) = 'active' AND expires_at IS NOT NULL
+        AND datetime(expires_at) > datetime('now')
+      ORDER BY datetime(expires_at) DESC LIMIT 1
+    `).bind(user.id).first();
+    const pendingRow = await env.DB.prepare(`SELECT reference FROM premium_subscriptions WHERE user_id = ? AND lower(status) = 'pending' ORDER BY created_at DESC LIMIT 1`).bind(user.id).first();
+    const active = !!row;
+    const pending = !!pendingRow;
+    return json({ active, pending, status: active ? "active" : pending ? "pending" : "free", expiresAt: active ? row.expires_at : null });
+  }
+  if (request.method !== "POST") return error("Method not allowed", 405);
+  const body = await readBody(request);
+  const phone = normalizeUgandanPhone(body.phone_number || body.phoneNumber);
+  const provider = String(body.provider || "").trim().toLowerCase();
+  if (!/^\+256\d{9}$/.test(phone)) return error("Enter a valid Ugandan mobile-money number", 422);
+  if (!["mtn", "airtel"].includes(provider)) return error("Provider must be MTN or Airtel", 422);
+  const apiKey = env.PESAJET_API_KEY || env.PESAJET_TOKEN;
+  const baseUrl = String(env.PESAJET_API_BASE_URL || "https://payments.pesajet.com/api/v1").replace(/\/+$/, "");
+  if (!apiKey) return error("Payment service is not configured", 503);
+  const pending = await env.DB.prepare(`SELECT reference FROM premium_subscriptions WHERE user_id = ? AND lower(status) = 'pending' ORDER BY created_at DESC LIMIT 1`).bind(user.id).first();
+  if (pending) return error(`A Premium payment is already pending (reference ${pending.reference}). Check its status before retrying.`, 409);
+  const reference = `NILESONIQ-PREMIUM-${crypto.randomUUID()}`;
+  const id = crypto.randomUUID();
+  const now = new Date().toISOString();
+  await env.DB.prepare(`INSERT INTO premium_subscriptions (id,user_id,amount,currency,provider,phone_number,reference,status,created_at) VALUES (?,?,5000,'UGX',?,?,?,'pending',?)`).bind(id,user.id,provider,phone,reference,now).run();
+  let response, result;
+  try {
+    response = await fetch(`${baseUrl}/payments`, { method:"POST", headers:{"Content-Type":"application/json","X-API-Key":apiKey}, body:JSON.stringify({type:"COLLECTION",amount:5000,currency:"UGX",phoneNumber:phone,provider,reference,description:"NileSoniQ Premium — 30 days",idempotencyKey:`nilesoniq-${reference}`}) });
+    result = await response.json().catch(()=>({}));
+  } catch (e) {
+    console.error("Premium payment outcome uncertain:",e.message);
+    return error("Payment request outcome is uncertain. It remains pending; check provider status before retrying.",502);
+  }
+  const transaction = result?.transaction && typeof result.transaction === "object" ? result.transaction : result?.data && typeof result.data === "object" ? result.data : result;
+  const status = String(transaction?.status || result?.status || "PENDING").toUpperCase();
+  const providerId = String(transaction?.transactionId || transaction?.transaction_id || result?.transactionId || result?.transaction_id || "");
+  if (!response.ok || result?.success === false) {
+    const definitive = (response.status >= 400 && response.status < 500) || result?.success === false;
+    if (definitive) await env.DB.prepare("UPDATE premium_subscriptions SET status='failed', provider_transaction_id=? WHERE reference=? AND status='pending'").bind(providerId,reference).run();
+    return error(String(result?.error?.message || result?.message || result?.error || "Payment provider rejected the request"), response.status >= 400 && response.status < 500 ? response.status : 502);
+  }
+  await env.DB.prepare("UPDATE premium_subscriptions SET provider_transaction_id=? WHERE reference=? AND status='pending'").bind(providerId,reference).run();
+  return json({ success:true, status:"PENDING", reference, message:"Payment request sent. Premium activates only after verified payment confirmation." });
+}
+
+async function applyPremiumPaymentStatus(env, reference, status, transactionId = "") {
+  const normalized = String(status || "").toUpperCase();
+  if (isSuccessfulPaymentStatus(normalized)) {
+    await env.DB.prepare(`UPDATE premium_subscriptions SET status='active', provider_transaction_id=COALESCE(NULLIF(?,''),provider_transaction_id), paid_at=COALESCE(paid_at,datetime('now')), expires_at=CASE WHEN expires_at IS NULL OR datetime(expires_at) <= datetime('now') THEN datetime('now','+30 days') ELSE datetime(expires_at,'+30 days') END WHERE reference=? AND lower(status)='pending'`).bind(transactionId,reference).run();
+  } else if (["FAILED","EXPIRED","REJECTED"].includes(normalized)) {
+    await env.DB.prepare("UPDATE premium_subscriptions SET status='failed', provider_transaction_id=COALESCE(NULLIF(?,''),provider_transaction_id) WHERE reference=? AND lower(status)='pending'").bind(transactionId,reference).run();
+  }
+}
+
+
 async function paymentWebhookRoute(request, env) {
   if (request.method !== "POST") {
     return error("Method not allowed", 405);
@@ -2050,6 +2110,7 @@ async function paymentWebhookRoute(request, env) {
       status,
       transactionId
     );
+    await applyPremiumPaymentStatus(env, reference, status, transactionId);
 
     return json({ received: true });
   } catch (e) {
@@ -2318,6 +2379,8 @@ export default {
           env,
           "disbursement"
         );
+      } else if (path === "/api/payments/premium-subscription") {
+        response = await premiumSubscriptionRoute(request, env);
       } else if (path.startsWith("/api/storage/public/")) {
         response = await storageRoute(
           request,
