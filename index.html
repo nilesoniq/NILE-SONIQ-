@@ -3058,9 +3058,14 @@ const storageAdapter={from(bucket){return {
     }catch(fetchError){
       return {data:null,error:new Error(fetchError?.message || "Could not reach the NileSoniq storage server.")};
     }
-    const responseText=await res.text();
-    let j;
-    try{ j=responseText ? JSON.parse(responseText) : null; }catch(parseError){ j=null; }
+    let responseText="";
+    let j=null;
+    try{
+      responseText=await res.text();
+      j=responseText ? JSON.parse(responseText) : null;
+    }catch(readError){
+      return {data:null,error:new Error("The storage server returned an unreadable response. Please try a smaller image or try again.")};
+    }
     if(!res.ok) return {data:null,error:new Error(j?.error || j?.message || `Storage upload failed (${res.status})`)};
     if(!j || typeof j!=="object" || j.error || !j.data || !j.data.path){
       return {data:null,error:new Error(j?.error || "The server did not confirm that the file was stored.")};
@@ -9717,6 +9722,46 @@ document.addEventListener("DOMContentLoaded", async () => {
 });
 
 </script>
+
+
+/* Tap any site image to view it larger; tap the backdrop or Close to dismiss. */
+(function installNileImageViewer(){
+  if(window.__nileImageViewerInstalled) return;
+  window.__nileImageViewerInstalled=true;
+  const style=document.createElement("style");
+  style.textContent=`
+    #nileImageViewer{position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.92);display:none;align-items:center;justify-content:center;padding:22px;box-sizing:border-box}
+    #nileImageViewer.open{display:flex}
+    #nileImageViewer img{max-width:100%;max-height:88vh;object-fit:contain;border-radius:10px;cursor:zoom-out}
+    #nileImageViewer button{position:absolute;top:16px;right:16px;border:0;border-radius:999px;background:#fff;color:#111;font-size:16px;font-weight:700;padding:10px 14px;cursor:pointer}
+    body.nile-image-viewer-open{overflow:hidden}
+    img[data-nile-viewable="1"]{cursor:zoom-in}
+  `;
+  document.head.appendChild(style);
+  const viewer=document.createElement("div");
+  viewer.id="nileImageViewer";
+  viewer.setAttribute("role","dialog");
+  viewer.setAttribute("aria-modal","true");
+  viewer.setAttribute("aria-label","Image preview");
+  viewer.innerHTML='<button type="button" aria-label="Close image preview">Close ✕</button><img alt="Expanded image">';
+  document.body.appendChild(viewer);
+  const big=viewer.querySelector("img");
+  const close=()=>{viewer.classList.remove("open");document.body.classList.remove("nile-image-viewer-open");big.removeAttribute("src");};
+  viewer.addEventListener("click",e=>{if(e.target===viewer||e.target===big||e.target===viewer.querySelector("button"))close();});
+  document.addEventListener("keydown",e=>{if(e.key==="Escape")close();});
+  document.addEventListener("click",e=>{
+    const img=e.target?.closest?.("img");
+    if(!img || !img.src || img.closest("#nileImageViewer")) return;
+    if(img.closest("button, a") && !img.closest(".news-card")) return;
+    if(img.naturalWidth===0 && img.complete) return;
+    e.preventDefault();
+    e.stopPropagation();
+    big.src=img.currentSrc||img.src;
+    big.alt=img.alt||"Image preview";
+    viewer.classList.add("open");
+    document.body.classList.add("nile-image-viewer-open");
+  },true);
+})();
 
 </body>
   </html>
