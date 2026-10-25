@@ -1832,19 +1832,29 @@ async function storageRoute(request, env, path) {
       );
     }
 
-    const bytes = await request.arrayBuffer();
+    const contentType = request.headers.get("Content-Type") || "application/octet-stream";
+    const contentLength = Number(request.headers.get("Content-Length") || 0);
+    // Avoid unexpectedly large uploads exhausting the request or storage budget.
+    const maxBytes = bucket === "audio" ? 100 * 1024 * 1024 : 8 * 1024 * 1024;
+    if (contentLength > maxBytes) {
+      return error(`File is too large. Maximum allowed size is ${Math.floor(maxBytes / (1024 * 1024))} MB.`, 413);
+    }
 
-    await env.MEDIA_BUCKET.put(
-      `${bucket}/${objectPath}`,
-      bytes,
-      {
-        httpMetadata: {
-          contentType:
-            request.headers.get("Content-Type") ||
-            "application/octet-stream"
-        }
+    try {
+      const bytes = await request.arrayBuffer();
+      if (bytes.byteLength > maxBytes) {
+        return error(`File is too large. Maximum allowed size is ${Math.floor(maxBytes / (1024 * 1024))} MB.`, 413);
       }
-    );
+
+      await env.MEDIA_BUCKET.put(
+        `${bucket}/${objectPath}`,
+        bytes,
+        { httpMetadata: { contentType } }
+      );
+    } catch (uploadError) {
+      console.error("R2 storage upload failed:", uploadError?.message || uploadError);
+      return error("The image could not be saved to storage. Please try again.", 502);
+    }
 
     return json({
       data: { path: objectPath },
@@ -2321,10 +2331,12 @@ export default {
         const bucket = url.searchParams.get("bucket") || "audio";
         const objectPath = url.searchParams.get("path") || "file";
 
+        const safeBucket = String(bucket).replace(/[^a-z0-9_-]/gi, "");
+        const encodedPath = String(objectPath).split("/").map(part => encodeURIComponent(part)).join("/");
         response = await storageRoute(
           request,
           env,
-          `/api/storage/${bucket}/${objectPath}`
+          `/api/storage/${safeBucket}/${encodedPath}`
         );
       } else if (path === "/api/health") {
         response = json({
