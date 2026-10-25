@@ -2021,6 +2021,18 @@ Save Profile
 <div class="stat-card balance-card"><span>Amount Withdrawn</span><strong id="amountWithdrawn">UGX 0</strong><p style="color:#777;font-size:12px;margin-top:8px;">Total amount from completed withdrawals.</p></div>
 </div>
 
+<div class="dashboard-card" id="premiumSubscriptionCard" style="margin:18px 0;border:1px solid rgba(255,165,0,.45);">
+<h2>🌟 NileSoniQ Premium</h2>
+<p>Upgrade for <strong>UGX 5,000 per 30 days</strong>. Premium status activates only after the payment provider confirms your payment.</p>
+<div id="premiumSubscriptionStatus" role="status" aria-live="polite" style="margin:12px 0;color:#bbb;">Checking subscription status…</div>
+<div class="form-grid">
+<div class="field"><label for="premiumPhone">MTN / Airtel Mobile Money number</label><input id="premiumPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="07XXXXXXXX or +2567XXXXXXXX" required></div>
+<div class="field"><label for="premiumNetwork">Mobile Money network</label><select id="premiumNetwork"><option value="mtn">MTN Mobile Money</option><option value="airtel">Airtel Money</option></select></div>
+</div>
+<button class="btn btn-orange" type="button" id="premiumSubscribeButton" onclick="startPremiumSubscription()">Pay UGX 5,000 with MoMo</button>
+<p style="font-size:12px;color:#888;margin-top:10px;">This starts a one-time 30-day payment request. Automatic monthly recurring collection is not enabled by this button.</p>
+</div>
+
 <div class="dashboard-card" id="withdrawalCard">
 <button class="btn btn-orange" id="toggleWithdrawalForm" type="button" aria-expanded="false" onclick="toggleWithdrawalForm()">Request Withdrawal</button>
 <div id="withdrawalFormPanel" class="hidden" style="margin-top:18px;">
@@ -9796,7 +9808,45 @@ window.addEventListener("popstate", async () => {
 
 document.addEventListener("DOMContentLoaded", async () => {
   /* Route handling is performed by the main startup handler above. */
+  refreshPremiumSubscriptionStatus();
 });
+
+
+/* =========================================================
+   PREMIUM SUBSCRIPTION — provider-confirmed only
+========================================================= */
+async function refreshPremiumSubscriptionStatus(){
+  const statusEl=document.getElementById("premiumSubscriptionStatus");
+  if(!statusEl) return;
+  try{
+    const response=await fetch("/api/payments/premium-subscription",{method:"GET",credentials:"include"});
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok){statusEl.textContent=response.status===401?"Sign in to check or purchase Premium.":(data.error||"Premium status is temporarily unavailable.");return;}
+    if(data.active){
+      const until=data.expiresAt?new Date(data.expiresAt).toLocaleDateString():"the displayed expiry date";
+      statusEl.textContent=`Premium is active until ${until}.`;
+      const button=document.getElementById("premiumSubscribeButton"); if(button) button.textContent="Renew Premium — UGX 5,000";
+    }else{
+      statusEl.textContent=data.pending?"Your payment is pending provider confirmation. Do not pay again until its status is checked.":"You are on the free plan. Premium is not active yet.";
+    }
+  }catch(e){statusEl.textContent="Could not reach the payment server. No payment status was assumed.";}
+}
+async function startPremiumSubscription(){
+  const button=document.getElementById("premiumSubscribeButton");
+  const statusEl=document.getElementById("premiumSubscriptionStatus");
+  const phone=document.getElementById("premiumPhone")?.value.trim();
+  const provider=document.getElementById("premiumNetwork")?.value;
+  if(!phone){if(statusEl)statusEl.textContent="Enter the mobile-money number to charge.";return;}
+  if(button){button.disabled=true;button.textContent="Requesting payment…";}
+  try{
+    const response=await fetch("/api/payments/premium-subscription",{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({phone_number:phone,provider})});
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok){if(statusEl)statusEl.textContent=data.error||"Could not start payment. No subscription was activated.";return;}
+    if(statusEl)statusEl.textContent=`Payment request created (${data.status||"PENDING"}, reference ${data.reference}). Premium will activate only after a verified provider webhook confirms payment. Keep this reference.`;
+    await refreshPremiumSubscriptionStatus();
+  }catch(e){if(statusEl)statusEl.textContent="The payment request outcome could not be confirmed. Check with support before retrying to avoid duplicate charges.";}
+  finally{if(button){button.disabled=false;button.textContent="Pay UGX 5,000 with MoMo";}}
+}
 
 /* Tap any site image to view it larger; tap the backdrop or Close to dismiss. */
 (function installNileImageViewer(){
