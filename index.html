@@ -2052,9 +2052,23 @@ Request Withdrawal
 
 </div>
 
-<div class="dashboard-card">
+<div class="dashboard-card" id="artistProfileSummaryCard" style="margin-bottom:18px;">
+  <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+    <div id="dashboardArtistAvatar" style="width:96px;height:96px;flex:0 0 96px;border-radius:50%;overflow:hidden;background:#242424;border:3px solid var(--orange);display:flex;align-items:center;justify-content:center;color:var(--orange);font-size:30px;font-weight:800;">
+      <span>NS</span>
+    </div>
+    <div style="flex:1;min-width:180px;">
+      <h2 id="dashboardArtistName" style="margin:0 0 5px;">Your artist profile</h2>
+      <p id="dashboardArtistLocation" style="color:var(--muted);margin:0 0 8px;">Add your location</p>
+      <p id="dashboardArtistBio" style="white-space:pre-wrap;line-height:1.6;margin:0;color:#bbb;">Your biography will appear here.</p>
+    </div>
+    <button class="btn btn-orange" type="button" onclick="document.getElementById('artistProfileEditForm').scrollIntoView({behavior:'smooth',block:'center'});document.getElementById('artistName').focus();">Edit Profile</button>
+  </div>
+</div>
 
-<h2>Artist Profile</h2>
+<div class="dashboard-card" id="artistProfileEditForm">
+
+<h2>Edit Artist Profile</h2>
 
 <div id="profileMessage"
 class="message"></div>
@@ -4226,6 +4240,30 @@ async function logout(){
    ARTIST PROFILE
 ========================================================= */
 
+function renderDashboardArtistProfile(artist){
+  const name = (artist && artist.name) || document.getElementById("artistName")?.value?.trim() || "Your artist profile";
+  const location = (artist && artist.location) || document.getElementById("artistLocation")?.value?.trim() || "Add your location";
+  const bio = (artist && artist.bio) || document.getElementById("artistBio")?.value?.trim() || "Your biography will appear here.";
+  const avatar = artist && artist.avatar_url;
+  const nameEl = document.getElementById("dashboardArtistName");
+  const locationEl = document.getElementById("dashboardArtistLocation");
+  const bioEl = document.getElementById("dashboardArtistBio");
+  const avatarEl = document.getElementById("dashboardArtistAvatar");
+  if(nameEl) nameEl.textContent = name;
+  if(locationEl) locationEl.textContent = location === "Add your location" ? location : "📍 " + location;
+  if(bioEl) bioEl.textContent = bio;
+  if(avatarEl){
+    avatarEl.replaceChildren();
+    if(avatar){
+      const img=document.createElement("img"); img.src=avatar; img.alt=name + " profile photo"; img.style.cssText="width:100%;height:100%;object-fit:cover";
+      img.onerror=()=>{avatarEl.replaceChildren(); const initials=document.createElement("span"); initials.textContent=(name.split(/\s+/).filter(Boolean).slice(0,2).map(x=>x[0]).join("")||"NS").toUpperCase(); avatarEl.appendChild(initials);};
+      avatarEl.appendChild(img);
+    } else {
+      const initials=document.createElement("span"); initials.textContent=(name.split(/\s+/).filter(Boolean).slice(0,2).map(x=>x[0]).join("")||"NS").toUpperCase(); avatarEl.appendChild(initials);
+    }
+  }
+}
+
 async function loadArtistProfile(){
 
   if(!currentUser){
@@ -4276,7 +4314,7 @@ async function loadArtistProfile(){
       document.getElementById(
         "artistBio"
       ).value = "";
-
+      renderDashboardArtistProfile(null);
       return;
 
     }
@@ -4296,7 +4334,7 @@ async function loadArtistProfile(){
       "artistBio"
     ).value =
       data.bio || "";
-
+    renderDashboardArtistProfile(data);
 
     const songArtist =
       document.getElementById(
@@ -4444,7 +4482,7 @@ async function saveArtistProfile(){
 
 
     currentArtist = data;
-
+    renderDashboardArtistProfile(data);
 
     showMessage(
       "profileMessage",
@@ -9746,6 +9784,16 @@ document.addEventListener("DOMContentLoaded", async () => {
   const close=()=>{viewer.classList.remove("open");document.body.classList.remove("nile-image-viewer-open");big.removeAttribute("src");};
   viewer.addEventListener("click",e=>{if(e.target===viewer||e.target===big||e.target===viewer.querySelector("button"))close();});
   document.addEventListener("keydown",e=>{if(e.key==="Escape")close();});
+  // Broken remote images should not leave the browser's broken-image icon visible.
+  document.addEventListener("error",e=>{
+    const img=e.target;
+    if(!img || img.tagName!=="IMG" || img.dataset.nileFallbackApplied==="1") return;
+    img.dataset.nileFallbackApplied="1";
+    img.style.visibility="hidden";
+    img.setAttribute("aria-label", img.alt || "Image unavailable");
+    const parent=img.parentElement;
+    if(parent){ parent.style.backgroundColor="#222"; parent.style.position=parent.style.position||"relative"; }
+  },true);
   document.addEventListener("click",e=>{
     const img=e.target?.closest?.("img");
     if(!img || !img.src || img.closest("#nileImageViewer")) return;
