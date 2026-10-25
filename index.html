@@ -450,20 +450,20 @@ nav button.active{
 .artist-grid{
   display:grid;
   grid-template-columns:repeat(4,1fr);
-  gap:18px;
+  gap:12px;
 }
 
 .artist-card{
   background:var(--card);
   border:1px solid var(--border);
-  border-radius:18px;
-  padding:20px;
+  border-radius:14px;
+  padding:12px;
   text-align:center;
 }
 
 .artist-avatar{
-  width:58px;
-  height:58px;
+  width:48px;
+  height:48px;
   border-radius:50%;
   overflow:hidden;
   margin:0 auto 14px;
@@ -1574,11 +1574,19 @@ footer{
 }
 .news-card{
   display:flex;
-  flex-direction:column;
-  gap:10px;
-  height:100%;
+  flex-direction:row;
+  align-items:flex-start;
+  gap:14px;
+  height:auto;
+  padding:14px;
 }
+.news-card > a{display:grid;grid-template-columns:150px minmax(0,1fr);grid-template-rows:auto auto auto 1fr;gap:5px 14px;width:100%;align-items:start;}
+.news-card > a > img{grid-column:1;grid-row:1 / span 4;width:150px!important;height:110px!important;object-fit:cover;border-radius:10px;margin:0!important;}
+.news-card > a > .news-date,.news-card > a > h3,.news-card > a > .news-excerpt,.news-card > a > .news-read{grid-column:2;}
 .news-card h3{margin:0;font-size:18px;line-height:1.3;}
+#newsPageContainer{display:flex;flex-direction:column;gap:12px;}
+.news-list-placeholder{grid-column:1;grid-row:1 / span 4;width:150px;height:110px;border-radius:10px;background:#242424;display:flex;align-items:center;justify-content:center;color:var(--orange);font-weight:800;}
+@media(max-width:520px){.news-card > a{grid-template-columns:100px minmax(0,1fr);gap:5px 10px}.news-card > a > img,.news-list-placeholder{width:100px!important;height:90px!important}.news-card h3{font-size:15px}.news-card .news-excerpt{font-size:12px;}}
 .news-card .news-date{color:#888;font-size:12px;}
 .news-card .news-excerpt{color:#aaa;line-height:1.6;font-size:14px;}
 .news-card .news-read{margin-top:auto;color:var(--orange);font-size:13px;font-weight:800;}
@@ -7078,7 +7086,6 @@ async function loadArtists(){
           <div class="artist-avatar">${avatar}</div>
           <h3>${escapeHtml(artist.name || "Unknown Artist")}</h3>
           <p>${escapeHtml(artist.location || "Uganda")}</p>
-          <div style="margin-top:10px;color:var(--orange);font-size:12px;font-weight:700;">View Profile →</div>
         </div>`;
     }).join("");
     const controls = document.getElementById("artistsSeeMoreControls");
