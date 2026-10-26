@@ -1978,21 +1978,18 @@ async function verifyPesaJetWebhook(rawBody, signature, secret) {
 
 function premiumPaymentFailureMessage(value) {
   const raw = String(value || "").trim();
-  const lower = raw.toLowerCase();
-  if (/^(failed|expired|rejected|declined|cancelled|canceled)$/.test(lower)) {
-    return "Mobile-money payment failed. Please check your wallet balance and transaction limits, then try again.";
+  const lower = raw.toLowerCase().replace(/[_-]+/g, " ");
+  if (/insufficient|not enough|low balance|wallet balance|balance too low|no funds|insufficient funds/.test(lower)) {
+    return "Payment failed: your mobile-money balance is insufficient. Please top up your wallet and try again.";
   }
-  if (/insufficient|not enough|low balance|wallet balance|balance too low/.test(lower)) {
-    return "Insufficient balance. Please top up your mobile-money wallet and try again.";
+  if (/limit exceeded|transaction limit|daily limit|limit reached|exceed.*limit/.test(lower)) {
+    return "Payment failed because your mobile-money transaction limit was reached. Try again later or contact your mobile-money provider.";
   }
-  if (/limit exceeded|transaction limit|daily limit|limit reached/.test(lower)) {
-    return "Your mobile-money transaction limit was reached. Try again later or contact your mobile-money provider.";
+  if (/expired|timed out|time out|timeout/.test(lower)) {
+    return "Payment failed because the request expired or timed out. Please check your transaction status before trying again.";
   }
-  if (/expired|timed out|timeout/.test(lower)) {
-    return "The payment request expired before it was completed. Please try again.";
-  }
-  if (/cancel|declin|reject|fail/.test(lower)) {
-    return raw ? `Payment failed: ${raw}` : "Mobile-money payment failed. Please check your balance and try again.";
+  if (/cancel|declin|reject|fail|error|authorization failed/.test(lower)) {
+    return raw ? `Payment failed: ${raw}` : "Mobile-money payment failed. Please check your wallet balance and try again.";
   }
   return raw ? `Payment could not be completed: ${raw}` : "Mobile-money payment failed. Check your wallet balance and transaction limits, then try again.";
 }
@@ -2083,29 +2080,53 @@ async function premiumSubscriptionRoute(request, env) {
     return error("Payment request outcome is uncertain. It remains pending; check provider status before retrying.", 502);
   }
 
-  const transaction = result?.transaction && typeof result.transaction === "object" ? result.transaction : result?.data && typeof result.data === "object" ? result.data : result;
-  const status = String(transaction?.status || result?.status || "PENDING").toUpperCase();
-  const providerId = String(transaction?.transactionId || transaction?.transaction_id || result?.transactionId || result?.transaction_id || "");
-  if (!response.ok || result?.success === false) {
-    const definitive = (response.status >= 400 && response.status < 500) || result?.success === false;
-    const providerMessage = String(typeof result?.error === "string" ? result.error : result?.error?.message || transaction?.message || result?.message || "Payment provider rejected the request");
-    const failureMessage = premiumPaymentFailureMessage(providerMessage);
+  const dataObject = result?.data && typeof result.data === "object" ? result.data : {};
+  const transaction = result?.transaction && typeof result.transaction === "object"
+    ? result.transaction
+    : dataObject?.transaction && typeof dataObject.transaction === "object"
+      ? dataObject.transaction
+      : dataObject;
+  const statusCandidates = [
+    transaction?.status, transaction?.transactionStatus, transaction?.paymentStatus, transaction?.state,
+    dataObject?.status, dataObject?.transactionStatus, dataObject?.paymentStatus, dataObject?.state,
+    result?.status, result?.transactionStatus, result?.paymentStatus, result?.state
+  ].filter(Boolean).map(value => String(value).trim().toUpperCase().replace(/[\s-]+/g, "_"));
+  const status = statusCandidates[0] || "PENDING";
+  const providerId = String(transaction?.transactionId || transaction?.transaction_id || dataObject?.transactionId || dataObject?.transaction_id || result?.transactionId || result?.transaction_id || "");
+  const providerMessages = [
+    result?.message, result?.description, result?.detail, result?.reason, result?.failureReason, result?.failure_reason,
+    result?.failureMessage, result?.failure_message, result?.errorCode, result?.error_code, result?.code,
+    typeof result?.error === "string" ? result.error : result?.error?.message || result?.error?.description || result?.error?.code,
+    dataObject?.message, dataObject?.description, dataObject?.detail, dataObject?.reason, dataObject?.failureReason,
+    dataObject?.failure_reason, dataObject?.failureMessage, dataObject?.failure_message, dataObject?.errorCode,
+    dataObject?.error_code, dataObject?.code,
+    typeof dataObject?.error === "string" ? dataObject.error : dataObject?.error?.message || dataObject?.error?.description || dataObject?.error?.code,
+    transaction?.message, transaction?.description, transaction?.detail, transaction?.reason,
+    transaction?.failureReason, transaction?.failure_reason, transaction?.failureMessage, transaction?.failure_message,
+    transaction?.errorCode, transaction?.error_code, transaction?.code,
+    typeof transaction?.error === "string" ? transaction.error : transaction?.error?.message || transaction?.error?.description || transaction?.error?.code,
+    ...statusCandidates
+  ].filter(value => value !== undefined && value !== null && String(value).trim() !== "").map(value => String(value).trim());
+  const providerMessage = providerMessages.join(" | ");
+  const failureStatuses = ["FAILED", "FAILURE", "ERROR", "EXPIRED", "REJECTED", "DECLINED", "CANCELLED", "CANCELED", "TIMED_OUT", "TIMEOUT", "TIME_OUT", "INSUFFICIENT_BALANCE", "INSUFFICIENT_FUNDS", "AUTHORIZATION_FAILED", "LIMIT_EXCEEDED"];
+  const failureText = /insufficient[ _-]*(balance|funds)|not enough (money|funds|balance)|low balance|balance too low|transaction limit|daily limit|limit exceeded|payment failed|payment declined|request rejected|authorization failed/i.test(providerMessage);
+  const hasExplicitError = result?.success === false || dataObject?.success === false || !!result?.error || !!dataObject?.error || !!transaction?.error;
+  const providerRejected = !response.ok || hasExplicitError || statusCandidates.some(value => failureStatuses.includes(value)) || failureText;
+  if (providerRejected) {
+    const rawReason = providerMessage || "Payment provider rejected the request";
+    const failureMessage = premiumPaymentFailureMessage(rawReason);
+    const definitive = (response.status >= 400 && response.status < 500) || hasExplicitError || statusCandidates.some(value => failureStatuses.includes(value)) || failureText;
     if (definitive) {
-      await env.DB.prepare("UPDATE premium_subscriptions SET status='failed', provider_transaction_id=?, failure_message=? WHERE reference=? AND status='pending'").bind(providerId, failureMessage, reference).run();
+      await env.DB.prepare("UPDATE premium_subscriptions SET status='failed', provider_transaction_id=?, failure_message=? WHERE reference=? AND lower(status)='pending'").bind(providerId, failureMessage, reference).run();
     }
     return error(failureMessage, response.status >= 400 && response.status < 500 ? response.status : 502);
   }
 
-  if (["FAILED", "EXPIRED", "REJECTED", "DECLINED", "CANCELLED", "CANCELED"].includes(status)) {
-    const providerMessage = String(transaction?.message || result?.message || result?.error?.message || status);
-    const failureMessage = premiumPaymentFailureMessage(providerMessage);
-    await env.DB.prepare(`
-      UPDATE premium_subscriptions
-      SET status='failed',
-          provider_transaction_id=COALESCE(NULLIF(?,''),provider_transaction_id),
-          failure_message=?
-      WHERE reference=? AND lower(status)='pending'
-    `).bind(providerId, failureMessage, reference).run();
+  if (statusCandidates.some(value => ["PENDING", "PROCESSING", "INITIATED", "ACCEPTED", "IN_PROGRESS"].includes(value)) || status === "PENDING") {
+    // The API accepted the request, but that does not prove the prompt reached the phone.
+  } else if (statusCandidates.length && !isSuccessfulPaymentStatus(status)) {
+    const failureMessage = premiumPaymentFailureMessage(providerMessage || status);
+    await env.DB.prepare("UPDATE premium_subscriptions SET status='failed', provider_transaction_id=?, failure_message=? WHERE reference=? AND lower(status)='pending'").bind(providerId, failureMessage, reference).run();
     return json({ success: false, status: "FAILED", reference, message: failureMessage });
   }
 
@@ -2114,7 +2135,7 @@ async function premiumSubscriptionRoute(request, env) {
     success: true,
     status: "PENDING",
     reference,
-    message: "Payment initiated successfully. Approve the mobile-money prompt on your phone and enter your PIN. Premium will activate automatically after verified payment confirmation."
+    message: "Your payment request was accepted by the provider. Check your phone for a mobile-money approval prompt and enter your PIN if it arrives. We will update the status when the provider confirms the outcome."
   });
 }
 
@@ -2197,7 +2218,7 @@ async function applyPremiumPaymentStatus(
     return { matched: true, changed: Number(update?.meta?.changes || 0) > 0, reason: "verified_success" };
   }
 
-  if (["FAILED", "EXPIRED", "REJECTED", "DECLINED", "CANCELLED", "CANCELED"].includes(normalized)) {
+  if (["FAILED", "FAILURE", "ERROR", "EXPIRED", "REJECTED", "DECLINED", "CANCELLED", "CANCELED", "TIMED_OUT", "TIMEOUT", "TIME_OUT", "INSUFFICIENT_BALANCE", "INSUFFICIENT_FUNDS", "AUTHORIZATION_FAILED", "LIMIT_EXCEEDED"].includes(normalized)) {
     await env.DB.prepare(`
       UPDATE premium_subscriptions
       SET status='failed',
@@ -2268,8 +2289,13 @@ async function paymentWebhookRoute(request, env) {
 
   const eventStatus = {
     "payment.completed": "COMPLETED",
+    "payment.succeeded": "COMPLETED",
     "payment.failed": "FAILED",
-    "payment.expired": "EXPIRED"
+    "payment.declined": "DECLINED",
+    "payment.expired": "EXPIRED",
+    "payment.cancelled": "CANCELLED",
+    "payment.canceled": "CANCELLED",
+    "payment.rejected": "REJECTED"
   };
   const status = eventStatus[event];
 
@@ -2308,7 +2334,11 @@ async function paymentWebhookRoute(request, env) {
       transactionId,
       webhookPayment.amount,
       webhookPayment.currency,
-      payload?.message || payload?.error?.message || payload?.data?.message || ""
+      payload?.message || payload?.description || payload?.reason || payload?.failureReason || payload?.failure_reason ||
+        payload?.failureMessage || payload?.failure_message || payload?.error?.message || payload?.error?.code ||
+        payload?.data?.message || payload?.data?.description || payload?.data?.reason || payload?.data?.failureReason ||
+        payload?.data?.failure_reason || payload?.data?.failureMessage || payload?.data?.failure_message ||
+        payload?.data?.error?.message || payload?.data?.error?.code || ""
     );
     if (premiumResult.reason === "amount_currency_mismatch" || premiumResult.reason === "transaction_id_mismatch") {
       console.error("Premium payment webhook was not applied:", premiumResult.reason, reference);
