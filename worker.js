@@ -1930,49 +1930,77 @@ async function applyPlatformPaymentStatus(
 }
 
 async function verifyPesaJetWebhook(rawBody, signature, secret) {
-  if (!signature || !secret) return false;
+  if (typeof signature !== "string" || !signature.trim() || typeof secret !== "string" || !secret) {
+    return false;
+  }
 
-  // PesaJet's verification example signs the original request body.
-  // Do not parse and re-serialize JSON before calculating the HMAC:
-  // whitespace and property ordering are part of the signed bytes.
-  const key = await crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"]
-  );
+  // PesaJet documents HMAC-SHA256 with a hex-encoded signature and the
+  // signing secret exactly as issued (including its whsec_ prefix, if present).
+  // Verify the untouched request body first. Some SDK/reference implementations
+  // verify a parsed JSON object, so also try compact JSON serialization as a
+  // compatibility fallback. Never process the event until one HMAC matches.
+  const bodies = [rawBody];
+  let parsedPayload;
+  try {
+    parsedPayload = JSON.parse(rawBody);
+    if (parsedPayload && typeof parsedPayload === "object") {
+      const compactBody = JSON.stringify(parsedPayload);
+      if (compactBody !== rawBody) bodies.push(compactBody);
 
-  const digest = new Uint8Array(await crypto.subtle.sign(
-    "HMAC",
-    key,
-    new TextEncoder().encode(rawBody)
-  ));
-
-  const expectedHex = Array.from(digest)
-    .map(byte => byte.toString(16).padStart(2, "0"))
-    .join("");
-
-  const expectedBase64 = btoa(
-    String.fromCharCode(...digest)
-  );
-
-  const received = String(signature).trim().replace(/^sha256=/i, "");
-
-  // Accept either common HMAC-SHA256 digest encoding (hex or Base64),
-  // while comparing in constant time once lengths match.
-  for (const expected of [expectedHex, expectedBase64]) {
-    const candidate = expected === expectedHex
-      ? received.toLowerCase()
-      : received;
-
-    if (candidate.length !== expected.length) continue;
-
-    let mismatch = 0;
-    for (let i = 0; i < expected.length; i++) {
-      mismatch |= expected.charCodeAt(i) ^ candidate.charCodeAt(i);
+      // The PesaJet reference verifier excludes a root-level `signature` field
+      // when one is embedded in the payload object.
+      if (!Array.isArray(parsedPayload) && Object.prototype.hasOwnProperty.call(parsedPayload, "signature")) {
+        const { signature: _embeddedSignature, ...unsignedPayload } = parsedPayload;
+        const unsignedBody = JSON.stringify(unsignedPayload);
+        if (!bodies.includes(unsignedBody)) bodies.push(unsignedBody);
+      }
     }
-    if (mismatch === 0) return true;
+  } catch {
+    // Non-JSON bodies are still checked using their exact raw bytes below.
+  }
+
+  const received = String(signature).trim().replace(/^sha256=/i, "").trim();
+  if (!received) return false;
+
+  // Normally the exact secret is used. The trimmed fallback only accounts for
+  // accidental whitespace around a dashboard secret pasted into an environment
+  // variable; it never bypasses HMAC verification.
+  const secrets = [secret];
+  const trimmedSecret = secret.trim();
+  if (trimmedSecret && trimmedSecret !== secret) secrets.push(trimmedSecret);
+
+  const encoder = new TextEncoder();
+  for (const candidateSecret of secrets) {
+    const key = await crypto.subtle.importKey(
+      "raw",
+      encoder.encode(candidateSecret),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"]
+    );
+
+    for (const body of bodies) {
+      const digest = new Uint8Array(await crypto.subtle.sign(
+        "HMAC",
+        key,
+        encoder.encode(body)
+      ));
+      const expectedHex = Array.from(digest)
+        .map(byte => byte.toString(16).padStart(2, "0"))
+        .join("");
+      const expectedBase64 = btoa(String.fromCharCode(...digest));
+
+      for (const expected of [expectedHex, expectedBase64]) {
+        const comparison = expected === expectedHex ? received.toLowerCase() : received;
+        if (comparison.length !== expected.length) continue;
+
+        let mismatch = 0;
+        for (let i = 0; i < expected.length; i++) {
+          mismatch |= expected.charCodeAt(i) ^ comparison.charCodeAt(i);
+        }
+        if (mismatch === 0) return true;
+      }
+    }
   }
 
   return false;
