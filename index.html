@@ -1456,6 +1456,12 @@ footer{
 
 }
 
+/* NILESONIQ PREMIUM ARTIST BADGE */
+.nilesoniq-premium-badge{display:inline-flex;align-items:center;gap:5px;vertical-align:middle;margin-left:8px;padding:4px 9px;border:1px solid rgba(255,174,0,.55);border-radius:999px;background:linear-gradient(135deg,rgba(255,174,0,.18),rgba(255,119,0,.10));color:#ffc45c;font-size:11px;font-weight:800;letter-spacing:.04em;line-height:1.2;white-space:nowrap}
+.nilesoniq-premium-badge .premium-badge-star{font-size:12px}
+.artist-card .nilesoniq-premium-badge{margin:5px 0 0;font-size:10px;padding:3px 7px}
+#dashboardArtistPremiumBadge{margin:0 0 8px}
+
 /* NILESONIQ PUBLIC ARTIST PROFILE */
 .artist-card{cursor:pointer;transition:transform .2s ease,border-color .2s ease,box-shadow .2s ease}
 .artist-card:hover{transform:translateY(-4px);border-color:var(--orange);box-shadow:0 12px 30px rgba(0,0,0,.25)}
@@ -1939,6 +1945,7 @@ Artist Login
     </div>
     <div style="flex:1;min-width:180px;">
       <h2 id="dashboardArtistName" style="margin:0 0 5px;">Your artist profile</h2>
+      <div id="dashboardArtistPremiumBadge" class="nilesoniq-premium-badge" style="display:none;">★ PREMIUM ARTIST</div>
       <p id="dashboardArtistLocation" style="color:var(--muted);margin:0 0 8px;">Add your location</p>
       <p id="dashboardArtistBio" style="white-space:pre-wrap;line-height:1.6;margin:0;color:#bbb;">Your biography will appear here.</p>
     </div>
@@ -2021,7 +2028,7 @@ Save Profile
 <div class="stat-card balance-card"><span>Amount Withdrawn</span><strong id="amountWithdrawn">UGX 0</strong><p style="color:#777;font-size:12px;margin-top:8px;">Total amount from completed withdrawals.</p></div>
 </div>
 
-<div class="dashboard-card" id="premiumSubscriptionCard" style="margin:18px 0;border:1px solid rgba(255,165,0,.45);">
+<div class="dashboard-card" id="premiumSubscriptionCard" style="display:none;margin:18px 0;border:1px solid rgba(255,165,0,.45);" hidden>
 <h2>🌟 NileSoniQ Premium</h2>
 <p>Upgrade for <strong>UGX 5,000 per 30 days</strong>. Premium status activates only after the payment provider confirms your payment.</p>
 <div id="premiumSubscriptionStatus" role="status" aria-live="polite" style="margin:12px 0;color:#bbb;">Checking subscription status…</div>
@@ -4266,6 +4273,14 @@ function toggleSongUpload(){
   if(opening) form.scrollIntoView({behavior:"smooth",block:"start"});
 }
 
+function isArtistPremiumActive(artist){
+  if(!artist) return false;
+  const flag = artist.is_premium === true || artist.is_premium === 1 || artist.is_premium === "1";
+  if(!flag || !artist.premium_expiry_date) return false;
+  const expiry = Date.parse(artist.premium_expiry_date);
+  return Number.isFinite(expiry) && expiry > Date.now();
+}
+
 function renderDashboardArtistProfile(artist){
   const name = (artist && artist.name) || document.getElementById("artistName")?.value?.trim() || "Your artist profile";
   const location = (artist && artist.location) || document.getElementById("artistLocation")?.value?.trim() || "Add your location";
@@ -4276,6 +4291,8 @@ function renderDashboardArtistProfile(artist){
   const bioEl = document.getElementById("dashboardArtistBio");
   const avatarEl = document.getElementById("dashboardArtistAvatar");
   if(nameEl) nameEl.textContent = name;
+  const premiumBadge=document.getElementById("dashboardArtistPremiumBadge");
+  if(premiumBadge) premiumBadge.style.display=isArtistPremiumActive(artist)?"inline-flex":"none";
   if(locationEl) locationEl.textContent = location === "Add your location" ? location : "📍 " + location;
   if(bioEl) bioEl.textContent = bio;
   if(avatarEl){
@@ -4290,9 +4307,19 @@ function renderDashboardArtistProfile(artist){
   }
 }
 
+function updatePremiumSubscriptionCardVisibility(isArtist){
+  const card=document.getElementById("premiumSubscriptionCard");
+  if(!card) return;
+  const visible=Boolean(isArtist && currentUser && currentArtist);
+  card.hidden=!visible;
+  card.style.display=visible?"":"none";
+}
+
 async function loadArtistProfile(){
 
   if(!currentUser){
+    currentArtist=null;
+    updatePremiumSubscriptionCardVisibility(false);
     return;
   }
 
@@ -4318,6 +4345,8 @@ async function loadArtistProfile(){
         "Artist load error:",
         error
       );
+      currentArtist=null;
+      updatePremiumSubscriptionCardVisibility(false);
 
       return;
 
@@ -4341,10 +4370,13 @@ async function loadArtistProfile(){
         "artistBio"
       ).value = "";
       renderDashboardArtistProfile(null);
+      updatePremiumSubscriptionCardVisibility(false);
       return;
 
     }
 
+    updatePremiumSubscriptionCardVisibility(true);
+    await refreshPremiumSubscriptionStatus();
 
     document.getElementById(
       "artistName"
@@ -4381,6 +4413,8 @@ async function loadArtistProfile(){
   }catch(error){
 
     console.error(error);
+    currentArtist=null;
+    updatePremiumSubscriptionCardVisibility(false);
 
   }
 
@@ -6404,6 +6438,7 @@ async function openArtistProfile(artistId, fromPublicRoute=false){
 
           <h2>
             ${escapeHtml(artist.name || "Unknown Artist")}
+            ${isArtistPremiumActive(artist) ? '<span class="nilesoniq-premium-badge" aria-label="Active Premium artist">★ PREMIUM</span>' : ''}
           </h2>
 
           <p class="artist-profile-location">
@@ -7086,6 +7121,7 @@ async function loadArtists(){
           </div>
           <div class="artist-avatar">${avatar}</div>
           <h3>${escapeHtml(artist.name || "Unknown Artist")}</h3>
+          ${isArtistPremiumActive(artist) ? '<div class="nilesoniq-premium-badge" aria-label="Active Premium artist">★ PREMIUM ARTIST</div>' : ''}
           <p>${escapeHtml(artist.location || "Uganda")}</p>
         </div>`;
     }).join("");
@@ -9807,8 +9843,8 @@ window.addEventListener("popstate", async () => {
 });
 
 document.addEventListener("DOMContentLoaded", async () => {
-  /* Route handling is performed by the main startup handler above. */
-  refreshPremiumSubscriptionStatus();
+  /* Premium status is refreshed after authentication and artist-profile loading. */
+  updatePremiumSubscriptionCardVisibility(Boolean(currentUser && currentArtist));
 });
 
 
@@ -9818,6 +9854,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 async function refreshPremiumSubscriptionStatus(reference=null, fromPoll=false){
   const statusEl=document.getElementById("premiumSubscriptionStatus");
   if(!statusEl) return {status:"unavailable"};
+  if(!currentUser || !currentArtist){
+    updatePremiumSubscriptionCardVisibility(false);
+    return {status:"unavailable",isArtist:false};
+  }
+  updatePremiumSubscriptionCardVisibility(true);
   try{
     const url="/api/payments/premium-subscription"+(reference?"?reference="+encodeURIComponent(reference):"");
     const response=await fetch(url,{method:"GET",credentials:"include",cache:"no-store"});
@@ -9872,6 +9913,12 @@ function beginPremiumPaymentPolling(reference){
 async function startPremiumSubscription(){
   const button=document.getElementById("premiumSubscribeButton");
   const statusEl=document.getElementById("premiumSubscriptionStatus");
+  if(!currentUser || !currentArtist){
+    updatePremiumSubscriptionCardVisibility(false);
+    if(statusEl) statusEl.textContent="NileSoniQ Premium is available to artist accounts only.";
+    else window.alert("NileSoniQ Premium is available to artist accounts only.");
+    return;
+  }
   const phone=document.getElementById("premiumPhone")?.value.trim();
   const provider=document.getElementById("premiumNetwork")?.value;
   if(!phone){if(statusEl)statusEl.textContent="Enter the mobile-money number to charge.";return;}
