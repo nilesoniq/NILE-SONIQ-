@@ -1976,21 +1976,84 @@ async function verifyPesaJetWebhook(rawBody, signature, secret) {
   return false;
 }
 
+function premiumPaymentFailureMessage(value) {
+  const raw = String(value || "").trim();
+  const lower = raw.toLowerCase();
+  if (/^(failed|expired|rejected|declined|cancelled|canceled)$/.test(lower)) {
+    return "Mobile-money payment failed. Please check your wallet balance and transaction limits, then try again.";
+  }
+  if (/insufficient|not enough|low balance|wallet balance|balance too low/.test(lower)) {
+    return "Insufficient balance. Please top up your mobile-money wallet and try again.";
+  }
+  if (/limit exceeded|transaction limit|daily limit|limit reached/.test(lower)) {
+    return "Your mobile-money transaction limit was reached. Try again later or contact your mobile-money provider.";
+  }
+  if (/expired|timed out|timeout/.test(lower)) {
+    return "The payment request expired before it was completed. Please try again.";
+  }
+  if (/cancel|declin|reject|fail/.test(lower)) {
+    return raw ? `Payment failed: ${raw}` : "Mobile-money payment failed. Please check your balance and try again.";
+  }
+  return raw ? `Payment could not be completed: ${raw}` : "Mobile-money payment failed. Check your wallet balance and transaction limits, then try again.";
+}
+
 async function premiumSubscriptionRoute(request, env) {
   const user = await currentUser(request, env);
   if (!user) return error("Authentication required", 401);
+
   if (request.method === "GET") {
+    const requestedReference = new URL(request.url).searchParams.get("reference");
+    if (requestedReference) {
+      const payment = await env.DB.prepare(`
+        SELECT status, reference, expires_at, failure_message
+        FROM premium_subscriptions
+        WHERE user_id = ? AND reference = ?
+        LIMIT 1
+      `).bind(user.id, requestedReference).first();
+      if (!payment) return error("Payment reference not found", 404);
+
+      const paymentStatus = String(payment.status || "").toLowerCase();
+      const paymentActive = paymentStatus === "active" && !!payment.expires_at && Date.parse(payment.expires_at) > Date.now();
+      const paymentPending = paymentStatus === "pending";
+      const paymentFailed = paymentStatus === "failed";
+      return json({
+        active: paymentActive,
+        pending: paymentPending,
+        status: paymentActive ? "active" : paymentPending ? "pending" : paymentFailed ? "failed" : "free",
+        expiresAt: paymentActive ? payment.expires_at : null,
+        reference: payment.reference,
+        message: paymentFailed ? payment.failure_message || "Mobile-money payment failed. Check your wallet balance and transaction limits, then try again." : null
+      });
+    }
+
     const row = await env.DB.prepare(`
       SELECT status, expires_at FROM premium_subscriptions
       WHERE user_id = ? AND lower(status) = 'active' AND expires_at IS NOT NULL
         AND datetime(expires_at) > datetime('now')
       ORDER BY datetime(expires_at) DESC LIMIT 1
     `).bind(user.id).first();
-    const pendingRow = await env.DB.prepare(`SELECT reference FROM premium_subscriptions WHERE user_id = ? AND lower(status) = 'pending' ORDER BY created_at DESC LIMIT 1`).bind(user.id).first();
+    const pendingRow = await env.DB.prepare(`
+      SELECT reference FROM premium_subscriptions
+      WHERE user_id = ? AND lower(status) = 'pending'
+      ORDER BY created_at DESC LIMIT 1
+    `).bind(user.id).first();
+    const latestRow = await env.DB.prepare(`
+      SELECT status, reference, failure_message FROM premium_subscriptions
+      WHERE user_id = ? ORDER BY created_at DESC LIMIT 1
+    `).bind(user.id).first();
     const active = !!row;
     const pending = !!pendingRow;
-    return json({ active, pending, status: active ? "active" : pending ? "pending" : "free", expiresAt: active ? row.expires_at : null });
+    const failed = !active && !pending && String(latestRow?.status || "").toLowerCase() === "failed";
+    return json({
+      active,
+      pending,
+      status: active ? "active" : pending ? "pending" : failed ? "failed" : "free",
+      expiresAt: active ? row.expires_at : null,
+      reference: pending ? pendingRow.reference : failed ? latestRow.reference : null,
+      message: failed ? latestRow.failure_message || "Mobile-money payment failed. Check your wallet balance and transaction limits, then try again." : null
+    });
   }
+
   if (request.method !== "POST") return error("Method not allowed", 405);
   const body = await readBody(request);
   const phone = normalizeUgandanPhone(body.phone_number || body.phoneNumber);
@@ -2000,52 +2063,59 @@ async function premiumSubscriptionRoute(request, env) {
   const apiKey = env.PESAJET_API_KEY || env.PESAJET_TOKEN;
   const baseUrl = String(env.PESAJET_API_BASE_URL || "https://payments.pesajet.com/api/v1").replace(/\/+$/, "");
   if (!apiKey) return error("Payment service is not configured", 503);
-  // Do not block a new payment attempt just because this user has another
-  // Premium transaction pending. Each attempt below receives its own unique
-  // reference and idempotency key, and provider callbacks are processed against
-  // that exact reference. A pending/uncertain transaction may still complete,
-  // so the client should warn users that multiple attempts can cause multiple
-  // mobile-money prompts or charges.
+
+  // Each attempt gets a unique reference. Keep payment initiation behavior unchanged.
   const reference = `NILESONIQ-PREMIUM-${crypto.randomUUID()}`;
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
   await env.DB.prepare(`INSERT INTO premium_subscriptions (id,user_id,amount,currency,provider,phone_number,reference,status,created_at) VALUES (?,?,5000,'UGX',?,?,?,'pending',?)`).bind(id,user.id,provider,phone,reference,now).run();
+
   let response, result;
   try {
-    response = await fetch(`${baseUrl}/payments`, { method:"POST", headers:{"Content-Type":"application/json","X-API-Key":apiKey}, body:JSON.stringify({type:"COLLECTION",amount:5000,currency:"UGX",phoneNumber:phone,provider,reference,description:"NileSoniQ Premium - 30 days",idempotencyKey:`nilesoniq-${reference}`}) });
-    result = await response.json().catch(()=>({}));
+    response = await fetch(`${baseUrl}/payments`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-API-Key": apiKey },
+      body: JSON.stringify({ type: "COLLECTION", amount: 5000, currency: "UGX", phoneNumber: phone, provider, reference, description: "NileSoniQ Premium - 30 days", idempotencyKey: `nilesoniq-${reference}` })
+    });
+    result = await response.json().catch(() => ({}));
   } catch (e) {
-    console.error("Premium payment outcome uncertain:",e.message);
-    return error("Payment request outcome is uncertain. It remains pending; check provider status before retrying.",502);
+    console.error("Premium payment outcome uncertain:", e.message);
+    return error("Payment request outcome is uncertain. It remains pending; check provider status before retrying.", 502);
   }
+
   const transaction = result?.transaction && typeof result.transaction === "object" ? result.transaction : result?.data && typeof result.data === "object" ? result.data : result;
   const status = String(transaction?.status || result?.status || "PENDING").toUpperCase();
   const providerId = String(transaction?.transactionId || transaction?.transaction_id || result?.transactionId || result?.transaction_id || "");
   if (!response.ok || result?.success === false) {
     const definitive = (response.status >= 400 && response.status < 500) || result?.success === false;
-    if (definitive) await env.DB.prepare("UPDATE premium_subscriptions SET status='failed', provider_transaction_id=? WHERE reference=? AND status='pending'").bind(providerId,reference).run();
-    return error(String(result?.error?.message || result?.message || result?.error || "Payment provider rejected the request"), response.status >= 400 && response.status < 500 ? response.status : 502);
+    const providerMessage = String(typeof result?.error === "string" ? result.error : result?.error?.message || transaction?.message || result?.message || "Payment provider rejected the request");
+    const failureMessage = premiumPaymentFailureMessage(providerMessage);
+    if (definitive) {
+      await env.DB.prepare("UPDATE premium_subscriptions SET status='failed', provider_transaction_id=?, failure_message=? WHERE reference=? AND status='pending'").bind(providerId, failureMessage, reference).run();
+    }
+    return error(failureMessage, response.status >= 400 && response.status < 500 ? response.status : 502);
   }
-  // Some PesaJet responses are HTTP 200 even when the mobile-money request
-  // has already failed. Persist that definitive result so it does not block
-  // the user from starting a new Premium payment.
+
   if (["FAILED", "EXPIRED", "REJECTED", "DECLINED", "CANCELLED", "CANCELED"].includes(status)) {
+    const providerMessage = String(transaction?.message || result?.message || result?.error?.message || status);
+    const failureMessage = premiumPaymentFailureMessage(providerMessage);
     await env.DB.prepare(`
       UPDATE premium_subscriptions
       SET status='failed',
-          provider_transaction_id=COALESCE(NULLIF(?,''),provider_transaction_id)
+          provider_transaction_id=COALESCE(NULLIF(?,''),provider_transaction_id),
+          failure_message=?
       WHERE reference=? AND lower(status)='pending'
-    `).bind(providerId, reference).run();
-    return json({
-      success: false,
-      status: "FAILED",
-      reference,
-      message: String(transaction?.message || result?.message || result?.error?.message || "The mobile-money payment failed. Please try again.")
-    }, 200);
+    `).bind(providerId, failureMessage, reference).run();
+    return json({ success: false, status: "FAILED", reference, message: failureMessage });
   }
 
   await env.DB.prepare("UPDATE premium_subscriptions SET provider_transaction_id=? WHERE reference=? AND status='pending'").bind(providerId,reference).run();
-  return json({ success:true, status:"PENDING", reference, message:"Payment request sent. Premium activates only after verified payment confirmation." });
+  return json({
+    success: true,
+    status: "PENDING",
+    reference,
+    message: "Payment initiated successfully. Approve the mobile-money prompt on your phone and enter your PIN. Premium will activate automatically after verified payment confirmation."
+  });
 }
 
 async function applyPremiumPaymentStatus(
@@ -2054,7 +2124,8 @@ async function applyPremiumPaymentStatus(
   status,
   transactionId = "",
   confirmedAmount = null,
-  confirmedCurrency = ""
+  confirmedCurrency = "",
+  failureMessage = ""
 ) {
   const normalized = String(status || "").toUpperCase();
   const ref = String(reference || "").trim();
@@ -2126,14 +2197,21 @@ async function applyPremiumPaymentStatus(
     return { matched: true, changed: Number(update?.meta?.changes || 0) > 0, reason: "verified_success" };
   }
 
-  if (["FAILED", "EXPIRED", "REJECTED"].includes(normalized)) {
+  if (["FAILED", "EXPIRED", "REJECTED", "DECLINED", "CANCELLED", "CANCELED"].includes(normalized)) {
     await env.DB.prepare(`
       UPDATE premium_subscriptions
       SET status='failed',
-          provider_transaction_id=COALESCE(NULLIF(?,''),provider_transaction_id)
+          provider_transaction_id=COALESCE(NULLIF(?,''),provider_transaction_id),
+          failure_message=?
       WHERE reference=? AND lower(status)='pending'
         AND (?='' OR provider_transaction_id IS NULL OR provider_transaction_id='' OR provider_transaction_id=?)
-    `).bind(incomingTransactionId, ref, incomingTransactionId, incomingTransactionId).run();
+    `).bind(
+      incomingTransactionId,
+      premiumPaymentFailureMessage(failureMessage || normalized),
+      ref,
+      incomingTransactionId,
+      incomingTransactionId
+    ).run();
   }
   return { matched: true, changed: false, reason: "non_success_status" };
 }
@@ -2229,7 +2307,8 @@ async function paymentWebhookRoute(request, env) {
       status,
       transactionId,
       webhookPayment.amount,
-      webhookPayment.currency
+      webhookPayment.currency,
+      payload?.message || payload?.error?.message || payload?.data?.message || ""
     );
     if (premiumResult.reason === "amount_currency_mismatch" || premiumResult.reason === "transaction_id_mismatch") {
       console.error("Premium payment webhook was not applied:", premiumResult.reason, reference);
