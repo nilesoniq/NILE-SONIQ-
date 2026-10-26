@@ -2022,6 +2022,24 @@ async function premiumSubscriptionRoute(request, env) {
     if (definitive) await env.DB.prepare("UPDATE premium_subscriptions SET status='failed', provider_transaction_id=? WHERE reference=? AND status='pending'").bind(providerId,reference).run();
     return error(String(result?.error?.message || result?.message || result?.error || "Payment provider rejected the request"), response.status >= 400 && response.status < 500 ? response.status : 502);
   }
+  // Some PesaJet responses are HTTP 200 even when the mobile-money request
+  // has already failed. Persist that definitive result so it does not block
+  // the user from starting a new Premium payment.
+  if (["FAILED", "EXPIRED", "REJECTED", "DECLINED", "CANCELLED", "CANCELED"].includes(status)) {
+    await env.DB.prepare(`
+      UPDATE premium_subscriptions
+      SET status='failed',
+          provider_transaction_id=COALESCE(NULLIF(?,''),provider_transaction_id)
+      WHERE reference=? AND lower(status)='pending'
+    `).bind(providerId, reference).run();
+    return json({
+      success: false,
+      status: "FAILED",
+      reference,
+      message: String(transaction?.message || result?.message || result?.error?.message || "The mobile-money payment failed. Please try again.")
+    }, 200);
+  }
+
   await env.DB.prepare("UPDATE premium_subscriptions SET provider_transaction_id=? WHERE reference=? AND status='pending'").bind(providerId,reference).run();
   return json({ success:true, status:"PENDING", reference, message:"Payment request sent. Premium activates only after verified payment confirmation." });
 }
