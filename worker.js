@@ -2008,7 +2008,7 @@ async function premiumSubscriptionRoute(request, env) {
   await env.DB.prepare(`INSERT INTO premium_subscriptions (id,user_id,amount,currency,provider,phone_number,reference,status,created_at) VALUES (?,?,5000,'UGX',?,?,?,'pending',?)`).bind(id,user.id,provider,phone,reference,now).run();
   let response, result;
   try {
-    response = await fetch(`${baseUrl}/payments`, { method:"POST", headers:{"Content-Type":"application/json","X-API-Key":apiKey}, body:JSON.stringify({type:"COLLECTION",amount:5000,currency:"UGX",phoneNumber:phone,provider,reference,description:"NileSoniQ Premium — 30 days",idempotencyKey:`nilesoniq-${reference}`}) });
+    response = await fetch(`${baseUrl}/payments`, { method:"POST", headers:{"Content-Type":"application/json","X-API-Key":apiKey}, body:JSON.stringify({type:"COLLECTION",amount:5000,currency:"UGX",phoneNumber:phone,provider,reference,description:"NileSoniQ Premium - 30 days",idempotencyKey:`nilesoniq-${reference}`}) });
     result = await response.json().catch(()=>({}));
   } catch (e) {
     console.error("Premium payment outcome uncertain:",e.message);
