@@ -2000,8 +2000,12 @@ async function premiumSubscriptionRoute(request, env) {
   const apiKey = env.PESAJET_API_KEY || env.PESAJET_TOKEN;
   const baseUrl = String(env.PESAJET_API_BASE_URL || "https://payments.pesajet.com/api/v1").replace(/\/+$/, "");
   if (!apiKey) return error("Payment service is not configured", 503);
-  const pending = await env.DB.prepare(`SELECT reference FROM premium_subscriptions WHERE user_id = ? AND lower(status) = 'pending' ORDER BY created_at DESC LIMIT 1`).bind(user.id).first();
-  if (pending) return error(`A Premium payment is already pending (reference ${pending.reference}). Check its status before retrying.`, 409);
+  // Do not block a new payment attempt just because this user has another
+  // Premium transaction pending. Each attempt below receives its own unique
+  // reference and idempotency key, and provider callbacks are processed against
+  // that exact reference. A pending/uncertain transaction may still complete,
+  // so the client should warn users that multiple attempts can cause multiple
+  // mobile-money prompts or charges.
   const reference = `NILESONIQ-PREMIUM-${crypto.randomUUID()}`;
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
