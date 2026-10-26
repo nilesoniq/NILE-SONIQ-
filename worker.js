@@ -560,7 +560,7 @@ async function dbRoute(request, env, path) {
     // This applies even when a caller supplies a custom `select` parameter.
     const publicArtistColumns = new Set([
       "id", "name", "bio", "avatar_url", "location",
-      "total_plays", "verified", "created_at"
+      "total_plays", "verified", "is_premium", "premium_expiry_date", "created_at"
     ]);
 
     if (
@@ -590,7 +590,7 @@ async function dbRoute(request, env, path) {
 
     const effectiveColumns =
       publicArtistRead && columns.includes("*")
-        ? "id, name, bio, avatar_url, location, total_plays, verified, created_at"
+        ? "id, name, bio, avatar_url, location, total_plays, verified, is_premium, premium_expiry_date, created_at"
         : columns.join(",");
 
     let query = `SELECT ${effectiveColumns} FROM ${table}${where}`;
@@ -735,6 +735,8 @@ async function dbRoute(request, env, path) {
             );
           }
 
+          // Premium entitlement fields are intentionally excluded: only verified
+          // payment handling may change is_premium or premium_expiry_date.
           const allowed = new Set([
             "user_id",
             "name",
@@ -1994,11 +1996,44 @@ function premiumPaymentFailureMessage(value) {
   return raw ? `Payment could not be completed: ${raw}` : "Mobile-money payment failed. Check your wallet balance and transaction limits, then try again.";
 }
 
+async function syncArtistPremiumEntitlement(env, userId, preferredArtistId = null) {
+  const uid = String(userId || "").trim();
+  if (!uid) return { artistFound: false, isPremium: false, expiresAt: null };
+
+  const artist = preferredArtistId
+    ? await env.DB.prepare("SELECT id FROM artists WHERE id = ? AND user_id = ? LIMIT 1").bind(preferredArtistId, uid).first()
+    : await env.DB.prepare("SELECT id FROM artists WHERE user_id = ? LIMIT 1").bind(uid).first();
+
+  if (!artist) return { artistFound: false, isPremium: false, expiresAt: null };
+
+  // Keep the most recent paid expiry visible, even after it expires. The boolean
+  // entitlement is always derived from the database clock, not from a client.
+  const latest = await env.DB.prepare(`
+    SELECT expires_at,
+           CASE WHEN datetime(expires_at) > datetime('now') THEN 1 ELSE 0 END AS currently_active
+    FROM premium_subscriptions
+    WHERE user_id = ? AND lower(status) = 'active' AND expires_at IS NOT NULL
+    ORDER BY datetime(expires_at) DESC
+    LIMIT 1
+  `).bind(uid).first();
+
+  const expiresAt = latest?.expires_at || null;
+  const isPremium = Number(latest?.currently_active || 0) === 1;
+  await env.DB.prepare(`
+    UPDATE artists
+    SET is_premium = ?, premium_expiry_date = ?
+    WHERE id = ? AND user_id = ?
+  `).bind(isPremium ? 1 : 0, expiresAt, artist.id, uid).run();
+
+  return { artistFound: true, artistId: artist.id, isPremium, expiresAt };
+}
+
 async function premiumSubscriptionRoute(request, env) {
   const user = await currentUser(request, env);
   if (!user) return error("Authentication required", 401);
 
   if (request.method === "GET") {
+    const entitlement = await syncArtistPremiumEntitlement(env, user.id);
     const requestedReference = new URL(request.url).searchParams.get("reference");
     if (requestedReference) {
       const payment = await env.DB.prepare(`
@@ -2019,7 +2054,11 @@ async function premiumSubscriptionRoute(request, env) {
         status: paymentActive ? "active" : paymentPending ? "pending" : paymentFailed ? "failed" : "free",
         expiresAt: paymentActive ? payment.expires_at : null,
         reference: payment.reference,
-        message: paymentFailed ? payment.failure_message || "Mobile-money payment failed. Check your wallet balance and transaction limits, then try again." : null
+        message: paymentFailed ? payment.failure_message || "Mobile-money payment failed. Check your wallet balance and transaction limits, then try again." : null,
+        isArtist: entitlement.artistFound,
+        artistId: entitlement.artistId || null,
+        isPremium: entitlement.isPremium,
+        premiumExpiryDate: entitlement.expiresAt
       });
     }
 
@@ -2047,11 +2086,20 @@ async function premiumSubscriptionRoute(request, env) {
       status: active ? "active" : pending ? "pending" : failed ? "failed" : "free",
       expiresAt: active ? row.expires_at : null,
       reference: pending ? pendingRow.reference : failed ? latestRow.reference : null,
-      message: failed ? latestRow.failure_message || "Mobile-money payment failed. Check your wallet balance and transaction limits, then try again." : null
+      message: failed ? latestRow.failure_message || "Mobile-money payment failed. Check your wallet balance and transaction limits, then try again." : null,
+      isArtist: entitlement.artistFound,
+      artistId: entitlement.artistId || null,
+      isPremium: entitlement.isPremium,
+      premiumExpiryDate: entitlement.expiresAt
     });
   }
 
   if (request.method !== "POST") return error("Method not allowed", 405);
+  const artist = await env.DB.prepare(
+    "SELECT id FROM artists WHERE user_id = ? LIMIT 1"
+  ).bind(user.id).first();
+  if (!artist) return error("NileSoniQ Premium is available to artist accounts only", 403);
+
   const body = await readBody(request);
   const phone = normalizeUgandanPhone(body.phone_number || body.phoneNumber);
   const provider = String(body.provider || "").trim().toLowerCase();
@@ -2065,7 +2113,11 @@ async function premiumSubscriptionRoute(request, env) {
   const reference = `NILESONIQ-PREMIUM-${crypto.randomUUID()}`;
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
-  await env.DB.prepare(`INSERT INTO premium_subscriptions (id,user_id,amount,currency,provider,phone_number,reference,status,created_at) VALUES (?,?,5000,'UGX',?,?,?,'pending',?)`).bind(id,user.id,provider,phone,reference,now).run();
+  await env.DB.prepare(`
+    INSERT INTO premium_subscriptions
+      (id,user_id,artist_id,amount,currency,provider,phone_number,reference,status,created_at)
+    VALUES (?,?,?,5000,'UGX',?,?,?,'pending',?)
+  `).bind(id,user.id,artist.id,provider,phone,reference,now).run();
 
   let response, result;
   try {
@@ -2153,13 +2205,38 @@ async function applyPremiumPaymentStatus(
   if (!ref) return { matched: false, reason: "missing_reference" };
 
   const payment = await env.DB.prepare(`
-    SELECT id, user_id, amount, currency, status, provider_transaction_id
+    SELECT id, user_id, artist_id, amount, currency, status, provider_transaction_id
     FROM premium_subscriptions WHERE reference = ? LIMIT 1
   `).bind(ref).first();
   if (!payment) return { matched: false, reason: "unknown_reference" };
   if (String(payment.status || "").toLowerCase() !== "pending") {
     // Webhook retries must never activate twice or extend the subscription twice.
+    if (String(payment.status || "").toLowerCase() === "active") {
+      await syncArtistPremiumEntitlement(env, payment.user_id, payment.artist_id || null);
+    }
     return { matched: true, changed: false, reason: "already_processed" };
+  }
+
+  let artistId = String(payment.artist_id || "").trim();
+  if (!artistId) {
+    const artist = await env.DB.prepare(
+      "SELECT id FROM artists WHERE user_id = ? LIMIT 1"
+    ).bind(payment.user_id).first();
+    artistId = String(artist?.id || "").trim();
+    if (artistId) {
+      await env.DB.prepare(
+        "UPDATE premium_subscriptions SET artist_id = ? WHERE reference = ? AND (artist_id IS NULL OR artist_id = '')"
+      ).bind(artistId, ref).run();
+    }
+  }
+  if (!artistId) {
+    return { matched: true, changed: false, reason: "artist_account_missing" };
+  }
+  const linkedArtist = await env.DB.prepare(
+    "SELECT id FROM artists WHERE id = ? AND user_id = ? LIMIT 1"
+  ).bind(artistId, payment.user_id).first();
+  if (!linkedArtist) {
+    return { matched: true, changed: false, reason: "artist_account_missing" };
   }
 
   const incomingTransactionId = String(transactionId || "").trim();
@@ -2215,7 +2292,11 @@ async function applyPremiumPaymentStatus(
         AND amount=5000 AND upper(currency)='UGX'
         AND (?='' OR provider_transaction_id IS NULL OR provider_transaction_id='' OR provider_transaction_id=?)
     `).bind(incomingTransactionId, ref, incomingTransactionId, incomingTransactionId).run();
-    return { matched: true, changed: Number(update?.meta?.changes || 0) > 0, reason: "verified_success" };
+    const changed = Number(update?.meta?.changes || 0) > 0;
+    // The artist entitlement mirrors the verified subscription expiry. Re-sync
+    // even on a concurrent duplicate callback; activation itself remains idempotent.
+    await syncArtistPremiumEntitlement(env, payment.user_id, artistId);
+    return { matched: true, changed, reason: "verified_success" };
   }
 
   if (["FAILED", "FAILURE", "ERROR", "EXPIRED", "REJECTED", "DECLINED", "CANCELLED", "CANCELED", "TIMED_OUT", "TIMEOUT", "TIME_OUT", "INSUFFICIENT_BALANCE", "INSUFFICIENT_FUNDS", "AUTHORIZATION_FAILED", "LIMIT_EXCEEDED"].includes(normalized)) {
