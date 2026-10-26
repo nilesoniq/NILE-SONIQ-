@@ -9836,8 +9836,8 @@ async function refreshPremiumSubscriptionStatus(reference=null, fromPoll=false){
       if(button)button.textContent="Try Premium Again — UGX 5,000";
     }else if(data.pending){
       statusEl.textContent=reference
-        ?"Payment initiated successfully. Please approve the mobile-money prompt on your phone and enter your PIN. We’ll update your membership as soon as the payment is verified."
-        :"A mobile-money payment is awaiting confirmation. Approve the prompt on your phone if it is still waiting, and avoid starting another payment until this attempt is resolved.";
+        ?"Your payment request was accepted by the provider. Check your phone for a mobile-money approval prompt and enter your PIN if it arrives. We’ll show the final result as soon as the provider confirms it."
+        :"A previous mobile-money payment attempt has not received a final status yet. We cannot confirm whether a prompt reached your phone. Please wait while we check this attempt before starting another payment.";
       if(button)button.textContent="Pay UGX 5,000 with MoMo";
       if(!fromPoll&&data.reference)beginPremiumPaymentPolling(data.reference);
     }else{
@@ -9879,9 +9879,14 @@ async function startPremiumSubscription(){
   try{
     const response=await fetch("/api/payments/premium-subscription",{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({phone_number:phone,provider})});
     const data=await response.json().catch(()=>({}));
-    if(!response.ok||data.success===false||String(data.status||"").toUpperCase()==="FAILED"){
-      if(statusEl)statusEl.textContent=data.error||data.message||"Payment failed. Please check your mobile-money balance and try again.";
-      await refreshPremiumSubscriptionStatus();
+    const responseStatus=String(data.status||data.transactionStatus||data.paymentStatus||"").toUpperCase().replace(/[\s-]+/g,"_");
+    const responseReason=String(data.message||data.error||data.failureMessage||data.failure_message||data.reason||"");
+    const explicitPaymentFailure=["FAILED","FAILURE","ERROR","EXPIRED","REJECTED","DECLINED","CANCELLED","CANCELED","TIMED_OUT","TIMEOUT","TIME_OUT","INSUFFICIENT_BALANCE","INSUFFICIENT_FUNDS","AUTHORIZATION_FAILED","LIMIT_EXCEEDED"].includes(responseStatus)
+      ||/insufficient[ _-]*(balance|funds)|not enough (money|funds|balance)|low balance|balance too low|transaction limit|daily limit|limit exceeded|payment failed|payment declined/i.test(responseReason);
+    if(!response.ok||data.success===false||explicitPaymentFailure){
+      if(statusEl)statusEl.textContent=responseReason||"Payment failed. Please check your mobile-money balance and try again.";
+      if(data.reference)await refreshPremiumSubscriptionStatus(data.reference);
+      else await refreshPremiumSubscriptionStatus();
       return;
     }
     const reference=data.reference;
