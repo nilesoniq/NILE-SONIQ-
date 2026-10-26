@@ -2381,6 +2381,8 @@ async function paymentWebhookRoute(request, env) {
   const signature = request.headers.get("X-Webhook-Signature");
 
   if (!(await verifyPesaJetWebhook(rawBody, signature, secret))) {
+    // Do not log the raw body or signature; they may contain sensitive data.
+    console.error("PesaJet webhook rejected: invalid signature.");
     return error("Invalid PesaJet webhook signature", 401);
   }
 
@@ -2388,11 +2390,13 @@ async function paymentWebhookRoute(request, env) {
   try {
     payload = JSON.parse(rawBody);
   } catch {
+    console.error("PesaJet webhook rejected: invalid JSON payload.");
     return error("Invalid webhook payload", 400);
   }
 
   const event = String(payload.event || "").toLowerCase();
   if (event === "webhook.test") {
+    console.info("PesaJet webhook test accepted.");
     return json({ received: true, test: true });
   }
 
@@ -2409,6 +2413,7 @@ async function paymentWebhookRoute(request, env) {
   const status = eventStatus[event];
 
   if (!status) {
+    console.info("PesaJet webhook event ignored.", { event: event || "(missing)" });
     return json({ received: true, ignored: true });
   }
 
@@ -2417,6 +2422,7 @@ async function paymentWebhookRoute(request, env) {
   const transactionId = webhookPayment.transactionId;
 
   if (!reference) {
+    console.error("PesaJet webhook rejected: payment reference missing.", { event, status });
     return error("Webhook reference is required", 422);
   }
 
@@ -2436,6 +2442,7 @@ async function paymentWebhookRoute(request, env) {
       status,
       transactionId
     );
+
     const premiumResult = await applyPremiumPaymentStatus(
       env,
       reference,
@@ -2449,8 +2456,35 @@ async function paymentWebhookRoute(request, env) {
         payload?.data?.failure_reason || payload?.data?.failureMessage || payload?.data?.failure_message ||
         payload?.data?.error?.message || payload?.data?.error?.code || ""
     );
-    if (premiumResult.reason === "amount_currency_mismatch" || premiumResult.reason === "transaction_id_mismatch") {
-      console.error("Premium payment webhook was not applied:", premiumResult.reason, reference);
+
+    // Log enough to diagnose Premium activation without logging the signature,
+    // raw payload, phone number, or other unnecessary personal information.
+    const isPremiumReference =
+      reference.startsWith("NILESONIQ-PREMIUM-") || premiumResult.matched;
+
+    if (isPremiumReference) {
+      const diagnostic = {
+        event,
+        status,
+        reference,
+        transactionIdPresent: Boolean(transactionId),
+        amount: webhookPayment.amount,
+        currency: webhookPayment.currency || null,
+        matchedSubscription: Boolean(premiumResult.matched),
+        applied: Boolean(premiumResult.changed),
+        reason: premiumResult.reason || "no_reason_returned"
+      };
+
+      if (
+        premiumResult.reason === "verified_success" &&
+        premiumResult.changed
+      ) {
+        console.info("NileSoniQ Premium activated from verified PesaJet payment.", diagnostic);
+      } else if (premiumResult.reason === "already_processed") {
+        console.info("NileSoniQ Premium webhook was already processed.", diagnostic);
+      } else {
+        console.error("NileSoniQ Premium webhook did not activate the subscription.", diagnostic);
+      }
     }
 
     return json({ received: true });
