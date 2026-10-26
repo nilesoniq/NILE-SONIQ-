@@ -9815,21 +9815,59 @@ document.addEventListener("DOMContentLoaded", async () => {
 /* =========================================================
    PREMIUM SUBSCRIPTION — provider-confirmed only
 ========================================================= */
-async function refreshPremiumSubscriptionStatus(){
+async function refreshPremiumSubscriptionStatus(reference=null, fromPoll=false){
   const statusEl=document.getElementById("premiumSubscriptionStatus");
-  if(!statusEl) return;
+  if(!statusEl) return {status:"unavailable"};
   try{
-    const response=await fetch("/api/payments/premium-subscription",{method:"GET",credentials:"include"});
+    const url="/api/payments/premium-subscription"+(reference?"?reference="+encodeURIComponent(reference):"");
+    const response=await fetch(url,{method:"GET",credentials:"include",cache:"no-store"});
     const data=await response.json().catch(()=>({}));
-    if(!response.ok){statusEl.textContent=response.status===401?"Sign in to check or purchase Premium.":(data.error||"Premium status is temporarily unavailable.");return;}
+    if(!response.ok){
+      statusEl.textContent=response.status===401?"Sign in to check or purchase Premium.":(data.error||"Premium status is temporarily unavailable.");
+      return {status:"unavailable"};
+    }
+    const button=document.getElementById("premiumSubscribeButton");
     if(data.active){
       const until=data.expiresAt?new Date(data.expiresAt).toLocaleDateString():"the displayed expiry date";
-      statusEl.textContent=`Premium is active until ${until}.`;
-      const button=document.getElementById("premiumSubscribeButton"); if(button) button.textContent="Renew Premium — UGX 5,000";
+      statusEl.textContent=reference?`Payment confirmed — you're now a Premium member! Premium is active until ${until}.`:`Premium is active until ${until}.`;
+      if(button)button.textContent="Renew Premium — UGX 5,000";
+    }else if(data.status==="failed"){
+      statusEl.textContent=data.message||"Mobile-money payment failed. Check your wallet balance and transaction limits, then try again.";
+      if(button)button.textContent="Try Premium Again — UGX 5,000";
+    }else if(data.pending){
+      statusEl.textContent=reference
+        ?"Payment initiated successfully. Please approve the mobile-money prompt on your phone and enter your PIN. We’ll update your membership as soon as the payment is verified."
+        :"A mobile-money payment is awaiting confirmation. Approve the prompt on your phone if it is still waiting, and avoid starting another payment until this attempt is resolved.";
+      if(button)button.textContent="Pay UGX 5,000 with MoMo";
+      if(!fromPoll&&data.reference)beginPremiumPaymentPolling(data.reference);
     }else{
-      statusEl.textContent=data.pending?"Your payment is pending provider confirmation. Do not pay again until its status is checked.":"You are on the free plan. Premium is not active yet.";
+      statusEl.textContent="You are on the free plan. Premium is not active yet.";
+      if(button)button.textContent="Pay UGX 5,000 with MoMo";
     }
-  }catch(e){statusEl.textContent="Could not reach the payment server. No payment status was assumed.";}
+    return data;
+  }catch(e){
+    statusEl.textContent="Could not reach the payment server. No payment status was assumed.";
+    return {status:"unavailable"};
+  }
+}
+function beginPremiumPaymentPolling(reference){
+  if(!reference||window.__nilePremiumPollingReference===reference)return;
+  window.__nilePremiumPollingReference=reference;
+  (async()=>{
+    try{
+      for(let attempt=0;attempt<120;attempt++){
+        await new Promise(resolve=>setTimeout(resolve,3000));
+        const result=await refreshPremiumSubscriptionStatus(reference,true);
+        if(result.status==="active"||result.status==="failed"||result.status==="free")return;
+      }
+      const statusEl=document.getElementById("premiumSubscriptionStatus");
+      if(statusEl&&window.__nilePremiumPollingReference===reference){
+        statusEl.textContent="Payment was initiated successfully, but provider confirmation is taking longer than expected. If you approved the prompt, please wait for confirmation before paying again.";
+      }
+    }finally{
+      if(window.__nilePremiumPollingReference===reference)window.__nilePremiumPollingReference=null;
+    }
+  })();
 }
 async function startPremiumSubscription(){
   const button=document.getElementById("premiumSubscribeButton");
@@ -9841,13 +9879,25 @@ async function startPremiumSubscription(){
   try{
     const response=await fetch("/api/payments/premium-subscription",{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({phone_number:phone,provider})});
     const data=await response.json().catch(()=>({}));
-    if(!response.ok){if(statusEl)statusEl.textContent=data.error||"Could not start payment. No subscription was activated.";return;}
-    if(statusEl)statusEl.textContent=`Payment request created (${data.status||"PENDING"}, reference ${data.reference}). Premium will activate only after a verified provider webhook confirms payment. Keep this reference.`;
-    await refreshPremiumSubscriptionStatus();
-  }catch(e){if(statusEl)statusEl.textContent="The payment request outcome could not be confirmed. Check with support before retrying to avoid duplicate charges.";}
-  finally{if(button){button.disabled=false;button.textContent="Pay UGX 5,000 with MoMo";}}
+    if(!response.ok||data.success===false||String(data.status||"").toUpperCase()==="FAILED"){
+      if(statusEl)statusEl.textContent=data.error||data.message||"Payment failed. Please check your mobile-money balance and try again.";
+      await refreshPremiumSubscriptionStatus();
+      return;
+    }
+    const reference=data.reference;
+    if(statusEl)statusEl.textContent=data.message||"Payment initiated successfully. Approve the mobile-money prompt on your phone and enter your PIN.";
+    if(reference){
+      await refreshPremiumSubscriptionStatus(reference);
+      beginPremiumPaymentPolling(reference);
+    }else{
+      await refreshPremiumSubscriptionStatus();
+    }
+  }catch(e){
+    if(statusEl)statusEl.textContent="The payment request outcome could not be confirmed. Check the payment status before retrying to avoid duplicate charges.";
+  }finally{
+    if(button){button.disabled=false;if(button.textContent==="Requesting payment…")button.textContent="Pay UGX 5,000 with MoMo";}
+  }
 }
-
 /* Tap any site image to view it larger; tap the backdrop or Close to dismiss. */
 (function installNileImageViewer(){
   if(window.__nileImageViewerInstalled) return;
