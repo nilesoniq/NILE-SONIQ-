@@ -2026,13 +2026,113 @@ async function premiumSubscriptionRoute(request, env) {
   return json({ success:true, status:"PENDING", reference, message:"Payment request sent. Premium activates only after verified payment confirmation." });
 }
 
-async function applyPremiumPaymentStatus(env, reference, status, transactionId = "") {
+async function applyPremiumPaymentStatus(
+  env,
+  reference,
+  status,
+  transactionId = "",
+  confirmedAmount = null,
+  confirmedCurrency = ""
+) {
   const normalized = String(status || "").toUpperCase();
-  if (isSuccessfulPaymentStatus(normalized)) {
-    await env.DB.prepare(`UPDATE premium_subscriptions SET status='active', provider_transaction_id=COALESCE(NULLIF(?,''),provider_transaction_id), paid_at=COALESCE(paid_at,datetime('now')), expires_at=CASE WHEN expires_at IS NULL OR datetime(expires_at) <= datetime('now') THEN datetime('now','+30 days') ELSE datetime(expires_at,'+30 days') END WHERE reference=? AND lower(status)='pending'`).bind(transactionId,reference).run();
-  } else if (["FAILED","EXPIRED","REJECTED"].includes(normalized)) {
-    await env.DB.prepare("UPDATE premium_subscriptions SET status='failed', provider_transaction_id=COALESCE(NULLIF(?,''),provider_transaction_id) WHERE reference=? AND lower(status)='pending'").bind(transactionId,reference).run();
+  const ref = String(reference || "").trim();
+  if (!ref) return { matched: false, reason: "missing_reference" };
+
+  const payment = await env.DB.prepare(`
+    SELECT id, user_id, amount, currency, status, provider_transaction_id
+    FROM premium_subscriptions WHERE reference = ? LIMIT 1
+  `).bind(ref).first();
+  if (!payment) return { matched: false, reason: "unknown_reference" };
+  if (String(payment.status || "").toLowerCase() !== "pending") {
+    // Webhook retries must never activate twice or extend the subscription twice.
+    return { matched: true, changed: false, reason: "already_processed" };
   }
+
+  const incomingTransactionId = String(transactionId || "").trim();
+  const storedTransactionId = String(payment.provider_transaction_id || "").trim();
+  if (storedTransactionId && incomingTransactionId && storedTransactionId !== incomingTransactionId) {
+    return { matched: true, changed: false, reason: "transaction_id_mismatch" };
+  }
+
+  if (isSuccessfulPaymentStatus(normalized)) {
+    const amount = Number(confirmedAmount);
+    const currency = String(confirmedCurrency || "").trim().toUpperCase();
+    const expectedAmount = Number(payment.amount);
+    const expectedCurrency = String(payment.currency || "").trim().toUpperCase();
+
+    // Never grant a paid subscription unless the signed provider event includes
+    // an amount and currency matching the exact pending Premium transaction.
+    if (!Number.isFinite(amount) || !currency || amount !== expectedAmount || currency !== expectedCurrency || expectedAmount !== 5000 || expectedCurrency !== "UGX") {
+      console.error("Premium payment confirmation failed amount/currency validation", {
+        reference: ref,
+        receivedAmount: Number.isFinite(amount) ? amount : null,
+        receivedCurrency: currency || null,
+        expectedAmount,
+        expectedCurrency
+      });
+      return { matched: true, changed: false, reason: "amount_currency_mismatch" };
+    }
+
+    const update = await env.DB.prepare(`
+      UPDATE premium_subscriptions
+      SET status='active',
+          provider_transaction_id=COALESCE(NULLIF(?,''),provider_transaction_id),
+          paid_at=COALESCE(paid_at,datetime('now')),
+          expires_at=CASE
+            WHEN (
+              SELECT MAX(datetime(existing.expires_at))
+              FROM premium_subscriptions AS existing
+              WHERE existing.user_id = premium_subscriptions.user_id
+                AND lower(existing.status) = 'active'
+                AND existing.expires_at IS NOT NULL
+                AND datetime(existing.expires_at) > datetime('now')
+            ) IS NOT NULL
+            THEN datetime((
+              SELECT MAX(datetime(existing.expires_at))
+              FROM premium_subscriptions AS existing
+              WHERE existing.user_id = premium_subscriptions.user_id
+                AND lower(existing.status) = 'active'
+                AND existing.expires_at IS NOT NULL
+                AND datetime(existing.expires_at) > datetime('now')
+            ), '+30 days')
+            ELSE datetime('now','+30 days')
+          END
+      WHERE reference=? AND lower(status)='pending'
+        AND amount=5000 AND upper(currency)='UGX'
+        AND (?='' OR provider_transaction_id IS NULL OR provider_transaction_id='' OR provider_transaction_id=?)
+    `).bind(incomingTransactionId, ref, incomingTransactionId, incomingTransactionId).run();
+    return { matched: true, changed: Number(update?.meta?.changes || 0) > 0, reason: "verified_success" };
+  }
+
+  if (["FAILED", "EXPIRED", "REJECTED"].includes(normalized)) {
+    await env.DB.prepare(`
+      UPDATE premium_subscriptions
+      SET status='failed',
+          provider_transaction_id=COALESCE(NULLIF(?,''),provider_transaction_id)
+      WHERE reference=? AND lower(status)='pending'
+        AND (?='' OR provider_transaction_id IS NULL OR provider_transaction_id='' OR provider_transaction_id=?)
+    `).bind(incomingTransactionId, ref, incomingTransactionId, incomingTransactionId).run();
+  }
+  return { matched: true, changed: false, reason: "non_success_status" };
+}
+
+function readPesaJetWebhookPaymentFields(payload) {
+  const data = payload?.data && typeof payload.data === "object" ? payload.data : {};
+  const transaction = payload?.transaction && typeof payload.transaction === "object"
+    ? payload.transaction
+    : data?.transaction && typeof data.transaction === "object" ? data.transaction : {};
+
+  const rawAmount = data.amount ?? payload.amount ?? transaction.amount ?? null;
+  const amountObject = rawAmount && typeof rawAmount === "object" ? rawAmount : null;
+  const amountValue = amountObject ? (amountObject.value ?? amountObject.amount ?? null) : rawAmount;
+  const currency = amountObject?.currency ?? data.currency ?? payload.currency ?? transaction.currency ?? "";
+
+  return {
+    reference: String(payload?.reference ?? data.reference ?? transaction.reference ?? payload?.merchantReference ?? data.merchantReference ?? "").trim(),
+    transactionId: String(payload?.transactionId ?? payload?.transaction_id ?? data.transactionId ?? data.transaction_id ?? transaction.transactionId ?? transaction.transaction_id ?? "").trim(),
+    amount: amountValue === null || amountValue === undefined || amountValue === "" ? null : Number(amountValue),
+    currency: String(currency || "").trim().toUpperCase()
+  };
 }
 
 
@@ -2077,8 +2177,9 @@ async function paymentWebhookRoute(request, env) {
     return json({ received: true, ignored: true });
   }
 
-  const reference = String(payload.reference || "").trim();
-  const transactionId = String(payload.transactionId || "").trim();
+  const webhookPayment = readPesaJetWebhookPaymentFields(payload);
+  const reference = webhookPayment.reference;
+  const transactionId = webhookPayment.transactionId;
 
   if (!reference) {
     return error("Webhook reference is required", 422);
@@ -2100,7 +2201,17 @@ async function paymentWebhookRoute(request, env) {
       status,
       transactionId
     );
-    await applyPremiumPaymentStatus(env, reference, status, transactionId);
+    const premiumResult = await applyPremiumPaymentStatus(
+      env,
+      reference,
+      status,
+      transactionId,
+      webhookPayment.amount,
+      webhookPayment.currency
+    );
+    if (premiumResult.reason === "amount_currency_mismatch" || premiumResult.reason === "transaction_id_mismatch") {
+      console.error("Premium payment webhook was not applied:", premiumResult.reason, reference);
+    }
 
     return json({ received: true });
   } catch (e) {
