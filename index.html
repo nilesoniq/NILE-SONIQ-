@@ -9,6 +9,15 @@
 <meta name="description"
 content="NileSoniq is an artist-first Ugandan music platform where listeners can stream approved songs, discover artists, explore releases, and read original music stories.">
 <link rel="canonical" href="https://nilesoniq.com/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="NileSoniq">
+<meta property="og:title" content="NileSoniq — Ugandan Music Platform">
+<meta property="og:description" content="Discover and stream music from Ugandan artists on NileSoniq.">
+<meta property="og:image" content="https://nilesoniq.com/favicon.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="NileSoniq — Ugandan Music Platform">
+<meta name="twitter:description" content="Discover and stream music from Ugandan artists on NileSoniq.">
+<meta name="twitter:image" content="https://nilesoniq.com/favicon.png">
 
 
 
@@ -7464,14 +7473,13 @@ function updateDashboardStats(
 
   const eligiblePlays =
     songs
-      .filter(song=>isSongApproved(song))
-      .reduce((sum,song)=>sum+Number(song.plays||0),0);
+      .filter(song=>isSongApproved(song) || String(song.review_status || "").toLowerCase() === "approved")
+      .reduce((sum,song)=>sum+Math.max(0, Number(song.plays || 0)),0);
 
-  // Artist net estimate: UGX 0.50 gross per approved play less 20% commission
-  // and 5% tax allocation (75% of gross remains for the artist).
-  const earnings =
-    eligiblePlays *
-    EARNINGS_PER_PLAY;
+  // EARNINGS_PER_PLAY is already the artist net rate: UGX 0.375
+  // per eligible play (UGX 0.50 gross less 20% commission and 5% tax).
+  // Do not apply the 75% allocation a second time.
+  const earnings = eligiblePlays * EARNINGS_PER_PLAY;
 
 
   document.getElementById(
@@ -7520,6 +7528,24 @@ async function updateAmountWithdrawn(withdrawals=null){
   }catch(error){
     console.error("Amount withdrawn error:",error);
   }
+}
+
+async function loadArtistWithdrawalNotifications(){
+  if(!currentUser) return;
+  try{
+    const response=await fetch("/api/artist/notifications",{credentials:"include",headers:{"Accept":"application/json"}});
+    if(!response.ok) return;
+    const payload=await response.json();
+    const notices=Array.isArray(payload.data)?payload.data:[];
+    const latest=notices.find(n=>!n.read_at);
+    if(latest){
+      const key="nilesoniq_notice_"+String(latest.id||latest.created_at||"");
+      if(!sessionStorage.getItem(key)){
+        alert(String(latest.message||"Your artist withdrawal request has been updated."));
+        sessionStorage.setItem(key,"1");
+      }
+    }
+  }catch(error){console.warn("Artist notifications could not be loaded:",error);}
 }
 
 async function loadMyWithdrawals(){
@@ -7646,6 +7672,7 @@ async function loadMyWithdrawals(){
 
     await updateAvailableBalance(withdrawals);
     await updateAmountWithdrawn(withdrawals);
+    await loadArtistWithdrawalNotifications();
 
 
   }catch(error){
@@ -7686,7 +7713,7 @@ async function updateAvailableBalance(withdrawals=null){
     }
     const {data:songs,error:songsError}=await sb.from("songs").select("plays,approved").eq("artist_id",currentUser.id);
     if(songsError) throw songsError;
-    const approvedPlays=(songs||[]).filter(s=>isSongApproved(s)).reduce((sum,s)=>sum+Number(s.plays||0),0);
+    const approvedPlays=(songs||[]).filter(s=>isSongApproved(s) || String(s.review_status || "").toLowerCase()==="approved").reduce((sum,s)=>sum+Math.max(0,Number(s.plays||0)),0);
     // Available balance uses the same net rate as the Worker withdrawal check.
     const currentBalance=approvedPlays*EARNINGS_PER_PLAY;
     const reserved=(withdrawals||[]).reduce((sum,w)=>{const st=String(w.status||"").toLowerCase();return sum+((["pending","processing","paid","completed","success","successful"].includes(st))?(Number(w.amount)||0):0);},0);
