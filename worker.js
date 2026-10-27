@@ -4,6 +4,9 @@ import bcrypt from "bcryptjs";
 const COOKIE_NAME = "nile_session";
 const SESSION_SECONDS = 30 * 24 * 60 * 60;
 const EARNINGS_PER_PLAY = 0.5;
+const ARTIST_COMMISSION_RATE = 0.20;
+const ARTIST_TAX_ALLOCATION_RATE = 0.05;
+const ARTIST_NET_RATE = 1 - ARTIST_COMMISSION_RATE - ARTIST_TAX_ALLOCATION_RATE;
 const WITHDRAWAL_MINIMUM = 10000;
 
 const PUBLIC_READ_TABLES = new Set([
@@ -937,7 +940,7 @@ async function dbRoute(request, env, path) {
               newRow.created_at,
               amount,
               user.id,
-              EARNINGS_PER_PLAY,
+              (EARNINGS_PER_PLAY * ARTIST_NET_RATE),
               user.id
             ).run();
 
@@ -1551,6 +1554,46 @@ async function rpcRoute(request, env, name) {
       });
     }
 
+    if (name === "get_platform_financial_summary") {
+      if (!admin || admin.role !== "super_admin") {
+        return error("Super Admin access required", 403);
+      }
+
+      const platform = await env.DB.prepare(`
+        SELECT
+          COALESCE(SUM(CASE WHEN event_type = 'income' THEN amount_signed ELSE 0 END), 0) AS income_total,
+          COALESCE(SUM(CASE WHEN event_type = 'payout' THEN -amount_signed ELSE 0 END), 0) AS payout_total,
+          COALESCE(SUM(CASE WHEN status = 'posted' THEN pesajet_fee_amount ELSE 0 END), 0) AS verified_fees,
+          COALESCE(SUM(CASE WHEN status = 'fee_unverified' THEN 1 ELSE 0 END), 0) AS fee_unverified_count
+        FROM platform_financial_ledger
+        WHERE currency = 'UGX'
+      `).first();
+
+      const artists = await env.DB.prepare(`
+        SELECT
+          COALESCE(SUM(gross_amount), 0) AS artist_gross,
+          COALESCE(SUM(commission_amount), 0) AS artist_commission,
+          COALESCE(SUM(tax_amount), 0) AS artist_tax_allocation,
+          COALESCE(SUM(net_amount), 0) AS artist_net
+        FROM artist_earning_ledger
+        WHERE currency = 'UGX' AND status = 'posted'
+      `).first();
+
+      return json({
+        data: {
+          income_total: Number(platform?.income_total || 0),
+          payout_total: Number(platform?.payout_total || 0),
+          verified_fees: Number(platform?.verified_fees || 0),
+          fee_unverified_count: Number(platform?.fee_unverified_count || 0),
+          artist_gross: Number(artists?.artist_gross || 0),
+          artist_commission: Number(artists?.artist_commission || 0),
+          artist_tax_allocation: Number(artists?.artist_tax_allocation || 0),
+          artist_net: Number(artists?.artist_net || 0)
+        },
+        error: null
+      });
+    }
+
     if (name === "record_song_play") {
       const id = String(body.song_id || "").trim();
 
@@ -1583,7 +1626,7 @@ async function rpcRoute(request, env, name) {
             FROM song_play_log
             WHERE song_id = ?
               AND ip_address = ?
-              AND datetime(played_at) >= datetime('now', '-10 minutes')
+              AND datetime(played_at) >= datetime('now', '-24 hours')
           )
         `).bind(id, ip, id, id, ip),
         env.DB.prepare(`
@@ -1595,6 +1638,43 @@ async function rpcRoute(request, env, name) {
 
       const inserted = Number(results?.[0]?.meta?.changes || 0) > 0;
       const incremented = Number(results?.[1]?.meta?.changes || 0) > 0;
+
+      // Keep a per-qualified-play artist earnings audit trail. The unique event
+      // key makes retries safe; this records the agreed 20% commission and 5%
+      // tax allocation against gross earnings of UGX 0.50 per counted play.
+      // Existing historical plays are not silently backfilled or rewritten.
+      if (inserted && incremented) {
+        const playLogId = Number(results?.[0]?.meta?.last_row_id || 0);
+        if (playLogId > 0) {
+          const song = await env.DB.prepare(
+            "SELECT artist_id FROM songs WHERE id = ? AND approved = 1 LIMIT 1"
+          ).bind(id).first();
+          const artistId = String(song?.artist_id || "").trim();
+          if (artistId) {
+            const gross = EARNINGS_PER_PLAY;
+            const commission = Math.round(gross * ARTIST_COMMISSION_RATE * 100) / 100;
+            const tax = Math.round(gross * ARTIST_TAX_ALLOCATION_RATE * 100) / 100;
+            const net = Math.round((gross - commission - tax) * 100) / 100;
+            await env.DB.prepare(`
+              INSERT OR IGNORE INTO artist_earning_ledger
+                (event_key, artist_id, source_type, source_id, gross_amount,
+                 commission_amount, tax_amount, pesajet_fee_amount, net_amount,
+                 currency, status, note, occurred_at)
+              VALUES (?, ?, 'qualified_play', ?, ?, ?, ?, 0, ?, 'UGX',
+                      'posted', 'UGX 0.50 gross per qualified play; 20% commission and 5% tax allocation',
+                      datetime('now'))
+            `).bind(
+              `song-play:${playLogId}`,
+              artistId,
+              String(playLogId),
+              gross,
+              commission,
+              tax,
+              net
+            ).run();
+          }
+        }
+      }
 
       return json({
         data: inserted && incremented,
@@ -1876,9 +1956,16 @@ async function applyPlatformPaymentStatus(
   type,
   reference,
   status,
-  transactionId = ""
+  transactionId = "",
+  confirmedFee = null
 ) {
   const normalized = String(status || "").toUpperCase();
+  const feeNumber = confirmedFee === null || confirmedFee === undefined || confirmedFee === ""
+    ? null
+    : Number(confirmedFee);
+  const feeKnown = feeNumber !== null && Number.isFinite(feeNumber) && feeNumber >= 0;
+  const feeValue = feeKnown ? feeNumber : 0;
+  const ledgerStatus = feeKnown ? "posted" : "fee_unverified";
 
   if (type === "collection") {
     await env.DB.batch([
@@ -1890,14 +1977,45 @@ async function applyPlatformPaymentStatus(
       `).bind(normalized.toLowerCase(), reference),
       env.DB.prepare(`
         UPDATE platform_wallet
-        SET balance = balance + (
-          SELECT amount FROM platform_deposits WHERE reference = ?
-        ),
+        SET balance = MAX(0, balance + (
+          SELECT amount - ? FROM platform_deposits WHERE reference = ?
+        )),
         updated_at = datetime('now')
         WHERE id = (SELECT id FROM platform_wallet ORDER BY created_at LIMIT 1)
           AND changes() > 0
           AND ? IN ('COMPLETED', 'SUCCESS', 'SUCCESSFUL', 'PAID')
-      `).bind(reference, normalized)
+      `).bind(feeValue, reference, normalized),
+      env.DB.prepare(`
+        INSERT OR IGNORE INTO platform_financial_ledger
+          (event_key, event_type, source_type, source_id, reference,
+           amount_signed, currency, pesajet_fee_amount, tax_liability_amount,
+           status, note, occurred_at)
+        SELECT
+          'platform-collection:' || id,
+          'income',
+          'platform_deposit',
+          id,
+          reference,
+          amount,
+          COALESCE(currency, 'UGX'),
+          ?,
+          0,
+          ?,
+          ?,
+          COALESCE(created_at, datetime('now'))
+        FROM platform_deposits
+        WHERE reference = ?
+          AND lower(status) IN ('completed', 'success', 'successful', 'paid')
+          AND ? IN ('COMPLETED', 'SUCCESS', 'SUCCESSFUL', 'PAID')
+      `).bind(
+        feeValue,
+        ledgerStatus,
+        feeKnown
+          ? "Successful collection. Actual PesaJet fee supplied by the confirmed provider event."
+          : "Successful collection. Actual PesaJet collection fee was not supplied by the confirmed transaction event; zero here does not mean fee-free.",
+        reference,
+        normalized
+      )
     ]);
     return;
   }
@@ -1920,12 +2038,43 @@ async function applyPlatformPaymentStatus(
       UPDATE platform_wallet
       SET balance = MAX(0, balance - (
         SELECT amount FROM platform_payouts WHERE reference = ?
-      )),
+      ) - ?),
       updated_at = datetime('now')
       WHERE id = (SELECT id FROM platform_wallet ORDER BY created_at LIMIT 1)
         AND changes() > 0
         AND ? IN ('COMPLETED', 'SUCCESS', 'SUCCESSFUL', 'PAID')
-    `).bind(reference, normalized)
+    `).bind(reference, feeKnown ? feeValue : 0, normalized),
+    env.DB.prepare(`
+      INSERT OR IGNORE INTO platform_financial_ledger
+        (event_key, event_type, source_type, source_id, reference,
+         amount_signed, currency, pesajet_fee_amount, tax_liability_amount,
+         status, note, occurred_at)
+      SELECT
+        'platform-payout:' || id,
+        'payout',
+        'platform_payout',
+        id,
+        reference,
+        -amount,
+        COALESCE(currency, 'UGX'),
+        ?,
+        0,
+        ?,
+        ?,
+        COALESCE(completed_at, created_at, datetime('now'))
+      FROM platform_payouts
+      WHERE reference = ?
+        AND lower(status) IN ('completed', 'success', 'successful', 'paid')
+        AND ? IN ('COMPLETED', 'SUCCESS', 'SUCCESSFUL', 'PAID')
+    `).bind(
+      feeValue,
+      ledgerStatus,
+      feeKnown
+        ? "Completed payout amount recorded with the actual PesaJet fee supplied by the confirmed provider event."
+        : "Completed payout amount recorded. Actual PesaJet payout fee was not supplied by the confirmed transaction event; zero here does not mean fee-free.",
+      reference,
+      normalized
+    )
   ]);
 }
 
@@ -2226,7 +2375,8 @@ async function applyPremiumPaymentStatus(
   transactionId = "",
   confirmedAmount = null,
   confirmedCurrency = "",
-  failureMessage = ""
+  failureMessage = "",
+  confirmedFee = null
 ) {
   const normalized = String(status || "").toUpperCase();
   const ref = String(reference || "").trim();
@@ -2321,6 +2471,43 @@ async function applyPremiumPaymentStatus(
         AND (?='' OR provider_transaction_id IS NULL OR provider_transaction_id='' OR provider_transaction_id=?)
     `).bind(incomingTransactionId, ref, incomingTransactionId, incomingTransactionId).run();
     const changed = Number(update?.meta?.changes || 0) > 0;
+    if (changed) {
+      // Record Premium revenue once, keyed to the subscription row. Only use
+      // a fee explicitly supplied by the signed provider event.
+      const feeValue = confirmedFee === null || confirmedFee === undefined || confirmedFee === ""
+        ? null
+        : Number(confirmedFee);
+      const feeKnown = feeValue !== null && Number.isFinite(feeValue) && feeValue >= 0;
+      // The ledger insert is the idempotency gate for crediting the wallet.
+      // Only credit once, and subtract a fee only when the signed provider event
+      // actually supplies it. Unknown fees remain explicitly flagged below.
+      await env.DB.batch([
+        env.DB.prepare(`
+          INSERT OR IGNORE INTO platform_financial_ledger
+            (event_key, event_type, source_type, source_id, reference,
+             amount_signed, currency, pesajet_fee_amount, tax_liability_amount,
+             status, note, occurred_at)
+          VALUES (?, 'income', 'premium_subscription', ?, ?, ?, 'UGX', ?, 0, ?, ?, datetime('now'))
+        `).bind(
+          `premium-subscription:${payment.id}`,
+          payment.id,
+          ref,
+          expectedAmount,
+          feeKnown ? feeValue : 0,
+          feeKnown ? "posted" : "fee_unverified",
+          feeKnown
+            ? "Premium subscription confirmed. Actual PesaJet fee supplied by the confirmed provider event."
+            : "Premium subscription confirmed. Actual PesaJet collection fee was not supplied by the confirmed transaction event; zero here does not mean fee-free."
+        ),
+        env.DB.prepare(`
+          UPDATE platform_wallet
+          SET balance = MAX(0, balance + ? - ?),
+              updated_at = datetime('now')
+          WHERE id = (SELECT id FROM platform_wallet ORDER BY created_at LIMIT 1)
+            AND changes() > 0
+        `).bind(expectedAmount, feeKnown ? feeValue : 0)
+      ]);
+    }
     // The artist entitlement mirrors the verified subscription expiry. Re-sync
     // even on a concurrent duplicate callback; activation itself remains idempotent.
     await syncArtistPremiumEntitlement(env, payment.user_id, artistId);
@@ -2356,12 +2543,18 @@ function readPesaJetWebhookPaymentFields(payload) {
   const amountObject = rawAmount && typeof rawAmount === "object" ? rawAmount : null;
   const amountValue = amountObject ? (amountObject.value ?? amountObject.amount ?? null) : rawAmount;
   const currency = amountObject?.currency ?? data.currency ?? payload.currency ?? transaction.currency ?? "";
+  const rawFee = data.fee ?? data.transactionFee ?? data.transaction_fee ??
+    payload.fee ?? payload.transactionFee ?? payload.transaction_fee ??
+    transaction.fee ?? transaction.transactionFee ?? transaction.transaction_fee ?? null;
+  const feeObject = rawFee && typeof rawFee === "object" ? rawFee : null;
+  const feeValue = feeObject ? (feeObject.value ?? feeObject.amount ?? null) : rawFee;
 
   return {
     reference: String(payload?.reference ?? data.reference ?? transaction.reference ?? payload?.merchantReference ?? data.merchantReference ?? "").trim(),
     transactionId: String(payload?.transactionId ?? payload?.transaction_id ?? data.transactionId ?? data.transaction_id ?? transaction.transactionId ?? transaction.transaction_id ?? "").trim(),
     amount: amountValue === null || amountValue === undefined || amountValue === "" ? null : Number(amountValue),
-    currency: String(currency || "").trim().toUpperCase()
+    currency: String(currency || "").trim().toUpperCase(),
+    fee: feeValue === null || feeValue === undefined || feeValue === "" ? null : Number(feeValue)
   };
 }
 
@@ -2433,14 +2626,16 @@ async function paymentWebhookRoute(request, env) {
       "collection",
       reference,
       status,
-      transactionId
+      transactionId,
+      webhookPayment.fee
     );
     await applyPlatformPaymentStatus(
       env,
       "disbursement",
       reference,
       status,
-      transactionId
+      transactionId,
+      webhookPayment.fee
     );
 
     const premiumResult = await applyPremiumPaymentStatus(
@@ -2454,7 +2649,8 @@ async function paymentWebhookRoute(request, env) {
         payload?.failureMessage || payload?.failure_message || payload?.error?.message || payload?.error?.code ||
         payload?.data?.message || payload?.data?.description || payload?.data?.reason || payload?.data?.failureReason ||
         payload?.data?.failure_reason || payload?.data?.failureMessage || payload?.data?.failure_message ||
-        payload?.data?.error?.message || payload?.data?.error?.code || ""
+        payload?.data?.error?.message || payload?.data?.error?.code || "",
+      webhookPayment.fee
     );
 
     // Log enough to diagnose Premium activation without logging the signature,
