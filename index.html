@@ -2018,7 +2018,7 @@ Save Profile
 
 <div class="stats-grid">
 <div class="stat-card"><span>Total Plays</span><strong id="totalPlays">0</strong></div>
-<div class="stat-card"><span>Estimated Earnings</span><strong id="totalEarnings">UGX 0</strong></div>
+<div class="stat-card"><span>Estimated Artist Net Earnings</span><strong id="totalEarnings">UGX 0</strong><small style="display:block;color:#888;font-size:11px;margin-top:5px;">After 20% platform commission and 5% tax allocation</small></div>
 <div class="stat-card"><span>Your Songs</span><strong id="totalSongs">0</strong></div>
 
 </div>
@@ -2576,7 +2576,17 @@ class="dashboard-card hidden">
   <div style="color:#888;font-size:12px;">Payout account</div>
   <div id="platformWalletNumber" style="font-size:20px;font-weight:800;margin-top:5px;">Not configured</div>
   <div class="wallet-balance" id="platformWalletBalance">UGX 0</div>
-  <div style="color:#888;font-size:12px;">Available platform balance shown here when a secure payment backend is connected.</div>
+  <div style="color:#888;font-size:12px;">Available platform balance after known fees and reserved pending payouts.</div>
+</div>
+
+<div class="stats-grid" style="margin-top:16px;">
+  <div class="stat-card"><span>Ledger Income Tracked</span><strong id="platformLedgerIncome">UGX 0</strong></div>
+  <div class="stat-card"><span>Completed Payouts Tracked</span><strong id="platformLedgerPayouts">UGX 0</strong></div>
+  <div class="stat-card"><span>Verified PesaJet Fees</span><strong id="platformLedgerFees">UGX 0</strong></div>
+  <div class="stat-card"><span>Artist Net Earnings Tracked</span><strong id="platformArtistNet">UGX 0</strong></div>
+</div>
+<div id="platformLedgerWarning" style="color:#c58b39;font-size:12px;line-height:1.5;margin-top:10px;">
+  Financial ledger tracking begins with transactions processed after this update. Historical transactions have not been imported automatically. If PesaJet does not send an actual fee, that fee remains unverified.
 </div>
 
 <div class="form-grid" style="margin-top:18px;">
@@ -3101,7 +3111,7 @@ const publicSb=cloudflareData;
 ========================================================= */
 
 const WITHDRAWAL_MINIMUM = 10000;
-const EARNINGS_PER_PLAY = 0.5;
+const EARNINGS_PER_PLAY = 0.375; // UGX 0.50 gross less 20% commission and 5% tax allocation
 
 
 /* =========================================================
@@ -7341,6 +7351,8 @@ function updateDashboardStats(
       .filter(song=>isSongApproved(song))
       .reduce((sum,song)=>sum+Number(song.plays||0),0);
 
+  // Artist net estimate: UGX 0.50 gross per approved play less 20% commission
+  // and 5% tax allocation (75% of gross remains for the artist).
   const earnings =
     eligiblePlays *
     EARNINGS_PER_PLAY;
@@ -7559,6 +7571,7 @@ async function updateAvailableBalance(withdrawals=null){
     const {data:songs,error:songsError}=await sb.from("songs").select("plays,approved").eq("artist_id",currentUser.id);
     if(songsError) throw songsError;
     const approvedPlays=(songs||[]).filter(s=>isSongApproved(s)).reduce((sum,s)=>sum+Number(s.plays||0),0);
+    // Available balance uses the same net rate as the Worker withdrawal check.
     const currentBalance=approvedPlays*EARNINGS_PER_PLAY;
     const reserved=(withdrawals||[]).reduce((sum,w)=>{const st=String(w.status||"").toLowerCase();return sum+((["pending","processing","paid","completed","success","successful"].includes(st))?(Number(w.amount)||0):0);},0);
     const available=Math.max(0,currentBalance-reserved);
@@ -8222,6 +8235,25 @@ async function loadPlatformWallet(){
     if(balanceElement) balanceElement.textContent = "UGX " + formatNumber(Math.floor(totalAmount));
 
     console.log("Platform completed deposits total:", totalAmount);
+
+    const summaryResult = await sb.rpc("get_platform_financial_summary");
+    if(summaryResult.error) throw summaryResult.error;
+    const summary = summaryResult.data || {};
+    const setMoney = (id, value) => {
+      const element = document.getElementById(id);
+      if(element) element.textContent = "UGX " + formatNumber(Math.floor(Number(value || 0)));
+    };
+    setMoney("platformLedgerIncome", summary.income_total);
+    setMoney("platformLedgerPayouts", summary.payout_total);
+    setMoney("platformLedgerFees", summary.verified_fees);
+    setMoney("platformArtistNet", summary.artist_net);
+    const warning = document.getElementById("platformLedgerWarning");
+    if(warning){
+      const unknownFees = Number(summary.fee_unverified_count || 0);
+      warning.textContent = unknownFees > 0
+        ? `Ledger entries needing fee verification: ${unknownFees}. Historical transactions have not been imported automatically. The ledger tracks transactions processed after this update; do not treat unverified fees as zero.`
+        : "Financial ledger tracking begins with transactions processed after this update. Historical transactions have not been imported automatically. Fees are shown only when the provider confirms the actual amount.";
+    }
   }catch(error){
     console.error("Platform completed deposits error:",error);
     const balanceElement=document.getElementById("platformWalletBalance");
