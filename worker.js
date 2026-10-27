@@ -482,16 +482,8 @@ async function authRoute(request, env, path) {
       const id = crypto.randomUUID();
       const passwordHash = await bcrypt.hash(password, 10);
       const displayName = artistName || email.split("@")[0];
-      // Save the user's requested package choice as profile metadata only.
-      // Selecting Premium never grants access; entitlement is activated only
-      // by the existing provider-confirmed Premium payment flow.
-      const requestedPackage = String(body.package || "free").trim().toLowerCase();
-      if (!["free", "premium"].includes(requestedPackage)) {
-        return error("Please choose Free or Premium.", 422);
-      }
       const metadata = JSON.stringify({
-        artist_name: displayName,
-        artist_package: requestedPackage
+        artist_name: displayName
       });
 
       await env.DB.prepare(`
@@ -560,8 +552,7 @@ async function authRoute(request, env, path) {
         user: {
           id,
           email,
-          artist_name: displayName,
-          artist_package: requestedPackage
+          artist_name: displayName
         }
       }, 201, {
         "Set-Cookie": makeCookie(token, SESSION_SECONDS)
@@ -1273,6 +1264,12 @@ async function dbRoute(request, env, path) {
         );
       }
 
+      let withdrawalRows = [];
+      if (table === "withdrawal_requests" && Object.prototype.hasOwnProperty.call(body, "status")) {
+        const prior = await env.DB.prepare(`SELECT id, artist_id, amount, status FROM withdrawal_requests${where}`).bind(...values).all();
+        withdrawalRows = prior.results || [];
+      }
+
       const sql = `
         UPDATE ${table}
         SET ${keys.map(k => `${k} = ?`).join(", ")}
@@ -1283,6 +1280,25 @@ async function dbRoute(request, env, path) {
         ...keys.map(k => body[k] ?? null),
         ...values
       ).run();
+
+      if (table === "withdrawal_requests" && withdrawalRows.length && Object.prototype.hasOwnProperty.call(body, "status")) {
+        try {
+          await ensureArtistNotificationsTable(env);
+          const newStatus = String(body.status || "updated").toLowerCase();
+          for (const item of withdrawalRows) {
+            const amount = Math.floor(Number(item.amount) || 0).toLocaleString("en-US");
+            const message = newStatus === "paid" || newStatus === "completed"
+              ? `Your withdrawal of UGX ${amount} has been marked as paid by the NileSoniq admin.`
+              : newStatus === "rejected"
+                ? `Your withdrawal request for UGX ${amount} was rejected by the NileSoniq admin.`
+                : `Your withdrawal request for UGX ${amount} is now ${newStatus}.`;
+            await env.DB.prepare(`INSERT INTO artist_notifications (id, artist_id, notification_type, message, related_id, created_at) VALUES (?, ?, 'withdrawal', ?, ?, ?)`)
+              .bind(crypto.randomUUID(), item.artist_id, message, item.id, new Date().toISOString()).run();
+          }
+        } catch (notificationError) {
+          console.error("Withdrawal notification could not be saved:", notificationError.message);
+        }
+      }
 
       return json({ data: body, error: null });
     }
@@ -3141,6 +3157,96 @@ async function paymentRoute(request, env, type) {
     );
   }
 }
+async function ensureArtistNotificationsTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS artist_notifications (
+    id TEXT PRIMARY KEY,
+    artist_id TEXT NOT NULL,
+    notification_type TEXT NOT NULL DEFAULT 'withdrawal',
+    message TEXT NOT NULL,
+    related_id TEXT,
+    read_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+}
+
+async function artistNotificationsRoute(request, env) {
+  const user = await currentUser(request, env);
+  if (!user) return error("Authentication required", 401);
+  if (request.method !== "GET") return error("Method not allowed", 405);
+  try {
+    await ensureArtistNotificationsTable(env);
+    const rows = await env.DB.prepare(`
+      SELECT id, notification_type, message, related_id, read_at, created_at
+      FROM artist_notifications
+      WHERE artist_id = ?
+      ORDER BY created_at DESC
+      LIMIT 25
+    `).bind(user.id).all();
+    return json({ data: rows.results || [], error: null });
+  } catch (e) {
+    console.error("Artist notifications failed:", e.message);
+    return error("Could not load artist notifications", 500);
+  }
+}
+
+function slugForShare(value) {
+  return String(value || "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase().trim().replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "").substring(0, 70) || "song";
+}
+
+function htmlEscape(value) {
+  return String(value || "").replace(/[&<>\"']/g, ch => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;"
+  }[ch]));
+}
+
+async function songSharePreview(request, env, url) {
+  if (request.method !== "GET" || !env.ASSETS || !/^\/song\/[^/]+\/?$/i.test(url.pathname)) return null;
+  const slug = decodeURIComponent(url.pathname.split("/")[2] || "");
+  let song = null;
+  try {
+    const result = await env.DB.prepare(`
+      SELECT id, title, artist, description, cover_url
+      FROM songs WHERE approved = 1 ORDER BY rowid DESC LIMIT 1000
+    `).all();
+    song = (result.results || []).find(item => slugForShare(item.title) === slugForShare(slug)) || null;
+  } catch (e) {
+    console.error("Song share preview lookup failed:", e.message);
+  }
+  const assetResponse = await env.ASSETS.fetch(new Request(new URL("/", url.origin), { method: "GET", headers: request.headers }));
+  const html = await assetResponse.text();
+  const title = song ? `${song.title || "Song"} — ${song.artist || "NileSoniq"}` : "NileSoniq — Ugandan Music Platform";
+  const description = song ? (song.description || `Listen to ${song.title || "this song"} by ${song.artist || "an artist"} on NileSoniq.`) : "Discover and stream music from Ugandan artists on NileSoniq.";
+  const image = song && song.cover_url && /^https:\/\//i.test(song.cover_url)
+    ? song.cover_url
+    : "https://nilesoniq.com/favicon.png";
+  const canonical = `https://nilesoniq.com${url.pathname}`;
+  const tags = [
+    `<title>${htmlEscape(title)}</title>`,
+    `<meta name="description" content="${htmlEscape(description)}">`,
+    `<link rel="canonical" href="${htmlEscape(canonical)}">`,
+    `<meta property="og:type" content="music.song">`,
+    `<meta property="og:site_name" content="NileSoniq">`,
+    `<meta property="og:title" content="${htmlEscape(title)}">`,
+    `<meta property="og:description" content="${htmlEscape(description)}">`,
+    `<meta property="og:url" content="${htmlEscape(canonical)}">`,
+    `<meta property="og:image" content="${htmlEscape(image)}">`,
+    `<meta name="twitter:card" content="summary_large_image">`,
+    `<meta name="twitter:title" content="${htmlEscape(title)}">`,
+    `<meta name="twitter:description" content="${htmlEscape(description)}">`,
+    `<meta name="twitter:image" content="${htmlEscape(image)}">`
+  ].join("\n");
+  let updated = html.replace(/<title>[\s\S]*?<\/title>/i, "");
+  updated = updated.replace(/<meta\s+name=["']description["'][^>]*>/i, "");
+  updated = updated.replace(/<link\s+rel=["']canonical["'][^>]*>/i, "");
+  updated = updated.replace(/<meta\s+property=["']og:[^>]*>/gi, "");
+  updated = updated.replace(/<meta\s+name=["']twitter:[^>]*>/gi, "");
+  updated = updated.replace(/<head[^>]*>/i, match => `${match}\n${tags}`);
+  return new Response(updated, { status: assetResponse.status, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=300" } });
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -3156,7 +3262,9 @@ export default {
 
       let response;
 
-      if (path.startsWith("/api/auth/")) {
+      if (path === "/api/artist/notifications") {
+        response = await artistNotificationsRoute(request, env);
+      } else if (path.startsWith("/api/auth/")) {
         response = await authRoute(request, env, path);
       } else if (path.startsWith("/api/db/")) {
         response = await dbRoute(request, env, path);
@@ -3219,6 +3327,9 @@ export default {
           ok: true,
           service: "nilesoniq"
         });
+      } else if (path.startsWith("/song/") && env.ASSETS) {
+        response = await songSharePreview(request, env, url);
+        if (!response) response = await env.ASSETS.fetch(request);
       } else if (env.ASSETS) {
         response = await env.ASSETS.fetch(request);
       } else {
