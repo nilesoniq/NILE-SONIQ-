@@ -7494,15 +7494,14 @@ function updateDashboardStats(
     formatNumber(totalSongs);
 
 
-  document.getElementById(
-    "totalEarnings"
-  ).textContent =
-    "UGX " +
-    formatNumber(
-      Math.floor(
-        earnings
-      )
-    );
+  const earningsElement = document.getElementById("totalEarnings");
+  if (earningsElement) {
+    // Keep fractional UGX visible; flooring made small but valid earnings show as zero.
+    earningsElement.textContent = "UGX " + Number(earnings).toLocaleString(undefined, {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2
+    });
+  }
 
 }
 
@@ -7711,7 +7710,7 @@ async function updateAvailableBalance(withdrawals=null){
       const {data,error}=await sb.from("withdrawal_requests").select("amount,status").eq("artist_id",currentUser.id);
       if(error) throw error; withdrawals=data||[];
     }
-    const {data:songs,error:songsError}=await sb.from("songs").select("plays,approved").eq("artist_id",currentUser.id);
+    const {data:songs,error:songsError}=await sb.from("songs").select("plays,approved,review_status").eq("artist_id",currentUser.id);
     if(songsError) throw songsError;
     const approvedPlays=(songs||[]).filter(s=>isSongApproved(s) || String(s.review_status || "").toLowerCase()==="approved").reduce((sum,s)=>sum+Math.max(0,Number(s.plays||0)),0);
     // Available balance uses the same net rate as the Worker withdrawal check.
@@ -7719,7 +7718,7 @@ async function updateAvailableBalance(withdrawals=null){
     const reserved=(withdrawals||[]).reduce((sum,w)=>{const st=String(w.status||"").toLowerCase();return sum+((["pending","processing","paid","completed","success","successful"].includes(st))?(Number(w.amount)||0):0);},0);
     const available=Math.max(0,currentBalance-reserved);
     const a=document.getElementById("availableBalance");
-    if(a)a.textContent="UGX "+formatNumber(Math.floor(available));
+    if(a)a.textContent="UGX "+Number(available).toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:2});
   }catch(error){console.error("Balance error:",error);}
 }
 
