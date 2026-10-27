@@ -215,7 +215,126 @@ async function createSession(env, userId) {
   return token;
 }
 
+async function sendResendEmail(env, { to, subject, html, text }) {
+  if (!env.RESEND_API_KEY) {
+    throw new Error("RESEND_API_KEY secret is not configured");
+  }
+
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${env.RESEND_API_KEY}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      from: env.RESEND_FROM_EMAIL || "NileSoniQ <noreply@nilesoniq.com>",
+      to: [to],
+      subject,
+      html,
+      text
+    })
+  });
+
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    console.error("Resend email request failed:", response.status, result?.message || result?.name || "unknown error");
+    throw new Error("Email provider rejected the request");
+  }
+  return result;
+}
+
+function authResultPage(title, message, status = 200) {
+  const safeTitle = String(title).replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
+  const safeMessage = String(message).replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
+  return new Response(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${safeTitle} - NileSoniQ</title><body style="font-family:system-ui,sans-serif;max-width:560px;margin:12vh auto;padding:24px;color:#222"><h1>${safeTitle}</h1><p>${safeMessage}</p><p><a href="https://nilesoniq.com/">Return to NileSoniQ</a></p></body></html>`, { status, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
+}
+
+async function ensureAuthEmailColumns(env) {
+  // Keep this migration limited to auth_users email-verification/reset fields.
+  // It does not modify user rows or any payment, song, wallet, or admin tables.
+  const requiredColumns = {
+    email_confirmed_at: "TEXT",
+    confirmation_token: "TEXT",
+    confirmation_sent_at: "TEXT",
+    recovery_token: "TEXT",
+    recovery_sent_at: "TEXT",
+    updated_at: "TEXT"
+  };
+
+  const getColumns = async () => {
+    const result = await env.DB.prepare("PRAGMA table_info(auth_users)").all();
+    return new Set((result.results || []).map(column => String(column.name).toLowerCase()));
+  };
+
+  let columns = await getColumns();
+  if (columns.size === 0) {
+    throw new Error("The auth_users table was not found or its schema could not be read");
+  }
+
+  for (const [name, type] of Object.entries(requiredColumns)) {
+    if (columns.has(name)) continue;
+    try {
+      await env.DB.prepare(`ALTER TABLE auth_users ADD COLUMN ${name} ${type}`).run();
+    } catch (e) {
+      // Re-read in case another request added the same column concurrently.
+      columns = await getColumns();
+      if (!columns.has(name)) throw e;
+    }
+    columns.add(name);
+  }
+}
+
 async function authRoute(request, env, path) {
+  const url = new URL(request.url);
+
+  if ([
+    "/api/auth/verify-email",
+    "/api/auth/reset-password",
+    "/api/auth/forgot-password",
+    "/api/auth/register"
+  ].includes(path)) {
+    try {
+      await ensureAuthEmailColumns(env);
+    } catch (e) {
+      console.error("Auth email schema check failed:", e.message);
+      if (request.method === "GET" && path === "/api/auth/verify-email") {
+        return authResultPage("Temporarily unavailable", "Email verification is temporarily unavailable. Please try again later.", 503);
+      }
+      if (request.method === "GET" && path === "/api/auth/reset-password") {
+        return authResultPage("Temporarily unavailable", "Password reset is temporarily unavailable. Please try again later.", 503);
+      }
+      return error("Email verification and password reset are temporarily unavailable. Please try again later.", 503);
+    }
+  }
+
+  if (request.method === "GET" && path === "/api/auth/verify-email") {
+    const token = String(url.searchParams.get("token") || "").trim();
+    if (!token || token.length > 200) return authResultPage("Invalid verification link", "This email verification link is invalid or incomplete.", 400);
+    try {
+      const user = await env.DB.prepare(`
+        SELECT id, email_confirmed_at, confirmation_sent_at
+        FROM auth_users WHERE confirmation_token = ? LIMIT 1
+      `).bind(token).first();
+      if (!user) return authResultPage("Link expired or already used", "Please sign in, or create a new verification request if your account still needs verification.", 400);
+      if (user.confirmation_sent_at && Date.now() - new Date(user.confirmation_sent_at).getTime() > 24 * 60 * 60 * 1000) {
+        return authResultPage("Link expired", "This verification link has expired. Please request a new one.", 400);
+      }
+      await env.DB.prepare(`UPDATE auth_users SET email_confirmed_at = COALESCE(email_confirmed_at, datetime('now')), confirmation_token = NULL, updated_at = datetime('now') WHERE id = ?`).bind(user.id).run();
+      return authResultPage("Email verified", "Your NileSoniQ email address has been verified. You can now return to the website and sign in.");
+    } catch (e) {
+      console.error("Email verification failed:", e.message);
+      return authResultPage("Could not verify email", "Please try again later or contact NileSoniQ support.", 500);
+    }
+  }
+
+  if (request.method === "GET" && path === "/api/auth/reset-password") {
+    const token = String(url.searchParams.get("token") || "").trim();
+    if (!token || token.length > 200) return authResultPage("Invalid reset link", "This password reset link is invalid or incomplete.", 400);
+    const safeToken = token.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const html = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Reset password - NileSoniQ</title><body style="font-family:system-ui,sans-serif;max-width:480px;margin:8vh auto;padding:24px;color:#222"><h1>Reset your password</h1><p>Choose a new password with at least 6 characters.</p><form id="resetForm"><label for="password">New password</label><br><input id="password" type="password" minlength="6" maxlength="128" required autocomplete="new-password" style="box-sizing:border-box;width:100%;padding:12px;margin:8px 0 16px"><button style="background:#ff7a00;color:white;border:0;padding:12px 18px;border-radius:6px" type="submit">Save new password</button></form><p id="message" role="status"></p><script>const token=${JSON.stringify(token)};document.getElementById('resetForm').addEventListener('submit',async e=>{e.preventDefault();const message=document.getElementById('message');const password=document.getElementById('password').value;message.textContent='Saving…';try{const r=await fetch('/api/auth/reset-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token,password})});const data=await r.json().catch(()=>({}));message.textContent=r.ok?(data.message||'Password updated. You can sign in now.'):(data.error||'Could not reset password. Request a new link.');if(r.ok)document.getElementById('resetForm').remove();}catch{message.textContent='Network error. Please try again.';}});</script></body></html>`;
+    return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
+  }
+
   if (request.method === "GET" && path === "/api/auth/me") {
     const user = await currentUser(request, env);
 
@@ -279,6 +398,57 @@ async function authRoute(request, env, path) {
   const body = await readBody(request);
   const email = String(body.email || "").trim().toLowerCase();
   const password = String(body.password || "");
+
+  if (path === "/api/auth/forgot-password") {
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return error("Please enter a valid email address.", 422);
+    }
+    try {
+      const user = await env.DB.prepare(`SELECT id, email FROM auth_users WHERE lower(email) = ? AND deleted_at IS NULL LIMIT 1`).bind(email).first();
+      // Always use the same public response to avoid revealing whether an email is registered.
+      if (user) {
+        const recoveryToken = crypto.randomUUID() + crypto.randomUUID().replace(/-/g, "");
+        await env.DB.prepare(`UPDATE auth_users SET recovery_token = ?, recovery_sent_at = datetime('now'), updated_at = datetime('now') WHERE id = ?`).bind(recoveryToken, user.id).run();
+        const resetUrl = `https://nilesoniq.com/api/auth/reset-password?token=${encodeURIComponent(recoveryToken)}`;
+        try {
+          await sendResendEmail(env, {
+            to: user.email,
+            subject: "Reset your NileSoniQ password",
+            text: `We received a request to reset your NileSoniQ password. Open this link within one hour: ${resetUrl}\n\nIf you did not request this, ignore this email.`,
+            html: `<div style="font-family:Arial,sans-serif;line-height:1.6;color:#222"><h2>Password reset</h2><p>We received a request to reset your NileSoniQ password.</p><p><a href="${resetUrl}" style="display:inline-block;background:#ff7a00;color:#fff;padding:12px 18px;text-decoration:none;border-radius:6px">Reset password</a></p><p>This link expires in one hour. If you did not request this, ignore this email.</p></div>`
+          });
+        } catch (mailError) {
+          console.error("Password reset email could not be sent:", mailError.message);
+        }
+      }
+      return json({ success: true, message: "If an account matches that email, a password reset link will be sent." });
+    } catch (e) {
+      console.error("Password reset request failed:", e.message);
+      return error("Could not process the password reset request. Please try again later.", 500);
+    }
+  }
+
+  if (path === "/api/auth/reset-password") {
+    const recoveryToken = String(body.token || "").trim();
+    if (!recoveryToken || recoveryToken.length > 200) return error("A valid password reset token is required.", 422);
+    if (password.length < 6 || password.length > 128) return error("Password must be between 6 and 128 characters.", 422);
+    try {
+      const user = await env.DB.prepare(`SELECT id, recovery_sent_at FROM auth_users WHERE recovery_token = ? LIMIT 1`).bind(recoveryToken).first();
+      if (!user) return error("This password reset link is invalid or has already been used.", 400);
+      if (!user.recovery_sent_at || Date.now() - new Date(user.recovery_sent_at).getTime() > 60 * 60 * 1000) {
+        return error("This password reset link has expired. Please request another one.", 400);
+      }
+      const passwordHash = await bcrypt.hash(password, 10);
+      await env.DB.batch([
+        env.DB.prepare(`UPDATE auth_users SET encrypted_password = ?, recovery_token = NULL, recovery_sent_at = NULL, updated_at = datetime('now') WHERE id = ?`).bind(passwordHash, user.id),
+        env.DB.prepare(`DELETE FROM auth_sessions WHERE user_id = ?`).bind(user.id)
+      ]);
+      return json({ success: true, message: "Password reset successfully. Please sign in with your new password." });
+    } catch (e) {
+      console.error("Password reset failed:", e.message);
+      return error("Could not reset the password. Please try again later.", 500);
+    }
+  }
 
   if (path === "/api/auth/register") {
     const phone = String(body.phone || "").trim();
@@ -347,10 +517,38 @@ async function authRoute(request, env, path) {
         );
       }
 
+      // Send an email-verification link when Resend is configured. Registration
+      // and existing login/session behavior are preserved for compatibility.
+      const verificationToken = crypto.randomUUID() + crypto.randomUUID().replace(/-/g, "");
+      await env.DB.prepare(`
+        UPDATE auth_users
+        SET confirmation_token = ?, confirmation_sent_at = datetime('now'), updated_at = datetime('now')
+        WHERE id = ?
+      `).bind(verificationToken, id).run();
+
+      let verificationEmailSent = false;
+      try {
+        const verificationUrl = `https://nilesoniq.com/api/auth/verify-email?token=${encodeURIComponent(verificationToken)}`;
+        await sendResendEmail(env, {
+          to: email,
+          subject: "Verify your NileSoniQ email",
+          text: `Hello ${displayName},\n\nPlease verify your email address by opening this link: ${verificationUrl}\n\nThis link expires in 24 hours. If you did not create a NileSoniQ account, you can ignore this email.`,
+          html: `<div style="font-family:Arial,sans-serif;line-height:1.6;color:#222"><h2>Welcome to NileSoniQ</h2><p>Hello ${String(displayName).replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]))},</p><p>Please confirm your email address to help secure your account.</p><p><a href="${verificationUrl}" style="display:inline-block;background:#ff7a00;color:#fff;padding:12px 18px;text-decoration:none;border-radius:6px">Verify email address</a></p><p>This link expires in 24 hours. If you did not create this account, you can ignore this email.</p></div>`
+        });
+        verificationEmailSent = true;
+      } catch (mailError) {
+        // Keep account creation available if email delivery is temporarily down.
+        console.error("Verification email could not be sent:", mailError.message);
+      }
+
       const token = await createSession(env, id);
 
       return json({
         success: true,
+        verification_email_sent: verificationEmailSent,
+        message: verificationEmailSent
+          ? "Account created. Check your email for a verification link."
+          : "Account created, but the verification email could not be sent yet.",
         user: {
           id,
           email,
