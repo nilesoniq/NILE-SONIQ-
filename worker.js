@@ -482,8 +482,16 @@ async function authRoute(request, env, path) {
       const id = crypto.randomUUID();
       const passwordHash = await bcrypt.hash(password, 10);
       const displayName = artistName || email.split("@")[0];
+      // Save the user's requested package choice as profile metadata only.
+      // Selecting Premium never grants access; entitlement is activated only
+      // by the existing provider-confirmed Premium payment flow.
+      const requestedPackage = String(body.package || "free").trim().toLowerCase();
+      if (!["free", "premium"].includes(requestedPackage)) {
+        return error("Please choose Free or Premium.", 422);
+      }
       const metadata = JSON.stringify({
-        artist_name: displayName
+        artist_name: displayName,
+        artist_package: requestedPackage
       });
 
       await env.DB.prepare(`
@@ -552,7 +560,8 @@ async function authRoute(request, env, path) {
         user: {
           id,
           email,
-          artist_name: displayName
+          artist_name: displayName,
+          artist_package: requestedPackage
         }
       }, 201, {
         "Set-Cookie": makeCookie(token, SESSION_SECONDS)
