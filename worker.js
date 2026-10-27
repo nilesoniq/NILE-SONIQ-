@@ -3219,9 +3219,20 @@ async function songSharePreview(request, env, url) {
   const html = await assetResponse.text();
   const title = song ? `${song.title || "Song"} — ${song.artist || "NileSoniq"}` : "NileSoniq — Ugandan Music Platform";
   const description = song ? (song.description || `Listen to ${song.title || "this song"} by ${song.artist || "an artist"} on NileSoniq.`) : "Discover and stream music from Ugandan artists on NileSoniq.";
-  const image = song && song.cover_url && /^https:\/\//i.test(song.cover_url)
-    ? song.cover_url
-    : "https://nilesoniq.com/favicon.png";
+  // Database cover paths may be relative (for example /api/storage/public/covers/...).
+  // Social preview crawlers need an absolute, publicly fetchable image URL.
+  let image = "https://nilesoniq.com/favicon.png";
+  if (song && typeof song.cover_url === "string" && song.cover_url.trim()) {
+    const savedCover = song.cover_url.trim();
+    try {
+      const absoluteCover = new URL(savedCover, "https://nilesoniq.com/");
+      if (["https:", "http:"].includes(absoluteCover.protocol) && absoluteCover.hostname === "nilesoniq.com") {
+        image = absoluteCover.href;
+      }
+    } catch (_) {
+      // Keep the known site fallback when a stored cover URL is malformed.
+    }
+  }
   const canonical = `https://nilesoniq.com${url.pathname}`;
   const tags = [
     `<title>${htmlEscape(title)}</title>`,
