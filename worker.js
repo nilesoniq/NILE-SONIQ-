@@ -2286,8 +2286,12 @@ async function premiumSubscriptionRoute(request, env) {
   const baseUrl = String(env.PESAJET_API_BASE_URL || "https://payments.pesajet.com/api/v1").replace(/\/+$/, "");
   if (!apiKey) return error("Payment service is not configured", 503);
 
-  // Each attempt gets a unique reference. Keep payment initiation behavior unchanged.
-  const reference = `NILESONIQ-PREMIUM-${crypto.randomUUID()}`;
+  // MTN and Airtel continue through the same PesaJet /payments endpoint and webhook.
+  // Use a shorter unique reference for Airtel to reduce possible downstream
+  // reference truncation/collision. Keep MTN's existing reference format unchanged.
+  const reference = provider === "airtel"
+    ? `NSPA${Date.now().toString(36).toUpperCase()}${crypto.randomUUID().replace(/-/g, "").slice(0, 8).toUpperCase()}`
+    : `NILESONIQ-PREMIUM-${crypto.randomUUID()}`;
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
   await env.DB.prepare(`
