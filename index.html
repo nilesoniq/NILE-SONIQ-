@@ -2875,15 +2875,34 @@ placeholder="you@example.com">
 
 </div>
 
-<div class="field">
+<div class="field" id="signupPackageField" style="display:none;">
+<label for="signupPackage">Choose your artist package</label>
+<select id="signupPackage">
+<option value="free">Free — UGX 0</option>
+<option value="premium">Premium — UGX 5,000 per 30 days</option>
+</select>
+<p style="color:#999;font-size:12px;margin-top:7px;">Premium is activated only after mobile-money payment is confirmed. Choosing Premium does not charge you now.</p>
+</div>
 
+<div class="field" id="authPasswordField">
 <label>Password</label>
+<input id="authPassword" type="password" placeholder="Password" autocomplete="current-password">
+</div>
 
-<input
-id="authPassword"
-type="password"
-placeholder="Password">
+<div id="forgotPasswordRow" style="text-align:right;margin:-5px 0 15px;">
+<button type="button" class="footer-admin-login" onclick="showForgotPasswordForm()">Forgot password?</button>
+</div>
 
+<div id="forgotPasswordForm" class="hidden">
+<p style="color:#bbb;font-size:13px;margin-bottom:12px;">Enter your account email and we’ll send a password-reset link if the account exists.</p>
+<button type="button" class="btn btn-dark" style="width:100%;margin-bottom:12px;" onclick="requestPasswordReset()">Send reset link</button>
+<button type="button" class="footer-admin-login" onclick="returnToAuthForm()">Back to login</button>
+</div>
+
+<div id="resetPasswordForm" class="hidden">
+<div class="field"><label for="newAuthPassword">New password</label><input id="newAuthPassword" type="password" autocomplete="new-password" placeholder="At least 6 characters"></div>
+<div class="field"><label for="confirmAuthPassword">Confirm new password</label><input id="confirmAuthPassword" type="password" autocomplete="new-password" placeholder="Repeat new password"></div>
+<button type="button" class="btn btn-orange" style="width:100%;margin-bottom:12px;" onclick="submitPasswordReset()">Save new password</button>
 </div>
 
 <button id="authSubmit"
@@ -3555,13 +3574,13 @@ const authApi = {
     return {data:{user:currentUser,session:currentUser?{user:currentUser}:null},error:null};
   },
 
-  async signUp({email,password,options}){
+  async signUp({email,password,options,packageName}){
     const artistName = options?.data?.artist_name || "";
     const response = await fetch(`${AUTH_API}/register`, {
       method:"POST",
       credentials:"include",
       headers:{"Content-Type":"application/json","Accept":"application/json"},
-      body:JSON.stringify({email,password,artist_name:artistName})
+      body:JSON.stringify({email,password,artist_name:artistName,package:packageName || "free"})
     });
     const data = await response.json().catch(()=>({}));
     if(!response.ok || data.success === false){
@@ -3573,7 +3592,7 @@ const authApi = {
       currentArtist = data.artist || null;
       notifyAuthListeners();
     }
-    return {data:{user:data.user || null,session:data.user?{user:data.user}:null},error:null};
+    return {data:{user:data.user || null,session:data.user?{user:data.user}:null,verification_email_sent:Boolean(data.verification_email_sent),message:data.message||"",artist_package:data.user?.artist_package||packageName||"free"},error:null};
   },
 
   async signOut(){
@@ -4135,6 +4154,12 @@ function setAuthMode(mode){
       : "Artist Login";
 
     submit.textContent = "Login";
+    document.getElementById("signupPackageField").style.display="none";
+    document.getElementById("forgotPasswordRow").classList.remove("hidden");
+    document.getElementById("authPasswordField").classList.remove("hidden");
+    document.getElementById("forgotPasswordForm").classList.add("hidden");
+    document.getElementById("resetPasswordForm").classList.add("hidden");
+    submit.classList.remove("hidden");
 
   }else{
 
@@ -4151,6 +4176,12 @@ function setAuthMode(mode){
 
     submit.textContent =
       "Create Account";
+    document.getElementById("signupPackageField").style.display="block";
+    document.getElementById("forgotPasswordRow").classList.add("hidden");
+    document.getElementById("authPasswordField").classList.remove("hidden");
+    document.getElementById("forgotPasswordForm").classList.add("hidden");
+    document.getElementById("resetPasswordForm").classList.add("hidden");
+    submit.classList.remove("hidden");
 
   }
 
@@ -4200,18 +4231,103 @@ async function submitAuth(){
       return;
     }
 
+    const chosenPackage=document.getElementById("signupPackage").value;
     const {data,error} = await authApi.signUp({
-      email,password,options:{data:{artist_name:artistName}}
+      email,password,packageName:chosenPackage,options:{data:{artist_name:artistName}}
     });
     if(error) throw error;
 
-    showMessage("authMessage", data?.session ? "Account created successfully. You can now use NileSoniq." : "Account created successfully. Please log in.","success");
+    const emailNotice=data?.verification_email_sent
+      ? " A verification email was sent; check your inbox and spam folder."
+      : " The account was created, but the verification email could not be confirmed as sent. Please contact support if it does not arrive.";
+    showMessage("authMessage", "Account created. Your selected package is "+(chosenPackage==="premium"?"Premium (UGX 5,000 per 30 days; it activates only after confirmed payment).":"Free (UGX 0).")+emailNotice,"success");
   }catch(error){
     console.error(error);
     showMessage("authMessage",error.message || "Authentication failed.","error");
   }
 }
 
+
+/* =========================================================
+   EMAIL VERIFICATION AND PASSWORD RECOVERY
+========================================================= */
+let pendingPasswordResetToken = "";
+
+function showForgotPasswordForm(){
+  clearMessage("authMessage");
+  document.getElementById("authTitle").textContent="Reset your password";
+  document.getElementById("loginTab").classList.remove("active");
+  document.getElementById("signupTab").classList.remove("active");
+  document.getElementById("signupNameField").classList.add("hidden");
+  document.getElementById("signupPackageField").style.display="none";
+  document.getElementById("authPasswordField").classList.add("hidden");
+  document.getElementById("forgotPasswordRow").classList.add("hidden");
+  document.getElementById("forgotPasswordForm").classList.remove("hidden");
+  document.getElementById("resetPasswordForm").classList.add("hidden");
+  document.getElementById("authSubmit").classList.add("hidden");
+}
+
+function returnToAuthForm(){
+  document.getElementById("forgotPasswordForm").classList.add("hidden");
+  document.getElementById("resetPasswordForm").classList.add("hidden");
+  document.getElementById("authPasswordField").classList.remove("hidden");
+  document.getElementById("authSubmit").classList.remove("hidden");
+  setAuthMode("login");
+}
+
+async function requestPasswordReset(){
+  const email=document.getElementById("authEmail").value.trim();
+  if(!email){showMessage("authMessage","Enter your email address first.","error");return;}
+  try{
+    const response=await fetch(`${AUTH_API}/forgot-password`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({email})});
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok||data.success===false)throw new Error(data.error||data.message||"Could not request a reset link.");
+    showMessage("authMessage",data.message||"If that email is registered, a password-reset link has been sent. Check your inbox and spam folder.","success");
+  }catch(error){showMessage("authMessage",error.message||"Password reset request failed.","error");}
+}
+
+async function submitPasswordReset(){
+  const password=document.getElementById("newAuthPassword").value;
+  const confirm=document.getElementById("confirmAuthPassword").value;
+  if(password.length<6){showMessage("authMessage","Your new password must be at least 6 characters.","error");return;}
+  if(password!==confirm){showMessage("authMessage","The passwords do not match.","error");return;}
+  if(!pendingPasswordResetToken){showMessage("authMessage","The reset link is missing its token. Request a new password-reset email.","error");return;}
+  try{
+    const response=await fetch(`${AUTH_API}/reset-password`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({token:pendingPasswordResetToken,password})});
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok||data.success===false)throw new Error(data.error||data.message||"Password could not be reset.");
+    pendingPasswordResetToken="";
+    showMessage("authMessage",data.message||"Password updated. You can now log in with your new password.","success");
+    document.getElementById("newAuthPassword").value="";document.getElementById("confirmAuthPassword").value="";
+    setTimeout(returnToAuthForm,1200);
+  }catch(error){showMessage("authMessage",error.message||"Password reset failed.","error");}
+}
+
+async function handleAuthEmailLink(){
+  const params=new URLSearchParams(window.location.search);
+  const hashParams=new URLSearchParams((window.location.hash||"").replace(/^#/,""));
+  const token=params.get("token")||params.get("token_hash")||hashParams.get("token")||hashParams.get("token_hash");
+  const type=(params.get("type")||hashParams.get("type")||"").toLowerCase();
+  if(!token)return;
+  if(type.includes("recovery")||type.includes("reset")){
+    pendingPasswordResetToken=token;
+    openAuthModal("artist");
+    showForgotPasswordForm();
+    document.getElementById("forgotPasswordForm").classList.add("hidden");
+    document.getElementById("resetPasswordForm").classList.remove("hidden");
+    document.getElementById("authTitle").textContent="Choose a new password";
+    showMessage("authMessage","Enter and confirm your new password.","success");
+    return;
+  }
+  if(type.includes("signup")||type.includes("verify")||params.has("verify_email")){
+    try{
+      const response=await fetch(`${AUTH_API}/verify-email?token=${encodeURIComponent(token)}`,{method:"GET",credentials:"include",headers:{"Accept":"application/json"}});
+      const data=await response.json().catch(()=>({}));
+      openAuthModal("artist");
+      showMessage("authMessage",response.ok&&data.success!==false?(data.message||"Email verified. You can now log in."):(data.error||data.message||"Email verification failed. Please request a new verification link."),response.ok&&data.success!==false?"success":"error");
+    }catch(error){openAuthModal("artist");showMessage("authMessage","Could not verify your email. Please try the link again.","error");}
+  }
+}
 
 /* =========================================================
    LOGOUT
@@ -9877,6 +9993,7 @@ window.addEventListener("popstate", async () => {
 document.addEventListener("DOMContentLoaded", async () => {
   /* Premium status is refreshed after authentication and artist-profile loading. */
   updatePremiumSubscriptionCardVisibility(Boolean(currentUser && currentArtist));
+  await handleAuthEmailLink();
 });
 
 
