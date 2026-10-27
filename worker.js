@@ -859,12 +859,45 @@ async function dbRoute(request, env, path) {
 
           const insertKeys = Object.keys(safeRow);
 
-          await env.DB.prepare(`
+          // Premium entitlement is checked on the server. Regular users may
+          // submit up to three songs per UTC calendar month. Pending and
+          // rejected submissions count toward the limit; active Premium users
+          // are not restricted by this free-account limit.
+          const activePremium = await env.DB.prepare(`
+            SELECT 1 AS active
+            FROM premium_subscriptions
+            WHERE user_id = ?
+              AND lower(status) = 'active'
+              AND expires_at IS NOT NULL
+              AND datetime(expires_at) > datetime('now')
+            LIMIT 1
+          `).bind(user.id).first();
+          const hasActivePremium = Number(activePremium?.active || 0) === 1;
+
+          // Apply the monthly check inside the INSERT statement so two
+          // simultaneous requests cannot both pass a separate count check.
+          const insertResult = await env.DB.prepare(`
             INSERT INTO songs (${insertKeys.join(",")})
-            VALUES (${insertKeys.map(() => "?").join(",")})
+            SELECT ${insertKeys.map(() => "?").join(",")}
+            WHERE ? = 1 OR (
+              SELECT COUNT(*)
+              FROM songs
+              WHERE artist_id = ?
+                AND datetime(created_at) >= datetime('now', 'start of month')
+                AND datetime(created_at) < datetime('now', 'start of month', '+1 month')
+            ) < 3
           `).bind(
-            ...insertKeys.map(k => safeRow[k] ?? null)
+            ...insertKeys.map(k => safeRow[k] ?? null),
+            hasActivePremium ? 1 : 0,
+            user.id
           ).run();
+
+          if (Number(insertResult?.meta?.changes || 0) === 0) {
+            return error(
+              "Monthly song upload limit reached. Free accounts can submit up to 3 songs per calendar month. Try again next month or activate Premium.",
+              429
+            );
+          }
 
           output.push(await env.DB.prepare(
             "SELECT * FROM songs WHERE id = ? LIMIT 1"
