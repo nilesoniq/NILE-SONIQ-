@@ -2957,7 +2957,7 @@ placeholder="you@example.com">
 
 <div class="field" id="authPasswordField">
 <label>Password</label>
-<input id="authPassword" type="password" placeholder="Password" autocomplete="current-password">
+<input id="authPassword" type="password" placeholder="Password" autocomplete="new-password">
 </div>
 
 <div id="forgotPasswordRow" style="text-align:right;margin:-5px 0 15px;">
@@ -4339,17 +4339,24 @@ async function submitAuth(){
       showMessage("authMessage","Please enter the mobile-money phone number you will use to pay.","error");
       return;
     }
-    const {data,error} = await authApi.signUp({
-      email,password,packageName:chosenPackage,
-      options:{data:{artist_name:artistName,package_name:chosenPackage,premium_payment_method:chosenPackage!=="free"?chosenPaymentMethod:null,premium_payment_phone:chosenPackage!=="free"?paymentPhone:null}}
-    });
-    if(error) throw error;
-
-    const emailNotice=data?.verification_email_sent
-      ? " A verification email was sent; check your inbox and spam folder."
-      : " The account was created, but the verification email could not be confirmed as sent. Please contact support if it does not arrive.";
     const packageLabels={free:"Free (UGX 0)",premium:"Premium (UGX 5,000 per 30 days)",hustler:"Hustler (UGX 10,000 per 30 days)",hit_maker:"Hit Maker (UGX 20,000 per 30 days)",star:"Star (UGX 30,000 per 30 days)"};
-    showMessage("authMessage", "Account created. Selected package: "+(packageLabels[chosenPackage]||"Free (UGX 0)")+(chosenPackage!=="free"?"; it activates only after confirmed payment.":"")+emailNotice,"success");
+    if(chosenPackage === "free"){
+      const {data,error} = await authApi.signUp({email,password,packageName:"free",options:{data:{artist_name:artistName}}});
+      if(error) throw error;
+      const emailNotice=data?.verification_email_sent
+        ? " A verification email was sent; check your inbox and spam folder."
+        : " The account was created, but the verification email could not be confirmed as sent. Please contact support if it does not arrive.";
+      showMessage("authMessage", "Free account created."+emailNotice,"success");
+      return;
+    }
+    const response=await fetch(`${AUTH_API}/register-paid`,{
+      method:"POST",credentials:"include",
+      headers:{"Content-Type":"application/json","Accept":"application/json"},
+      body:JSON.stringify({email,password,artist_name:artistName,package_code:chosenPackage,provider:chosenPaymentMethod,phone_number:paymentPhone})
+    });
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok || data.success===false) throw new Error(data.error||data.message||"Could not start payment.");
+    showMessage("authMessage", `Payment request started for ${packageLabels[chosenPackage]||chosenPackage}. Approve the mobile-money prompt on your phone. Your account will only be created and verification email sent after PesaJet confirms the payment. Reference: ${data.reference||"pending"}. Do not pay again while this request is pending.`,"success");
   }catch(error){
     console.error(error);
     showMessage("authMessage",error.message || "Authentication failed.","error");
@@ -4952,6 +4959,18 @@ async function uploadSong(){
     showMessage("uploadMessage","Please accept the Terms & Conditions and confirm you have the rights to upload this song.","error");
     return;
   }
+
+  // Reject oversized files locally before any bytes are sent. The Worker repeats
+  // these checks and verifies the monthly package allowance server-side.
+  const MAX_AUDIO_BYTES=50*1024*1024;
+  const MAX_COVER_BYTES=5*1024*1024;
+  if(audioFile.size>MAX_AUDIO_BYTES){showMessage("uploadMessage","Audio file is too large. Maximum size is 50 MB.","error");return;}
+  if(coverFile.size>MAX_COVER_BYTES){showMessage("uploadMessage","Cover image is too large. Maximum size is 5 MB.","error");return;}
+  try{
+    const preflight=await fetch(`${AUTH_API.replace(/\/api\/auth$/,"")}/api/uploads/check`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({audio_size:audioFile.size,cover_size:coverFile.size})});
+    const preflightData=await preflight.json().catch(()=>({}));
+    if(!preflight.ok||preflightData.allowed!==true){showMessage("uploadMessage",preflightData.error||"Your package upload limit has been reached. No files were uploaded.","error");return;}
+  }catch(e){showMessage("uploadMessage","Could not verify your upload allowance. No files were uploaded. Please try again.","error");return;}
 
   const uploadButton =
     document.getElementById(
