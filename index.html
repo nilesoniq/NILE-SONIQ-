@@ -4322,7 +4322,41 @@ async function submitAuth(){
     const emailNotice=data?.verification_email_sent
       ? " A verification email was sent; check your inbox and spam folder."
       : " The account was created, but the verification email could not be confirmed as sent. Please contact support if it does not arrive.";
-    showMessage("authMessage", "Account created. Your selected package is "+(chosenPackage==="premium"?"Premium (UGX 5,000 per 30 days; it activates only after confirmed payment).":"Free (UGX 0).")+emailNotice,"success");
+
+    if(chosenPackage === "premium"){
+      // Registration must first establish a valid Worker session and artist row.
+      // Only then request the real payment prompt through the same route used by the dashboard.
+      await authApi.getSession();
+      if(!currentUser || !currentArtist){
+        showMessage("authMessage", "Account created with Premium selected."+emailNotice+" For security, the payment prompt was not started because this signup has no active artist session yet. Verify your email if asked, then sign in and complete Premium payment from your artist dashboard.","success");
+        return;
+      }
+      showMessage("authMessage", "Account created. Requesting your UGX 5,000 Premium payment prompt…", "success");
+      try{
+        const paymentResponse = await fetch("/api/payments/premium-subscription", {
+          method:"POST",
+          credentials:"include",
+          headers:{"Content-Type":"application/json","Accept":"application/json"},
+          body:JSON.stringify({phone_number:paymentPhone,provider:chosenPaymentMethod})
+        });
+        const paymentData = await paymentResponse.json().catch(()=>({}));
+        if(!paymentResponse.ok || paymentData.success === false){
+          const reason = paymentData.error || paymentData.message || "The payment request could not be started.";
+          showMessage("authMessage", "Your account was created, but the payment prompt was not started: "+reason+" You can sign in and retry from the artist dashboard. Please check payment status before retrying if the provider response was uncertain.", "error");
+          return;
+        }
+        const ref = paymentData.reference || "";
+        showMessage("authMessage", "Account created. Your UGX 5,000 Premium payment request was sent to the provider. Check the "+(chosenPaymentMethod === "mtn" ? "MTN" : "Airtel")+" phone and approve the prompt if it arrives. Premium activates only after provider confirmation."+emailNotice, "success");
+        if(ref && typeof refreshPremiumSubscriptionStatus === "function"){
+          setTimeout(()=>{ refreshPremiumSubscriptionStatus(ref); if(typeof beginPremiumPaymentPolling === "function") beginPremiumPaymentPolling(ref); }, 300);
+        }
+      }catch(paymentError){
+        console.error("Signup Premium payment request error:",paymentError);
+        showMessage("authMessage", "Your account was created, but the payment outcome could not be confirmed. Check payment status before retrying to avoid a duplicate charge.", "error");
+      }
+      return;
+    }
+    showMessage("authMessage", "Account created. Your selected package is Free (UGX 0)."+emailNotice,"success");
   }catch(error){
     console.error(error);
     showMessage("authMessage",error.message || "Authentication failed.","error");
