@@ -2957,7 +2957,7 @@ placeholder="you@example.com">
 
 <div class="field" id="authPasswordField">
 <label>Password</label>
-<input id="authPassword" type="password" placeholder="Password" autocomplete="current-password">
+<input id="authPassword" type="password" placeholder="Password" autocomplete="new-password">
 </div>
 
 <div id="forgotPasswordRow" style="text-align:right;margin:-5px 0 15px;">
@@ -4339,17 +4339,24 @@ async function submitAuth(){
       showMessage("authMessage","Please enter the mobile-money phone number you will use to pay.","error");
       return;
     }
-    const {data,error} = await authApi.signUp({
-      email,password,packageName:chosenPackage,
-      options:{data:{artist_name:artistName,package_name:chosenPackage,premium_payment_method:chosenPackage!=="free"?chosenPaymentMethod:null,premium_payment_phone:chosenPackage!=="free"?paymentPhone:null}}
-    });
-    if(error) throw error;
-
-    const emailNotice=data?.verification_email_sent
-      ? " A verification email was sent; check your inbox and spam folder."
-      : " The account was created, but the verification email could not be confirmed as sent. Please contact support if it does not arrive.";
     const packageLabels={free:"Free (UGX 0)",premium:"Premium (UGX 5,000 per 30 days)",hustler:"Hustler (UGX 10,000 per 30 days)",hit_maker:"Hit Maker (UGX 20,000 per 30 days)",star:"Star (UGX 30,000 per 30 days)"};
-    showMessage("authMessage", "Account created. Selected package: "+(packageLabels[chosenPackage]||"Free (UGX 0)")+(chosenPackage!=="free"?"; it activates only after confirmed payment.":"")+emailNotice,"success");
+    if(chosenPackage === "free"){
+      const {data,error} = await authApi.signUp({email,password,packageName:"free",options:{data:{artist_name:artistName}}});
+      if(error) throw error;
+      const emailNotice=data?.verification_email_sent
+        ? " A verification email was sent; check your inbox and spam folder."
+        : " The account was created, but the verification email could not be confirmed as sent. Please contact support if it does not arrive.";
+      showMessage("authMessage", "Free account created."+emailNotice,"success");
+      return;
+    }
+    const response=await fetch(`${AUTH_API}/register-paid`,{
+      method:"POST",credentials:"include",
+      headers:{"Content-Type":"application/json","Accept":"application/json"},
+      body:JSON.stringify({email,password,artist_name:artistName,package_code:chosenPackage,provider:chosenPaymentMethod,phone_number:paymentPhone})
+    });
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok || data.success===false) throw new Error(data.error||data.message||"Could not start payment.");
+    showMessage("authMessage", `Payment request started for ${packageLabels[chosenPackage]||chosenPackage}. Approve the mobile-money prompt on your phone. Your account will only be created and verification email sent after PesaJet confirms the payment. Reference: ${data.reference||"pending"}. Do not pay again while this request is pending.`,"success");
   }catch(error){
     console.error(error);
     showMessage("authMessage",error.message || "Authentication failed.","error");
@@ -4508,23 +4515,12 @@ function toggleSongUpload(){
   if(opening) form.scrollIntoView({behavior:"smooth",block:"start"});
 }
 
-function getArtistPackageCode(artist){
-  const raw=String(artist?.package_name || artist?.packageName || artist?.package_code || artist?.packageCode || "free")
-    .trim().toLowerCase().replace(/[\\s-]+/g,"_");
-  return Object.prototype.hasOwnProperty.call(NILE_ARTIST_PACKAGES,raw) ? raw : "free";
-}
-function getArtistPackageLabel(artist){
-  const code=getArtistPackageCode(artist);
-  return (NILE_ARTIST_PACKAGES[code]||NILE_ARTIST_PACKAGES.free).label;
-}
 function isArtistPremiumActive(artist){
   if(!artist) return false;
-  const code=getArtistPackageCode(artist);
-  if(code==="free") return false;
-  const expiryValue=artist.package_expiry_date || artist.premium_expiry_date;
-  if(!expiryValue) return false;
-  const expiry=Date.parse(expiryValue);
-  return Number.isFinite(expiry) && expiry>Date.now();
+  const flag = artist.is_premium === true || artist.is_premium === 1 || artist.is_premium === "1";
+  if(!flag || !artist.premium_expiry_date) return false;
+  const expiry = Date.parse(artist.premium_expiry_date);
+  return Number.isFinite(expiry) && expiry > Date.now();
 }
 
 function renderDashboardArtistProfile(artist){
@@ -4538,12 +4534,7 @@ function renderDashboardArtistProfile(artist){
   const avatarEl = document.getElementById("dashboardArtistAvatar");
   if(nameEl) nameEl.textContent = name;
   const premiumBadge=document.getElementById("dashboardArtistPremiumBadge");
-  if(premiumBadge){
-    const active=isArtistPremiumActive(artist);
-    premiumBadge.style.display=active?"inline-flex":"none";
-    premiumBadge.textContent=active ? "★ "+getArtistPackageLabel(artist).toUpperCase()+" ARTIST" : "";
-    premiumBadge.setAttribute("aria-label",active ? "Active "+getArtistPackageLabel(artist)+" artist" : "No active paid package");
-  }
+  if(premiumBadge) premiumBadge.style.display=isArtistPremiumActive(artist)?"inline-flex":"none";
   if(locationEl) locationEl.textContent = location === "Add your location" ? location : "📍 " + location;
   if(bioEl) bioEl.textContent = bio;
   if(avatarEl){
@@ -4968,6 +4959,18 @@ async function uploadSong(){
     showMessage("uploadMessage","Please accept the Terms & Conditions and confirm you have the rights to upload this song.","error");
     return;
   }
+
+  // Reject oversized files locally before any bytes are sent. The Worker repeats
+  // these checks and verifies the monthly package allowance server-side.
+  const MAX_AUDIO_BYTES=50*1024*1024;
+  const MAX_COVER_BYTES=5*1024*1024;
+  if(audioFile.size>MAX_AUDIO_BYTES){showMessage("uploadMessage","Audio file is too large. Maximum size is 50 MB.","error");return;}
+  if(coverFile.size>MAX_COVER_BYTES){showMessage("uploadMessage","Cover image is too large. Maximum size is 5 MB.","error");return;}
+  try{
+    const preflight=await fetch(`${AUTH_API.replace(/\/api\/auth$/,"")}/api/uploads/check`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({audio_size:audioFile.size,cover_size:coverFile.size})});
+    const preflightData=await preflight.json().catch(()=>({}));
+    if(!preflight.ok||preflightData.allowed!==true){showMessage("uploadMessage",preflightData.error||"Your package upload limit has been reached. No files were uploaded.","error");return;}
+  }catch(e){showMessage("uploadMessage","Could not verify your upload allowance. No files were uploaded. Please try again.","error");return;}
 
   const uploadButton =
     document.getElementById(
@@ -6689,7 +6692,7 @@ async function openArtistProfile(artistId, fromPublicRoute=false){
 
           <h2>
             ${escapeHtml(artist.name || "Unknown Artist")}
-            ${isArtistPremiumActive(artist) ? '<span class="nilesoniq-premium-badge" aria-label="Active artist">★ ${escapeHtml(getArtistPackageLabel(artist).toUpperCase())}</span>' : ''}
+            ${isArtistPremiumActive(artist) ? '<span class="nilesoniq-premium-badge" aria-label="Active Premium artist">★ PREMIUM</span>' : ''}
           </h2>
 
           <p class="artist-profile-location">
@@ -7372,7 +7375,7 @@ async function loadArtists(){
           </div>
           <div class="artist-avatar">${avatar}</div>
           <h3>${escapeHtml(artist.name || "Unknown Artist")}</h3>
-          ${isArtistPremiumActive(artist) ? '<div class="nilesoniq-premium-badge" aria-label="Active artist">★ ${escapeHtml(getArtistPackageLabel(artist).toUpperCase())} ARTIST</div>' : ''}
+          ${isArtistPremiumActive(artist) ? '<div class="nilesoniq-premium-badge" aria-label="Active Premium artist">★ PREMIUM ARTIST</div>' : ''}
           <p>${escapeHtml(artist.location || "Uganda")}</p>
         </div>`;
     }).join("");
@@ -10141,6 +10144,15 @@ document.addEventListener("DOMContentLoaded", async () => {
 });
 
 
+/* Artist package pricing used by the dashboard UI. Keep these prices aligned with worker.js. */
+const NILE_ARTIST_PACKAGES = Object.freeze({
+  free: { label: "Free", amount: 0, rate: 0.5, uploads: 3 },
+  premium: { label: "Premium", amount: 5000, rate: 1, uploads: 6 },
+  hustler: { label: "Hustler", amount: 10000, rate: 1, uploads: 15 },
+  hit_maker: { label: "Hit Maker", amount: 20000, rate: 2, uploads: Infinity },
+  star: { label: "Star", amount: 30000, rate: 3, uploads: Infinity }
+});
+
 /* =========================================================
    PREMIUM SUBSCRIPTION — provider-confirmed only
 ========================================================= */
@@ -10153,12 +10165,48 @@ async function refreshPremiumSubscriptionStatus(reference=null, fromPoll=false){
   }
   updatePremiumSubscriptionCardVisibility(true);
   try{
-    const url="/api/payments/premium-subscription"+(reference?"?reference="+encodeURIComponent(reference):"");
-    const response=await fetch(url,{method:"GET",credentials:"include",cache:"no-store"});
-    const data=await response.json().catch(()=>({}));
+    // Always call the payment-status API on the current site origin so the
+    // browser uses the same nilesoniq.com session cookie as the Worker route.
+    // Retry only the read-only status request on transient network failures.
+    const statusUrl=new URL("/api/payments/premium-subscription",window.location.origin);
+    if(reference) statusUrl.searchParams.set("reference",reference);
+    let response=null, lastNetworkError=null;
+    for(let attempt=0;attempt<3;attempt++){
+      try{
+        response=await fetch(statusUrl.toString(),{
+          method:"GET",
+          credentials:"same-origin",
+          cache:"no-store",
+          redirect:"follow",
+          headers:{"Accept":"application/json","Cache-Control":"no-cache"}
+        });
+        lastNetworkError=null;
+        break;
+      }catch(networkError){
+        lastNetworkError=networkError;
+        if(attempt<2) await new Promise(resolve=>setTimeout(resolve,500*(attempt+1)));
+      }
+    }
+    if(lastNetworkError||!response){
+      throw new Error("Payment status endpoint could not be reached after retrying.");
+    }
+    const contentType=String(response.headers.get("content-type")||"").toLowerCase();
+    const data=contentType.includes("application/json")
+      ? await response.json().catch(()=>({}))
+      : {};
     if(!response.ok){
-      statusEl.textContent=response.status===401?"Sign in to check or purchase Premium.":(data.error||"Premium status is temporarily unavailable.");
-      return {status:"unavailable"};
+      const detail=data.error||data.message||`Payment status request failed (HTTP ${response.status}).`;
+      statusEl.textContent=response.status===401
+        ?"Your session could not be verified. Sign in again, then check payment status before starting another payment."
+        :detail;
+      console.warn("NileSoniQ payment status HTTP failure",{status:response.status,detail});
+      return {status:"unavailable",httpStatus:response.status,error:detail};
+    }
+    if(!contentType.includes("application/json")){
+      const detail=`Payment status endpoint returned a non-JSON response (HTTP ${response.status}).`;
+      statusEl.textContent=detail+" Do not pay again until the previous result is checked.";
+      console.warn("NileSoniQ payment status response was not JSON",{status:response.status,contentType});
+      return {status:"unavailable",httpStatus:response.status,error:detail};
     }
     const button=document.getElementById("premiumSubscribeButton");
     if(data.active){
@@ -10180,8 +10228,9 @@ async function refreshPremiumSubscriptionStatus(reference=null, fromPoll=false){
     }
     return data;
   }catch(e){
-    statusEl.textContent="Could not reach the payment server. No payment status was assumed.";
-    return {status:"unavailable"};
+    console.warn("NileSoniQ payment status check failed:",e?.message||e);
+    statusEl.textContent="We could not retrieve payment status after retrying. Your payment result is unknown; do not pay again yet. Please retry checking status shortly.";
+    return {status:"unavailable",error:e?.message||"network_error"};
   }
 }
 function beginPremiumPaymentPolling(reference){
