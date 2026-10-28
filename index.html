@@ -9,15 +9,6 @@
 <meta name="description"
 content="NileSoniq is an artist-first Ugandan music platform where listeners can stream approved songs, discover artists, explore releases, and read original music stories.">
 <link rel="canonical" href="https://nilesoniq.com/">
-<meta property="og:type" content="website">
-<meta property="og:site_name" content="NileSoniq">
-<meta property="og:title" content="NileSoniq — Ugandan Music Platform">
-<meta property="og:description" content="Discover and stream music from Ugandan artists on NileSoniq.">
-<meta property="og:image" content="https://nilesoniq.com/favicon.png">
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="NileSoniq — Ugandan Music Platform">
-<meta name="twitter:description" content="Discover and stream music from Ugandan artists on NileSoniq.">
-<meta name="twitter:image" content="https://nilesoniq.com/favicon.png">
 
 
 
@@ -2884,34 +2875,15 @@ placeholder="you@example.com">
 
 </div>
 
-<div class="field" id="signupPackageField" style="display:none;">
-<label for="signupPackage">Choose your artist package</label>
-<select id="signupPackage">
-<option value="free">Free — UGX 0</option>
-<option value="premium">Premium — UGX 5,000 per 30 days</option>
-</select>
-<p style="color:#999;font-size:12px;margin-top:7px;">Premium is activated only after mobile-money payment is confirmed. Choosing Premium does not charge you now.</p>
-</div>
+<div class="field">
 
-<div class="field" id="authPasswordField">
 <label>Password</label>
-<input id="authPassword" type="password" placeholder="Password" autocomplete="current-password">
-</div>
 
-<div id="forgotPasswordRow" style="text-align:right;margin:-5px 0 15px;">
-<button type="button" class="footer-admin-login" onclick="showForgotPasswordForm()">Forgot password?</button>
-</div>
+<input
+id="authPassword"
+type="password"
+placeholder="Password">
 
-<div id="forgotPasswordForm" class="hidden">
-<p style="color:#bbb;font-size:13px;margin-bottom:12px;">Enter your account email and we’ll send a password-reset link if the account exists.</p>
-<button type="button" class="btn btn-dark" style="width:100%;margin-bottom:12px;" onclick="requestPasswordReset()">Send reset link</button>
-<button type="button" class="footer-admin-login" onclick="returnToAuthForm()">Back to login</button>
-</div>
-
-<div id="resetPasswordForm" class="hidden">
-<div class="field"><label for="newAuthPassword">New password</label><input id="newAuthPassword" type="password" autocomplete="new-password" placeholder="At least 6 characters"></div>
-<div class="field"><label for="confirmAuthPassword">Confirm new password</label><input id="confirmAuthPassword" type="password" autocomplete="new-password" placeholder="Repeat new password"></div>
-<button type="button" class="btn btn-orange" style="width:100%;margin-bottom:12px;" onclick="submitPasswordReset()">Save new password</button>
 </div>
 
 <button id="authSubmit"
@@ -3102,25 +3074,47 @@ function cfQuery(table, initial={}){
 
 const storageAdapter={from(bucket){return {
   async upload(path,file){
-    let res;
-    try{
-      res=await fetch(`/api/storage/upload?bucket=${encodeURIComponent(bucket)}&path=${encodeURIComponent(path)}`,{method:"POST",credentials:"include",headers:{"Content-Type":file.type||"application/octet-stream"},body:file});
-    }catch(fetchError){
-      return {data:null,error:new Error(fetchError?.message || "Could not reach the NileSoniq storage server.")};
+    const uploadUrl=`/api/storage/upload?bucket=${encodeURIComponent(bucket)}&path=${encodeURIComponent(path)}`;
+    let lastError=null;
+    // Retry one time for temporary mobile-network failures. The same object key is
+    // used on retry, so a retry cannot create duplicate files under new names.
+    for(let attempt=0;attempt<2;attempt++){
+      let res;
+      try{
+        res=await fetch(uploadUrl,{method:"POST",credentials:"include",headers:{"Content-Type":file.type||"application/octet-stream"},body:file});
+      }catch(fetchError){
+        lastError=new Error(fetchError?.message || "Could not reach the NileSoniq storage server.");
+        if(attempt===0) continue;
+        return {data:null,error:lastError};
+      }
+      const responseText=await res.text().catch(()=> "");
+      let j=null;
+      try{ j=responseText ? JSON.parse(responseText) : null; }catch{}
+      if(!res.ok){
+        lastError=new Error(j?.error || j?.message || `Storage upload failed (${res.status})`);
+        // Authentication/permission/validation errors will not improve on retry.
+        if(attempt===0 && (res.status===408 || res.status===429 || res.status>=500)) continue;
+        return {data:null,error:lastError};
+      }
+      if(!j || typeof j!=="object" || j.error || !j.data || !j.data.path){
+        return {data:null,error:new Error(j?.error || "The server did not confirm that the file was stored.")};
+      }
+      const publicUrl=`/api/storage/public/${encodeURIComponent(bucket)}/${String(j.data.path).split('/').map(encodeURIComponent).join('/')}`;
+      try{
+        const verify=await fetch(publicUrl,{method:"HEAD",credentials:"include",cache:"no-store"});
+        if(!verify.ok){
+          lastError=new Error(`Upload response was received, but Cloudflare could not verify the saved file (${verify.status}). Please retry.`);
+          if(attempt===0 && (verify.status===408 || verify.status===429 || verify.status>=500)) continue;
+          return {data:null,error:lastError};
+        }
+      }catch(verifyError){
+        lastError=new Error("The file upload was accepted, but the saved file could not be verified because the connection failed.");
+        if(attempt===0) continue;
+        return {data:null,error:lastError};
+      }
+      return {data:j.data,error:null};
     }
-    let responseText="";
-    let j=null;
-    try{
-      responseText=await res.text();
-      j=responseText ? JSON.parse(responseText) : null;
-    }catch(readError){
-      return {data:null,error:new Error("The storage server returned an unreadable response. Please try a smaller image or try again.")};
-    }
-    if(!res.ok) return {data:null,error:new Error(j?.error || j?.message || `Storage upload failed (${res.status})`)};
-    if(!j || typeof j!=="object" || j.error || !j.data || !j.data.path){
-      return {data:null,error:new Error(j?.error || "The server did not confirm that the file was stored.")};
-    }
-    return {data:j.data,error:null};
+    return {data:null,error:lastError || new Error("Storage upload failed. Please try again.")};
   },
   getPublicUrl(path){return {data:{publicUrl:`/api/storage/public/${encodeURIComponent(bucket)}/${path.split('/').map(encodeURIComponent).join('/')}`}}}
 };}};
@@ -3583,13 +3577,13 @@ const authApi = {
     return {data:{user:currentUser,session:currentUser?{user:currentUser}:null},error:null};
   },
 
-  async signUp({email,password,options,packageName}){
+  async signUp({email,password,options}){
     const artistName = options?.data?.artist_name || "";
     const response = await fetch(`${AUTH_API}/register`, {
       method:"POST",
       credentials:"include",
       headers:{"Content-Type":"application/json","Accept":"application/json"},
-      body:JSON.stringify({email,password,artist_name:artistName,package:packageName || "free"})
+      body:JSON.stringify({email,password,artist_name:artistName})
     });
     const data = await response.json().catch(()=>({}));
     if(!response.ok || data.success === false){
@@ -3601,7 +3595,7 @@ const authApi = {
       currentArtist = data.artist || null;
       notifyAuthListeners();
     }
-    return {data:{user:data.user || null,session:data.user?{user:data.user}:null,verification_email_sent:Boolean(data.verification_email_sent),message:data.message||"",artist_package:data.user?.artist_package||packageName||"free"},error:null};
+    return {data:{user:data.user || null,session:data.user?{user:data.user}:null},error:null};
   },
 
   async signOut(){
@@ -4163,12 +4157,6 @@ function setAuthMode(mode){
       : "Artist Login";
 
     submit.textContent = "Login";
-    document.getElementById("signupPackageField").style.display="none";
-    document.getElementById("forgotPasswordRow").classList.remove("hidden");
-    document.getElementById("authPasswordField").classList.remove("hidden");
-    document.getElementById("forgotPasswordForm").classList.add("hidden");
-    document.getElementById("resetPasswordForm").classList.add("hidden");
-    submit.classList.remove("hidden");
 
   }else{
 
@@ -4185,12 +4173,6 @@ function setAuthMode(mode){
 
     submit.textContent =
       "Create Account";
-    document.getElementById("signupPackageField").style.display="block";
-    document.getElementById("forgotPasswordRow").classList.add("hidden");
-    document.getElementById("authPasswordField").classList.remove("hidden");
-    document.getElementById("forgotPasswordForm").classList.add("hidden");
-    document.getElementById("resetPasswordForm").classList.add("hidden");
-    submit.classList.remove("hidden");
 
   }
 
@@ -4240,103 +4222,18 @@ async function submitAuth(){
       return;
     }
 
-    const chosenPackage=document.getElementById("signupPackage").value;
     const {data,error} = await authApi.signUp({
-      email,password,packageName:chosenPackage,options:{data:{artist_name:artistName}}
+      email,password,options:{data:{artist_name:artistName}}
     });
     if(error) throw error;
 
-    const emailNotice=data?.verification_email_sent
-      ? " A verification email was sent; check your inbox and spam folder."
-      : " The account was created, but the verification email could not be confirmed as sent. Please contact support if it does not arrive.";
-    showMessage("authMessage", "Account created. Your selected package is "+(chosenPackage==="premium"?"Premium (UGX 5,000 per 30 days; it activates only after confirmed payment).":"Free (UGX 0).")+emailNotice,"success");
+    showMessage("authMessage", data?.session ? "Account created successfully. You can now use NileSoniq." : "Account created successfully. Please log in.","success");
   }catch(error){
     console.error(error);
     showMessage("authMessage",error.message || "Authentication failed.","error");
   }
 }
 
-
-/* =========================================================
-   EMAIL VERIFICATION AND PASSWORD RECOVERY
-========================================================= */
-let pendingPasswordResetToken = "";
-
-function showForgotPasswordForm(){
-  clearMessage("authMessage");
-  document.getElementById("authTitle").textContent="Reset your password";
-  document.getElementById("loginTab").classList.remove("active");
-  document.getElementById("signupTab").classList.remove("active");
-  document.getElementById("signupNameField").classList.add("hidden");
-  document.getElementById("signupPackageField").style.display="none";
-  document.getElementById("authPasswordField").classList.add("hidden");
-  document.getElementById("forgotPasswordRow").classList.add("hidden");
-  document.getElementById("forgotPasswordForm").classList.remove("hidden");
-  document.getElementById("resetPasswordForm").classList.add("hidden");
-  document.getElementById("authSubmit").classList.add("hidden");
-}
-
-function returnToAuthForm(){
-  document.getElementById("forgotPasswordForm").classList.add("hidden");
-  document.getElementById("resetPasswordForm").classList.add("hidden");
-  document.getElementById("authPasswordField").classList.remove("hidden");
-  document.getElementById("authSubmit").classList.remove("hidden");
-  setAuthMode("login");
-}
-
-async function requestPasswordReset(){
-  const email=document.getElementById("authEmail").value.trim();
-  if(!email){showMessage("authMessage","Enter your email address first.","error");return;}
-  try{
-    const response=await fetch(`${AUTH_API}/forgot-password`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({email})});
-    const data=await response.json().catch(()=>({}));
-    if(!response.ok||data.success===false)throw new Error(data.error||data.message||"Could not request a reset link.");
-    showMessage("authMessage",data.message||"If that email is registered, a password-reset link has been sent. Check your inbox and spam folder.","success");
-  }catch(error){showMessage("authMessage",error.message||"Password reset request failed.","error");}
-}
-
-async function submitPasswordReset(){
-  const password=document.getElementById("newAuthPassword").value;
-  const confirm=document.getElementById("confirmAuthPassword").value;
-  if(password.length<6){showMessage("authMessage","Your new password must be at least 6 characters.","error");return;}
-  if(password!==confirm){showMessage("authMessage","The passwords do not match.","error");return;}
-  if(!pendingPasswordResetToken){showMessage("authMessage","The reset link is missing its token. Request a new password-reset email.","error");return;}
-  try{
-    const response=await fetch(`${AUTH_API}/reset-password`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({token:pendingPasswordResetToken,password})});
-    const data=await response.json().catch(()=>({}));
-    if(!response.ok||data.success===false)throw new Error(data.error||data.message||"Password could not be reset.");
-    pendingPasswordResetToken="";
-    showMessage("authMessage",data.message||"Password updated. You can now log in with your new password.","success");
-    document.getElementById("newAuthPassword").value="";document.getElementById("confirmAuthPassword").value="";
-    setTimeout(returnToAuthForm,1200);
-  }catch(error){showMessage("authMessage",error.message||"Password reset failed.","error");}
-}
-
-async function handleAuthEmailLink(){
-  const params=new URLSearchParams(window.location.search);
-  const hashParams=new URLSearchParams((window.location.hash||"").replace(/^#/,""));
-  const token=params.get("token")||params.get("token_hash")||hashParams.get("token")||hashParams.get("token_hash");
-  const type=(params.get("type")||hashParams.get("type")||"").toLowerCase();
-  if(!token)return;
-  if(type.includes("recovery")||type.includes("reset")){
-    pendingPasswordResetToken=token;
-    openAuthModal("artist");
-    showForgotPasswordForm();
-    document.getElementById("forgotPasswordForm").classList.add("hidden");
-    document.getElementById("resetPasswordForm").classList.remove("hidden");
-    document.getElementById("authTitle").textContent="Choose a new password";
-    showMessage("authMessage","Enter and confirm your new password.","success");
-    return;
-  }
-  if(type.includes("signup")||type.includes("verify")||params.has("verify_email")){
-    try{
-      const response=await fetch(`${AUTH_API}/verify-email?token=${encodeURIComponent(token)}`,{method:"GET",credentials:"include",headers:{"Accept":"application/json"}});
-      const data=await response.json().catch(()=>({}));
-      openAuthModal("artist");
-      showMessage("authMessage",response.ok&&data.success!==false?(data.message||"Email verified. You can now log in."):(data.error||data.message||"Email verification failed. Please request a new verification link."),response.ok&&data.success!==false?"success":"error");
-    }catch(error){openAuthModal("artist");showMessage("authMessage","Could not verify your email. Please try the link again.","error");}
-  }
-}
 
 /* =========================================================
    LOGOUT
@@ -6234,11 +6131,16 @@ async function openSongBySlug(slug){
     const {data,error} = await sb
       .from("songs")
       .select("*")
-      .eq("approved",true)
       .order("created_at",{ascending:false});
     if(error) throw error;
 
-    const song = (data || []).find(item => songPublicSlug(item) === wanted);
+    // D1 returns SQLite booleans as 0/1. Do not rely on a boolean filter here:
+    // normalize the approved value in JavaScript before matching the public slug.
+    const publicSongs=(data || []).filter(item =>
+      Number(item.approved) === 1 ||
+      String(item.approved).toLowerCase() === "true"
+    );
+    const song = publicSongs.find(item => songPublicSlug(item) === wanted);
     if(!song){
       await showPage("home");
       alert("Song not found.");
@@ -7473,13 +7375,14 @@ function updateDashboardStats(
 
   const eligiblePlays =
     songs
-      .filter(song=>isSongApproved(song) || String(song.review_status || "").toLowerCase() === "approved")
-      .reduce((sum,song)=>sum+Math.max(0, Number(song.plays || 0)),0);
+      .filter(song=>isSongApproved(song))
+      .reduce((sum,song)=>sum+Number(song.plays||0),0);
 
-  // EARNINGS_PER_PLAY is already the artist net rate: UGX 0.375
-  // per eligible play (UGX 0.50 gross less 20% commission and 5% tax).
-  // Do not apply the 75% allocation a second time.
-  const earnings = eligiblePlays * EARNINGS_PER_PLAY;
+  // Artist net estimate: UGX 0.50 gross per approved play less 20% commission
+  // and 5% tax allocation (75% of gross remains for the artist).
+  const earnings =
+    eligiblePlays *
+    EARNINGS_PER_PLAY;
 
 
   document.getElementById(
@@ -7494,14 +7397,15 @@ function updateDashboardStats(
     formatNumber(totalSongs);
 
 
-  const earningsElement = document.getElementById("totalEarnings");
-  if (earningsElement) {
-    // Keep fractional UGX visible; flooring made small but valid earnings show as zero.
-    earningsElement.textContent = "UGX " + Number(earnings).toLocaleString(undefined, {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 2
-    });
-  }
+  document.getElementById(
+    "totalEarnings"
+  ).textContent =
+    "UGX " +
+    formatNumber(
+      Math.floor(
+        earnings
+      )
+    );
 
 }
 
@@ -7527,24 +7431,6 @@ async function updateAmountWithdrawn(withdrawals=null){
   }catch(error){
     console.error("Amount withdrawn error:",error);
   }
-}
-
-async function loadArtistWithdrawalNotifications(){
-  if(!currentUser) return;
-  try{
-    const response=await fetch("/api/artist/notifications",{credentials:"include",headers:{"Accept":"application/json"}});
-    if(!response.ok) return;
-    const payload=await response.json();
-    const notices=Array.isArray(payload.data)?payload.data:[];
-    const latest=notices.find(n=>!n.read_at);
-    if(latest){
-      const key="nilesoniq_notice_"+String(latest.id||latest.created_at||"");
-      if(!sessionStorage.getItem(key)){
-        alert(String(latest.message||"Your artist withdrawal request has been updated."));
-        sessionStorage.setItem(key,"1");
-      }
-    }
-  }catch(error){console.warn("Artist notifications could not be loaded:",error);}
 }
 
 async function loadMyWithdrawals(){
@@ -7671,7 +7557,6 @@ async function loadMyWithdrawals(){
 
     await updateAvailableBalance(withdrawals);
     await updateAmountWithdrawn(withdrawals);
-    await loadArtistWithdrawalNotifications();
 
 
   }catch(error){
@@ -7710,15 +7595,15 @@ async function updateAvailableBalance(withdrawals=null){
       const {data,error}=await sb.from("withdrawal_requests").select("amount,status").eq("artist_id",currentUser.id);
       if(error) throw error; withdrawals=data||[];
     }
-    const {data:songs,error:songsError}=await sb.from("songs").select("plays,approved,review_status").eq("artist_id",currentUser.id);
+    const {data:songs,error:songsError}=await sb.from("songs").select("plays,approved").eq("artist_id",currentUser.id);
     if(songsError) throw songsError;
-    const approvedPlays=(songs||[]).filter(s=>isSongApproved(s) || String(s.review_status || "").toLowerCase()==="approved").reduce((sum,s)=>sum+Math.max(0,Number(s.plays||0)),0);
+    const approvedPlays=(songs||[]).filter(s=>isSongApproved(s)).reduce((sum,s)=>sum+Number(s.plays||0),0);
     // Available balance uses the same net rate as the Worker withdrawal check.
     const currentBalance=approvedPlays*EARNINGS_PER_PLAY;
     const reserved=(withdrawals||[]).reduce((sum,w)=>{const st=String(w.status||"").toLowerCase();return sum+((["pending","processing","paid","completed","success","successful"].includes(st))?(Number(w.amount)||0):0);},0);
     const available=Math.max(0,currentBalance-reserved);
     const a=document.getElementById("availableBalance");
-    if(a)a.textContent="UGX "+Number(available).toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:2});
+    if(a)a.textContent="UGX "+formatNumber(Math.floor(available));
   }catch(error){console.error("Balance error:",error);}
 }
 
@@ -10019,7 +9904,6 @@ window.addEventListener("popstate", async () => {
 document.addEventListener("DOMContentLoaded", async () => {
   /* Premium status is refreshed after authentication and artist-profile loading. */
   updatePremiumSubscriptionCardVisibility(Boolean(currentUser && currentArtist));
-  await handleAuthEmailLink();
 });
 
 
