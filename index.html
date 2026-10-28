@@ -10144,6 +10144,15 @@ document.addEventListener("DOMContentLoaded", async () => {
 });
 
 
+/* Artist package pricing used by the dashboard UI. Keep these prices aligned with worker.js. */
+const NILE_ARTIST_PACKAGES = Object.freeze({
+  free: { label: "Free", amount: 0, rate: 0.5, uploads: 3 },
+  premium: { label: "Premium", amount: 5000, rate: 1, uploads: 6 },
+  hustler: { label: "Hustler", amount: 10000, rate: 1, uploads: 15 },
+  hit_maker: { label: "Hit Maker", amount: 20000, rate: 2, uploads: Infinity },
+  star: { label: "Star", amount: 30000, rate: 3, uploads: Infinity }
+});
+
 /* =========================================================
    PREMIUM SUBSCRIPTION — provider-confirmed only
 ========================================================= */
