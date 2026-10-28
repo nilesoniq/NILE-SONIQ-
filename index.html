@@ -2894,12 +2894,17 @@ placeholder="you@example.com">
 </div>
 <div class="field" id="signupPaymentMethodField" style="display:none;">
 <label for="signupPaymentMethod">Premium payment method</label>
-<select id="signupPaymentMethod">
+<select id="signupPaymentMethod" onchange="toggleSignupPaymentPhone()">
 <option value="">Select payment method</option>
 <option value="mtn">MTN Mobile Money</option>
 <option value="airtel">Airtel Money</option>
 </select>
 <p style="color:#999;font-size:12px;margin-top:7px;">Choose how you plan to pay. Premium activates only after payment is confirmed.</p>
+</div>
+<div class="field" id="signupPaymentPhoneField" style="display:none;">
+<label for="signupPaymentPhone">Mobile money phone number</label>
+<input id="signupPaymentPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="e.g. 0771234567" maxlength="20">
+<p style="color:#999;font-size:12px;margin-top:7px;">Enter the number for the selected mobile-money account.</p>
 </div>
 
 <div class="field" id="authPasswordField">
@@ -4144,6 +4149,19 @@ function toggleSignupPaymentMethod(){
   field.style.display=premium ? "block" : "none";
   select.required=premium;
   if(!premium) select.value="";
+  toggleSignupPaymentPhone();
+}
+
+function toggleSignupPaymentPhone(){
+  const premium=document.getElementById("signupPackage")?.value==="premium";
+  const method=document.getElementById("signupPaymentMethod")?.value || "";
+  const field=document.getElementById("signupPaymentPhoneField");
+  const input=document.getElementById("signupPaymentPhone");
+  if(!field || !input) return;
+  const show=premium && !!method;
+  field.style.display=show ? "block" : "none";
+  input.required=show;
+  if(!show) input.value="";
 }
 
 function setAuthMode(mode){
@@ -4264,13 +4282,18 @@ async function submitAuth(){
 
     const chosenPackage=document.getElementById("signupPackage").value;
     const chosenPaymentMethod=document.getElementById("signupPaymentMethod")?.value || "";
+    const paymentPhone=(document.getElementById("signupPaymentPhone")?.value || "").trim();
     if(chosenPackage==="premium" && !chosenPaymentMethod){
       showMessage("authMessage","Please select a payment method for Premium.","error");
       return;
     }
+    if(chosenPackage==="premium" && !paymentPhone){
+      showMessage("authMessage","Please enter the mobile-money phone number you will use to pay.","error");
+      return;
+    }
     const {data,error} = await authApi.signUp({
       email,password,packageName:chosenPackage,
-      options:{data:{artist_name:artistName,package_name:chosenPackage,premium_payment_method:chosenPackage==="premium"?chosenPaymentMethod:null}}
+      options:{data:{artist_name:artistName,package_name:chosenPackage,premium_payment_method:chosenPackage==="premium"?chosenPaymentMethod:null,premium_payment_phone:chosenPackage==="premium"?paymentPhone:null}}
     });
     if(error) throw error;
 
