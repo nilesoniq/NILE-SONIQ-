@@ -10156,9 +10156,35 @@ async function refreshPremiumSubscriptionStatus(reference=null, fromPoll=false){
   }
   updatePremiumSubscriptionCardVisibility(true);
   try{
-    const url="/api/payments/premium-subscription"+(reference?"?reference="+encodeURIComponent(reference):"");
-    const response=await fetch(url,{method:"GET",credentials:"include",cache:"no-store"});
-    const data=await response.json().catch(()=>({}));
+    // Always call the payment-status API on the current site origin so the
+    // browser uses the same nilesoniq.com session cookie as the Worker route.
+    // Retry only the read-only status request on transient network failures.
+    const statusUrl=new URL("/api/payments/premium-subscription",window.location.origin);
+    if(reference) statusUrl.searchParams.set("reference",reference);
+    let response=null, lastNetworkError=null;
+    for(let attempt=0;attempt<3;attempt++){
+      try{
+        response=await fetch(statusUrl.toString(),{
+          method:"GET",
+          credentials:"same-origin",
+          cache:"no-store",
+          redirect:"follow",
+          headers:{"Accept":"application/json","Cache-Control":"no-cache"}
+        });
+        lastNetworkError=null;
+        break;
+      }catch(networkError){
+        lastNetworkError=networkError;
+        if(attempt<2) await new Promise(resolve=>setTimeout(resolve,500*(attempt+1)));
+      }
+    }
+    if(lastNetworkError||!response){
+      throw new Error("Payment status endpoint could not be reached after retrying.");
+    }
+    const contentType=String(response.headers.get("content-type")||"").toLowerCase();
+    const data=contentType.includes("application/json")
+      ? await response.json().catch(()=>({}))
+      : {};
     if(!response.ok){
       statusEl.textContent=response.status===401?"Sign in to check or purchase Premium.":(data.error||"Premium status is temporarily unavailable.");
       return {status:"unavailable"};
@@ -10183,8 +10209,9 @@ async function refreshPremiumSubscriptionStatus(reference=null, fromPoll=false){
     }
     return data;
   }catch(e){
-    statusEl.textContent="Could not reach the payment server. No payment status was assumed.";
-    return {status:"unavailable"};
+    console.warn("NileSoniQ payment status check failed:",e?.message||e);
+    statusEl.textContent="We could not retrieve payment status after retrying. Your payment result is unknown; do not pay again yet. Please retry checking status shortly.";
+    return {status:"unavailable",error:e?.message||"network_error"};
   }
 }
 function beginPremiumPaymentPolling(reference){
