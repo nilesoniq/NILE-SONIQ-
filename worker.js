@@ -1057,42 +1057,41 @@ async function dbRoute(request, env, path) {
 
           const insertKeys = Object.keys(safeRow);
 
-          // Premium entitlement is checked on the server. Regular users may
-          // submit up to three songs per UTC calendar month. Pending and
-          // rejected submissions count toward the limit; active Premium users
-          // are not restricted by this free-account limit.
-          const activePremium = await env.DB.prepare(`
-            SELECT 1 AS active
+          // Server-side package entitlement. Pending/rejected submissions count
+          // toward monthly limits. A paid package only applies while its verified
+          // provider-confirmed subscription is active and unexpired.
+          const activePackage = await env.DB.prepare(`
+            SELECT package_name, amount, expires_at
             FROM premium_subscriptions
-            WHERE user_id = ?
-              AND lower(status) = 'active'
-              AND expires_at IS NOT NULL
-              AND datetime(expires_at) > datetime('now')
-            LIMIT 1
+            WHERE user_id = ? AND lower(status) = 'active'
+              AND expires_at IS NOT NULL AND datetime(expires_at) > datetime('now')
+            ORDER BY datetime(expires_at) DESC LIMIT 1
           `).bind(user.id).first();
-          const hasActivePremium = Number(activePremium?.active || 0) === 1;
+          const packageCode = String(activePackage?.package_name || 'free').toLowerCase();
+          const uploadLimits = { free: 3, premium: 6, hustler: 15, hit_maker: 2147483647, star: 2147483647 };
+          const uploadLimit = uploadLimits[packageCode] ?? 3;
 
-          // Apply the monthly check inside the INSERT statement so two
-          // simultaneous requests cannot both pass a separate count check.
+          // Keep the count and insert in one SQL statement to avoid parallel
+          // uploads exceeding the package limit.
           const insertResult = await env.DB.prepare(`
             INSERT INTO songs (${insertKeys.join(",")})
             SELECT ${insertKeys.map(() => "?").join(",")}
-            WHERE ? = 1 OR (
-              SELECT COUNT(*)
-              FROM songs
+            WHERE (
+              SELECT COUNT(*) FROM songs
               WHERE artist_id = ?
                 AND datetime(created_at) >= datetime('now', 'start of month')
                 AND datetime(created_at) < datetime('now', 'start of month', '+1 month')
-            ) < 3
+            ) < ?
           `).bind(
             ...insertKeys.map(k => safeRow[k] ?? null),
-            hasActivePremium ? 1 : 0,
-            user.id
+            user.id,
+            uploadLimit
           ).run();
 
           if (Number(insertResult?.meta?.changes || 0) === 0) {
+            const limitLabel = uploadLimit >= 2147483647 ? 'unlimited' : String(uploadLimit);
             return error(
-              "Monthly song upload limit reached. Free accounts can submit up to 3 songs per calendar month. Try again next month or activate Premium.",
+              `Monthly song upload limit reached for your ${packageCode} package (${limitLabel} songs per month). Upgrade or try again next month.`,
               429
             );
           }
@@ -1907,7 +1906,11 @@ async function rpcRoute(request, env, name) {
           ).bind(id).first();
           const artistId = String(song?.artist_id || "").trim();
           if (artistId) {
-            const gross = EARNINGS_PER_PLAY;
+            const artistPackage = await env.DB.prepare(`
+              SELECT package_name FROM artists WHERE id = ? LIMIT 1
+            `).bind(artistId).first();
+            const earningRates = { free: 0.5, premium: 1, hustler: 1, hit_maker: 2, star: 3 };
+            const gross = earningRates[String(artistPackage?.package_name || 'free').toLowerCase()] ?? EARNINGS_PER_PLAY;
             const commission = Math.round(gross * ARTIST_COMMISSION_RATE * 100) / 100;
             const tax = Math.round(gross * ARTIST_TAX_ALLOCATION_RATE * 100) / 100;
             const net = Math.round((gross - commission - tax) * 100) / 100;
@@ -1917,7 +1920,7 @@ async function rpcRoute(request, env, name) {
                  commission_amount, tax_amount, pesajet_fee_amount, net_amount,
                  currency, status, note, occurred_at)
               VALUES (?, ?, 'qualified_play', ?, ?, ?, ?, 0, ?, 'UGX',
-                      'posted', 'UGX 0.50 gross per qualified play; 20% commission and 5% tax allocation',
+                      'posted', 'Package-rate gross per qualified play; 20% commission and 5% tax allocation',
                       datetime('now'))
             `).bind(
               `song-play:${playLogId}`,
@@ -2439,26 +2442,29 @@ async function syncArtistPremiumEntitlement(env, userId, preferredArtistId = nul
 
   if (!artist) return { artistFound: false, isPremium: false, expiresAt: null };
 
-  // Keep the most recent paid expiry visible, even after it expires. The boolean
-  // entitlement is always derived from the database clock, not from a client.
+  // Package entitlement is derived only from provider-confirmed, unexpired rows.
   const latest = await env.DB.prepare(`
-    SELECT expires_at,
+    SELECT package_name, expires_at,
            CASE WHEN datetime(expires_at) > datetime('now') THEN 1 ELSE 0 END AS currently_active
     FROM premium_subscriptions
     WHERE user_id = ? AND lower(status) = 'active' AND expires_at IS NOT NULL
-    ORDER BY datetime(expires_at) DESC
-    LIMIT 1
+      AND datetime(expires_at) > datetime('now')
+    ORDER BY datetime(expires_at) DESC LIMIT 1
   `).bind(uid).first();
 
   const expiresAt = latest?.expires_at || null;
-  const isPremium = Number(latest?.currently_active || 0) === 1;
+  const packageCode = String(latest?.package_name || 'free').toLowerCase();
+  const isPremium = !!latest && packageCode !== 'free';
+  const rates = { free: 0.5, premium: 1, hustler: 1, hit_maker: 2, star: 3 };
+  const rate = rates[packageCode] ?? 0.5;
   await env.DB.prepare(`
     UPDATE artists
-    SET is_premium = ?, premium_expiry_date = ?
+    SET is_premium = ?, premium_expiry_date = ?, package_name = ?,
+        package_expiry_date = ?, earnings_rate = ?
     WHERE id = ? AND user_id = ?
-  `).bind(isPremium ? 1 : 0, expiresAt, artist.id, uid).run();
+  `).bind(isPremium ? 1 : 0, expiresAt, packageCode, expiresAt, rate, artist.id, uid).run();
 
-  return { artistFound: true, artistId: artist.id, isPremium, expiresAt };
+  return { artistFound: true, artistId: artist.id, isPremium, expiresAt, packageCode, rate };
 }
 
 async function premiumSubscriptionRoute(request, env) {
@@ -2491,12 +2497,13 @@ async function premiumSubscriptionRoute(request, env) {
         isArtist: entitlement.artistFound,
         artistId: entitlement.artistId || null,
         isPremium: entitlement.isPremium,
-        premiumExpiryDate: entitlement.expiresAt
+        premiumExpiryDate: entitlement.expiresAt,
+        packageCode: payment.package_name || entitlement.packageCode || 'free'
       });
     }
 
     const row = await env.DB.prepare(`
-      SELECT status, expires_at FROM premium_subscriptions
+      SELECT status, expires_at, package_name FROM premium_subscriptions
       WHERE user_id = ? AND lower(status) = 'active' AND expires_at IS NOT NULL
         AND datetime(expires_at) > datetime('now')
       ORDER BY datetime(expires_at) DESC LIMIT 1
@@ -2523,7 +2530,8 @@ async function premiumSubscriptionRoute(request, env) {
       isArtist: entitlement.artistFound,
       artistId: entitlement.artistId || null,
       isPremium: entitlement.isPremium,
-      premiumExpiryDate: entitlement.expiresAt
+      premiumExpiryDate: entitlement.expiresAt,
+      packageCode: active ? (row.package_name || entitlement.packageCode || 'free') : 'free'
     });
   }
 
@@ -2534,6 +2542,10 @@ async function premiumSubscriptionRoute(request, env) {
   if (!artist) return error("NileSoniQ Premium is available to artist accounts only", 403);
 
   const body = await readBody(request);
+  const packageCode = String(body.package_code || body.packageCode || 'premium').trim().toLowerCase();
+  const packagePrices = { premium: 5000, hustler: 10000, hit_maker: 20000, star: 30000 };
+  const packageAmount = packagePrices[packageCode];
+  if (!packageAmount) return error("Choose a valid paid artist package", 422);
   const phone = normalizeUgandanPhone(body.phone_number || body.phoneNumber);
   const provider = String(body.provider || "").trim().toLowerCase();
   if (!/^\+256\d{9}$/.test(phone)) return error("Enter a valid Ugandan mobile-money number", 422);
@@ -2552,16 +2564,16 @@ async function premiumSubscriptionRoute(request, env) {
   const now = new Date().toISOString();
   await env.DB.prepare(`
     INSERT INTO premium_subscriptions
-      (id,user_id,artist_id,amount,currency,provider,phone_number,reference,status,created_at)
-    VALUES (?,?,?,5000,'UGX',?,?,?,'pending',?)
-  `).bind(id,user.id,artist.id,provider,phone,reference,now).run();
+      (id,user_id,artist_id,amount,currency,provider,phone_number,reference,status,created_at,package_name)
+    VALUES (?,?,?,?,'UGX',?,?,?,'pending',?,?)
+  `).bind(id,user.id,artist.id,packageAmount,provider,phone,reference,now,packageCode).run();
 
   let response, result;
   try {
     response = await fetch(`${baseUrl}/payments`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-API-Key": apiKey },
-      body: JSON.stringify({ type: "COLLECTION", amount: 5000, currency: "UGX", phoneNumber: phone, provider, reference, description: "NileSoniQ Premium - 30 days", idempotencyKey: `nilesoniq-${reference}` })
+      body: JSON.stringify({ type: "COLLECTION", amount: packageAmount, currency: "UGX", phoneNumber: phone, provider, reference, description: `NileSoniQ ${packageCode} package - 30 days`, idempotencyKey: `nilesoniq-${reference}` })
     });
     result = await response.json().catch(() => ({}));
   } catch (e) {
@@ -2624,7 +2636,7 @@ async function premiumSubscriptionRoute(request, env) {
     success: true,
     status: "PENDING",
     reference,
-    message: "Your payment request was accepted by the provider. Check your phone for a mobile-money approval prompt and enter your PIN if it arrives. We will update the status when the provider confirms the outcome."
+    message: `Your UGX ${packageAmount.toLocaleString('en-US')} ${packageCode.replace('_',' ')} payment request was accepted. Approve the mobile-money prompt on your phone; activation waits for provider confirmation.`
   });
 }
 
@@ -2691,7 +2703,7 @@ async function applyPremiumPaymentStatus(
 
     // Never grant a paid subscription unless the signed provider event includes
     // an amount and currency matching the exact pending Premium transaction.
-    if (!Number.isFinite(amount) || !currency || amount !== expectedAmount || currency !== expectedCurrency || expectedAmount !== 5000 || expectedCurrency !== "UGX") {
+    if (!Number.isFinite(amount) || !currency || amount !== expectedAmount || currency !== expectedCurrency || ![5000,10000,20000,30000].includes(expectedAmount) || expectedCurrency !== "UGX") {
       console.error("Premium payment confirmation failed amount/currency validation", {
         reference: ref,
         receivedAmount: Number.isFinite(amount) ? amount : null,
@@ -2727,7 +2739,7 @@ async function applyPremiumPaymentStatus(
             ELSE datetime('now','+30 days')
           END
       WHERE reference=? AND lower(status)='pending'
-        AND amount=5000 AND upper(currency)='UGX'
+        AND amount IN (5000,10000,20000,30000) AND upper(currency)='UGX'
         AND (?='' OR provider_transaction_id IS NULL OR provider_transaction_id='' OR provider_transaction_id=?)
     `).bind(incomingTransactionId, ref, incomingTransactionId, incomingTransactionId).run();
     const changed = Number(update?.meta?.changes || 0) > 0;
