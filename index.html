@@ -10186,8 +10186,18 @@ async function refreshPremiumSubscriptionStatus(reference=null, fromPoll=false){
       ? await response.json().catch(()=>({}))
       : {};
     if(!response.ok){
-      statusEl.textContent=response.status===401?"Sign in to check or purchase Premium.":(data.error||"Premium status is temporarily unavailable.");
-      return {status:"unavailable"};
+      const detail=data.error||data.message||`Payment status request failed (HTTP ${response.status}).`;
+      statusEl.textContent=response.status===401
+        ?"Your session could not be verified. Sign in again, then check payment status before starting another payment."
+        :detail;
+      console.warn("NileSoniQ payment status HTTP failure",{status:response.status,detail});
+      return {status:"unavailable",httpStatus:response.status,error:detail};
+    }
+    if(!contentType.includes("application/json")){
+      const detail=`Payment status endpoint returned a non-JSON response (HTTP ${response.status}).`;
+      statusEl.textContent=detail+" Do not pay again until the previous result is checked.";
+      console.warn("NileSoniQ payment status response was not JSON",{status:response.status,contentType});
+      return {status:"unavailable",httpStatus:response.status,error:detail};
     }
     const button=document.getElementById("premiumSubscribeButton");
     if(data.active){
