@@ -3450,6 +3450,11 @@ export default {
 
       if (path === "/api/artist/notifications") {
         response = await artistNotificationsRoute(request, env);
+      } else if (path === "/api/auth/register-paid") {
+        // Paid artist signup must use the dedicated pending-payment flow.
+        // The account and verification email are created only after a verified
+        // successful PesaJet webhook, never merely because this request arrived.
+        response = await paidSignupRoute(request, env);
       } else if (path.startsWith("/api/auth/")) {
         response = await authRoute(request, env, path);
       } else if (path.startsWith("/api/db/")) {
