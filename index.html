@@ -2060,8 +2060,10 @@ Save Profile
 </div>
 
 <div class="dashboard-card" id="premiumSubscriptionCard" style="display:none;margin:18px 0;border:1px solid rgba(255,165,0,.45);" hidden>
-<h2>🌟 NileSoniQ Premium</h2>
-<p>Upgrade for <strong>UGX 5,000 per 30 days</strong>. Premium status activates only after the payment provider confirms your payment.</p>
+<h2>🎵 NileSoniQ Artist Packages</h2>
+<p>Choose a package. Paid packages activate only after PesaJet confirms the exact payment.</p>
+<div class="field"><label for="artistPackageChoice">Your package</label><select id="artistPackageChoice" onchange="updateArtistPackageDetails()"><option value="free">Free — UGX 0</option><option value="premium">Premium — UGX 5,000 / 30 days</option><option value="hustler">Hustler — UGX 10,000 / 30 days</option><option value="hit_maker">Hit Maker — UGX 20,000 / 30 days</option><option value="star">Star — UGX 30,000 / 30 days</option></select></div>
+<div id="artistPackageDetails" style="margin:8px 0 14px;color:#bbb;font-size:13px;">Free: UGX 0.5 per play; 3 uploads per month.</div>
 <div id="premiumSubscriptionStatus" role="status" aria-live="polite" style="margin:12px 0;color:#bbb;">Checking subscription status…</div>
 <div class="form-grid">
 <div class="field"><label for="premiumPhone">MTN / Airtel Mobile Money number</label><input id="premiumPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="07XXXXXXXX or +2567XXXXXXXX" required></div>
@@ -2911,8 +2913,11 @@ placeholder="you@example.com">
 <select id="signupPackage" onchange="toggleSignupPaymentMethod()">
 <option value="free">Free — UGX 0</option>
 <option value="premium">Premium — UGX 5,000 per 30 days</option>
+<option value="hustler">Hustler — UGX 10,000 per 30 days</option>
+<option value="hit_maker">Hit Maker — UGX 20,000 per 30 days</option>
+<option value="star">Star — UGX 30,000 per 30 days</option>
 </select>
-<p style="color:#999;font-size:12px;margin-top:7px;">Premium is activated only after mobile-money payment is confirmed. Choosing Premium does not charge you now.</p>
+<p style="color:#999;font-size:12px;margin-top:7px;">Free is immediate. Paid packages require mobile-money payment after account creation; the package activates only after PesaJet confirms the exact amount.</p>
 </div>
 <div class="field" id="signupPaymentMethodField" style="display:none;">
 <label for="signupPaymentMethod">Premium payment method</label>
@@ -4223,8 +4228,6 @@ function setAuthMode(mode){
 
     submit.textContent = "Login";
     document.getElementById("signupPackageField").style.display="none";
-    document.getElementById("signupPaymentMethodField").style.display="none";
-    document.getElementById("signupPaymentMethod").required=false;
     document.getElementById("forgotPasswordRow").classList.remove("hidden");
     document.getElementById("authPasswordField").classList.remove("hidden");
     document.getElementById("forgotPasswordForm").classList.add("hidden");
@@ -4247,7 +4250,6 @@ function setAuthMode(mode){
     submit.textContent =
       "Create Account";
     document.getElementById("signupPackageField").style.display="block";
-    toggleSignupPaymentMethod();
     document.getElementById("forgotPasswordRow").classList.add("hidden");
     document.getElementById("authPasswordField").classList.remove("hidden");
     document.getElementById("forgotPasswordForm").classList.add("hidden");
@@ -4303,60 +4305,16 @@ async function submitAuth(){
     }
 
     const chosenPackage=document.getElementById("signupPackage").value;
-    const chosenPaymentMethod=document.getElementById("signupPaymentMethod")?.value || "";
-    const paymentPhone=(document.getElementById("signupPaymentPhone")?.value || "").trim();
-    if(chosenPackage==="premium" && !chosenPaymentMethod){
-      showMessage("authMessage","Please select a payment method for Premium.","error");
-      return;
-    }
-    if(chosenPackage==="premium" && !paymentPhone){
-      showMessage("authMessage","Please enter the mobile-money phone number you will use to pay.","error");
-      return;
-    }
     const {data,error} = await authApi.signUp({
-      email,password,packageName:chosenPackage,
-      options:{data:{artist_name:artistName,package_name:chosenPackage,premium_payment_method:chosenPackage==="premium"?chosenPaymentMethod:null,premium_payment_phone:chosenPackage==="premium"?paymentPhone:null}}
+      email,password,packageName:chosenPackage,options:{data:{artist_name:artistName}}
     });
     if(error) throw error;
 
     const emailNotice=data?.verification_email_sent
       ? " A verification email was sent; check your inbox and spam folder."
       : " The account was created, but the verification email could not be confirmed as sent. Please contact support if it does not arrive.";
-
-    if(chosenPackage === "premium"){
-      // Registration must first establish a valid Worker session and artist row.
-      // Only then request the real payment prompt through the same route used by the dashboard.
-      await authApi.getSession();
-      if(!currentUser || !currentArtist){
-        showMessage("authMessage", "Account created with Premium selected."+emailNotice+" For security, the payment prompt was not started because this signup has no active artist session yet. Verify your email if asked, then sign in and complete Premium payment from your artist dashboard.","success");
-        return;
-      }
-      showMessage("authMessage", "Account created. Requesting your UGX 5,000 Premium payment prompt…", "success");
-      try{
-        const paymentResponse = await fetch("/api/payments/premium-subscription", {
-          method:"POST",
-          credentials:"include",
-          headers:{"Content-Type":"application/json","Accept":"application/json"},
-          body:JSON.stringify({phone_number:paymentPhone,provider:chosenPaymentMethod})
-        });
-        const paymentData = await paymentResponse.json().catch(()=>({}));
-        if(!paymentResponse.ok || paymentData.success === false){
-          const reason = paymentData.error || paymentData.message || "The payment request could not be started.";
-          showMessage("authMessage", "Your account was created, but the payment prompt was not started: "+reason+" You can sign in and retry from the artist dashboard. Please check payment status before retrying if the provider response was uncertain.", "error");
-          return;
-        }
-        const ref = paymentData.reference || "";
-        showMessage("authMessage", "Account created. Your UGX 5,000 Premium payment request was sent to the provider. Check the "+(chosenPaymentMethod === "mtn" ? "MTN" : "Airtel")+" phone and approve the prompt if it arrives. Premium activates only after provider confirmation."+emailNotice, "success");
-        if(ref && typeof refreshPremiumSubscriptionStatus === "function"){
-          setTimeout(()=>{ refreshPremiumSubscriptionStatus(ref); if(typeof beginPremiumPaymentPolling === "function") beginPremiumPaymentPolling(ref); }, 300);
-        }
-      }catch(paymentError){
-        console.error("Signup Premium payment request error:",paymentError);
-        showMessage("authMessage", "Your account was created, but the payment outcome could not be confirmed. Check payment status before retrying to avoid a duplicate charge.", "error");
-      }
-      return;
-    }
-    showMessage("authMessage", "Account created. Your selected package is Free (UGX 0)."+emailNotice,"success");
+    const packageLabels={free:"Free (UGX 0)",premium:"Premium (UGX 5,000 per 30 days; activates after confirmed payment)",hustler:"Hustler (UGX 10,000 per 30 days; activates after confirmed payment)",hit_maker:"Hit Maker (UGX 20,000 per 30 days; activates after confirmed payment)",star:"Star (UGX 30,000 per 30 days; activates after confirmed payment)"};
+    showMessage("authMessage", "Account created. Selected package: "+(packageLabels[chosenPackage]||packageLabels.free)+". Sign in and complete payment for a paid package."+emailNotice,"success");
   }catch(error){
     console.error(error);
     showMessage("authMessage",error.message || "Authentication failed.","error");
@@ -10134,104 +10092,45 @@ document.addEventListener("DOMContentLoaded", async () => {
 /* =========================================================
    PREMIUM SUBSCRIPTION — provider-confirmed only
 ========================================================= */
+const NILE_ARTIST_PACKAGES={free:{label:"Free",amount:0,rate:0.5,uploads:3},premium:{label:"Premium",amount:5000,rate:1,uploads:6},hustler:{label:"Hustler",amount:10000,rate:1,uploads:15},hit_maker:{label:"Hit Maker",amount:20000,rate:2,uploads:Infinity},star:{label:"Star",amount:30000,rate:3,uploads:Infinity}};
+function updateArtistPackageDetails(){
+ const key=document.getElementById("artistPackageChoice")?.value||"free",p=NILE_ARTIST_PACKAGES[key]||NILE_ARTIST_PACKAGES.free;
+ const details=document.getElementById("artistPackageDetails"),button=document.getElementById("premiumSubscribeButton");
+ if(details)details.textContent=`${p.label}: UGX ${p.rate} per play; ${p.uploads===Infinity?"unlimited song uploads":p.uploads+" song uploads per month"}${key==="star"?"; music videos and blue verification tick":key==="premium"?"; premium badge and enhanced profile":""}. Paid packages last 30 days.`;
+ if(button)button.textContent=p.amount?`Pay UGX ${p.amount.toLocaleString("en-US")} with MoMo`:"Free package selected";
+}
 async function refreshPremiumSubscriptionStatus(reference=null, fromPoll=false){
-  const statusEl=document.getElementById("premiumSubscriptionStatus");
-  if(!statusEl) return {status:"unavailable"};
-  if(!currentUser || !currentArtist){
-    updatePremiumSubscriptionCardVisibility(false);
-    return {status:"unavailable",isArtist:false};
-  }
-  updatePremiumSubscriptionCardVisibility(true);
-  try{
-    const url="/api/payments/premium-subscription"+(reference?"?reference="+encodeURIComponent(reference):"");
-    const response=await fetch(url,{method:"GET",credentials:"include",cache:"no-store"});
-    const data=await response.json().catch(()=>({}));
-    if(!response.ok){
-      statusEl.textContent=response.status===401?"Sign in to check or purchase Premium.":(data.error||"Premium status is temporarily unavailable.");
-      return {status:"unavailable"};
-    }
-    const button=document.getElementById("premiumSubscribeButton");
-    if(data.active){
-      const until=data.expiresAt?new Date(data.expiresAt).toLocaleDateString():"the displayed expiry date";
-      statusEl.textContent=reference?`Payment confirmed — you're now a Premium member! Premium is active until ${until}.`:`Premium is active until ${until}.`;
-      if(button)button.textContent="Renew Premium — UGX 5,000";
-    }else if(data.status==="failed"){
-      statusEl.textContent=data.message||"Mobile-money payment failed. Check your wallet balance and transaction limits, then try again.";
-      if(button)button.textContent="Try Premium Again — UGX 5,000";
-    }else if(data.pending){
-      statusEl.textContent=reference
-        ?"Your payment request was accepted by the provider. Check your phone for a mobile-money approval prompt and enter your PIN if it arrives. We’ll show the final result as soon as the provider confirms it."
-        :"A previous mobile-money payment attempt has not received a final status yet. We cannot confirm whether a prompt reached your phone. Please wait while we check this attempt before starting another payment.";
-      if(button)button.textContent="Pay UGX 5,000 with MoMo";
-      if(!fromPoll&&data.reference)beginPremiumPaymentPolling(data.reference);
-    }else{
-      statusEl.textContent="You are on the free plan. Premium is not active yet.";
-      if(button)button.textContent="Pay UGX 5,000 with MoMo";
-    }
-    return data;
-  }catch(e){
-    statusEl.textContent="Could not reach the payment server. No payment status was assumed.";
-    return {status:"unavailable"};
-  }
+ const statusEl=document.getElementById("premiumSubscriptionStatus");if(!statusEl)return {status:"unavailable"};
+ if(!currentUser||!currentArtist){updatePremiumSubscriptionCardVisibility(false);return {status:"unavailable",isArtist:false};}
+ updatePremiumSubscriptionCardVisibility(true);
+ try{
+  const url="/api/payments/premium-subscription"+(reference?"?reference="+encodeURIComponent(reference):"");
+  const response=await fetch(url,{method:"GET",credentials:"include",cache:"no-store"}),data=await response.json().catch(()=>({}));
+  if(!response.ok){statusEl.textContent=data.error||"Package status is temporarily unavailable.";return {status:"unavailable"};}
+  const key=data.packageCode||data.package_code||"premium",p=NILE_ARTIST_PACKAGES[key]||NILE_ARTIST_PACKAGES.premium;
+  if(data.active){statusEl.textContent=`${p.label} is active until ${data.expiresAt?new Date(data.expiresAt).toLocaleDateString():"the expiry date shown"}.`;}
+  else if(data.pending){statusEl.textContent="A mobile-money payment is pending. Approve the prompt on your phone, then wait for provider confirmation.";if(!fromPoll&&data.reference)beginPremiumPaymentPolling(data.reference);}
+  else if(data.status==="failed")statusEl.textContent=data.message||"Payment failed. Check your mobile-money wallet and try again.";
+  else statusEl.textContent="No paid package is currently active. Choose a package above.";
+  const choice=document.getElementById("artistPackageChoice");if(choice&&data.packageCode&&data.active)choice.value=data.packageCode;updateArtistPackageDetails();return data;
+ }catch(e){statusEl.textContent="Could not reach the payment server. No payment status was assumed.";return {status:"unavailable"};}
 }
-function beginPremiumPaymentPolling(reference){
-  if(!reference||window.__nilePremiumPollingReference===reference)return;
-  window.__nilePremiumPollingReference=reference;
-  (async()=>{
-    try{
-      for(let attempt=0;attempt<120;attempt++){
-        await new Promise(resolve=>setTimeout(resolve,3000));
-        const result=await refreshPremiumSubscriptionStatus(reference,true);
-        if(result.status==="active"||result.status==="failed"||result.status==="free")return;
-      }
-      const statusEl=document.getElementById("premiumSubscriptionStatus");
-      if(statusEl&&window.__nilePremiumPollingReference===reference){
-        statusEl.textContent="Payment was initiated successfully, but provider confirmation is taking longer than expected. If you approved the prompt, please wait for confirmation before paying again.";
-      }
-    }finally{
-      if(window.__nilePremiumPollingReference===reference)window.__nilePremiumPollingReference=null;
-    }
-  })();
-}
+function beginPremiumPaymentPolling(reference){if(!reference||window.__nilePremiumPollingReference===reference)return;window.__nilePremiumPollingReference=reference;(async()=>{try{for(let i=0;i<120;i++){await new Promise(r=>setTimeout(r,3000));const x=await refreshPremiumSubscriptionStatus(reference,true);if(["active","failed","free"].includes(x.status))return;}}finally{if(window.__nilePremiumPollingReference===reference)window.__nilePremiumPollingReference=null;}})();}
 async function startPremiumSubscription(){
-  const button=document.getElementById("premiumSubscribeButton");
-  const statusEl=document.getElementById("premiumSubscriptionStatus");
-  if(!currentUser || !currentArtist){
-    updatePremiumSubscriptionCardVisibility(false);
-    if(statusEl) statusEl.textContent="NileSoniQ Premium is available to artist accounts only.";
-    else window.alert("NileSoniQ Premium is available to artist accounts only.");
-    return;
-  }
-  const phone=document.getElementById("premiumPhone")?.value.trim();
-  const provider=document.getElementById("premiumNetwork")?.value;
-  if(!phone){if(statusEl)statusEl.textContent="Enter the mobile-money number to charge.";return;}
-  if(button){button.disabled=true;button.textContent="Requesting payment…";}
-  try{
-    const response=await fetch("/api/payments/premium-subscription",{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({phone_number:phone,provider})});
-    const data=await response.json().catch(()=>({}));
-    const responseStatus=String(data.status||data.transactionStatus||data.paymentStatus||"").toUpperCase().replace(/[\s-]+/g,"_");
-    const responseReason=String(data.message||data.error||data.failureMessage||data.failure_message||data.reason||"");
-    const explicitPaymentFailure=["FAILED","FAILURE","ERROR","EXPIRED","REJECTED","DECLINED","CANCELLED","CANCELED","TIMED_OUT","TIMEOUT","TIME_OUT","INSUFFICIENT_BALANCE","INSUFFICIENT_FUNDS","AUTHORIZATION_FAILED","LIMIT_EXCEEDED"].includes(responseStatus)
-      ||/insufficient[ _-]*(balance|funds)|not enough (money|funds|balance)|low balance|balance too low|transaction limit|daily limit|limit exceeded|payment failed|payment declined/i.test(responseReason);
-    if(!response.ok||data.success===false||explicitPaymentFailure){
-      if(statusEl)statusEl.textContent=responseReason||"Payment failed. Please check your mobile-money balance and try again.";
-      if(data.reference)await refreshPremiumSubscriptionStatus(data.reference);
-      else await refreshPremiumSubscriptionStatus();
-      return;
-    }
-    const reference=data.reference;
-    if(statusEl)statusEl.textContent=data.message||"Payment initiated successfully. Approve the mobile-money prompt on your phone and enter your PIN.";
-    if(reference){
-      await refreshPremiumSubscriptionStatus(reference);
-      beginPremiumPaymentPolling(reference);
-    }else{
-      await refreshPremiumSubscriptionStatus();
-    }
-  }catch(e){
-    if(statusEl)statusEl.textContent="The payment request outcome could not be confirmed. Check the payment status before retrying to avoid duplicate charges.";
-  }finally{
-    if(button){button.disabled=false;if(button.textContent==="Requesting payment…")button.textContent="Pay UGX 5,000 with MoMo";}
-  }
+ const button=document.getElementById("premiumSubscribeButton"),statusEl=document.getElementById("premiumSubscriptionStatus");
+ if(!currentUser||!currentArtist){if(statusEl)statusEl.textContent="Sign in with an artist account before purchasing a package.";return;}
+ const package_code=document.getElementById("artistPackageChoice")?.value||"premium",pkg=NILE_ARTIST_PACKAGES[package_code]||NILE_ARTIST_PACKAGES.premium;
+ if(!pkg.amount){if(statusEl)statusEl.textContent="The Free package does not require payment.";return;}
+ const phone=document.getElementById("premiumPhone")?.value.trim(),provider=document.getElementById("premiumNetwork")?.value;
+ if(!phone){if(statusEl)statusEl.textContent="Enter the mobile-money number to charge.";return;}
+ if(button){button.disabled=true;button.textContent="Requesting payment…";}
+ try{
+  const response=await fetch("/api/payments/premium-subscription",{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({phone_number:phone,provider,package_code})}),data=await response.json().catch(()=>({}));
+  if(!response.ok||data.success===false){if(statusEl)statusEl.textContent=data.message||data.error||"Payment request failed. Please try again.";if(data.reference)await refreshPremiumSubscriptionStatus(data.reference);return;}
+  if(statusEl)statusEl.textContent=data.message||`Approve the UGX ${pkg.amount.toLocaleString("en-US")} mobile-money prompt on your phone.`;
+  if(data.reference){await refreshPremiumSubscriptionStatus(data.reference);beginPremiumPaymentPolling(data.reference);}else await refreshPremiumSubscriptionStatus();
+ }catch(e){if(statusEl)statusEl.textContent="Payment outcome could not be confirmed. Check status before retrying.";}
+ finally{if(button){button.disabled=false;updateArtistPackageDetails();}}
 }
 /* Tap any site image to view it larger; tap the backdrop or Close to dismiss. */
 (function installNileImageViewer(){
