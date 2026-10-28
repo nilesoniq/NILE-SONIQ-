@@ -284,6 +284,145 @@ async function ensureAuthEmailColumns(env) {
   }
 }
 
+async function ensurePendingArtistSignups(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS pending_artist_signups (
+    id TEXT PRIMARY KEY,
+    reference TEXT NOT NULL UNIQUE,
+    email TEXT NOT NULL,
+    password_hash TEXT NOT NULL,
+    artist_name TEXT NOT NULL,
+    phone_number TEXT NOT NULL,
+    provider TEXT NOT NULL,
+    package_code TEXT NOT NULL,
+    amount INTEGER NOT NULL,
+    currency TEXT NOT NULL DEFAULT 'UGX',
+    status TEXT NOT NULL DEFAULT 'pending',
+    provider_transaction_id TEXT,
+    failure_message TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    completed_at TEXT,
+    user_id TEXT
+  )`).run();
+}
+
+async function paidSignupRoute(request, env) {
+  await ensurePendingArtistSignups(env);
+  if (request.method === "GET") {
+    const reference = String(new URL(request.url).searchParams.get("reference") || "").trim();
+    if (!/^NILESONIQ-SIGNUP-[A-F0-9-]{20,80}$/i.test(reference)) return error("A valid payment reference is required", 422);
+    const row = await env.DB.prepare("SELECT status, failure_message FROM pending_artist_signups WHERE reference = ? LIMIT 1").bind(reference).first();
+    if (!row) return error("Payment request not found", 404);
+    return json({status: row.status, message: row.status === "completed" ? "Payment confirmed. Your account was created and a verification email was sent if email delivery is available." : row.status === "failed" ? (row.failure_message || "Payment failed.") : "Payment is still pending confirmation."});
+  }
+  if (request.method !== "POST") return error("Method not allowed", 405);
+  const body = await readBody(request);
+  const email = String(body.email || "").trim().toLowerCase();
+  const password = String(body.password || "");
+  const artistName = String(body.artist_name || body.name || "").trim();
+  const packageCode = String(body.package_code || "").trim().toLowerCase();
+  const provider = String(body.provider || "").trim().toLowerCase();
+  const phone = normalizeUgandanPhone(body.phone_number || body.phoneNumber);
+  const prices = {premium:5000,hustler:10000,hit_maker:20000,star:30000};
+  const amount = prices[packageCode];
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return error("Please enter a valid email address.", 422);
+  if (password.length < 6 || password.length > 128) return error("Password must be between 6 and 128 characters.", 422);
+  if (!artistName || artistName.length > 100) return error("Please enter a valid artist name.", 422);
+  if (!amount) return error("Choose a valid paid artist package.", 422);
+  if (!/^\+256\d{9}$/.test(phone)) return error("Enter a valid Ugandan mobile-money number.", 422);
+  if (!["mtn","airtel"].includes(provider)) return error("Provider must be MTN or Airtel.", 422);
+  const existing = await env.DB.prepare("SELECT id FROM auth_users WHERE lower(email)=? AND deleted_at IS NULL LIMIT 1").bind(email).first();
+  if (existing) return error("An account with that email already exists.", 409);
+  const activePending = await env.DB.prepare("SELECT reference FROM pending_artist_signups WHERE lower(email)=? AND status='pending' ORDER BY created_at DESC LIMIT 1").bind(email).first();
+  if (activePending) return error(`A payment request is already pending for this email. Reference: ${activePending.reference}. Please do not pay again.`, 409);
+  const apiKey = env.PESAJET_API_KEY || env.PESAJET_TOKEN;
+  const baseUrl = String(env.PESAJET_API_BASE_URL || "https://payments.pesajet.com/api/v1").replace(/\/+$/, "");
+  if (!apiKey) return error("Payment service is not configured.", 503);
+  const reference = `NILESONIQ-SIGNUP-${crypto.randomUUID().replace(/-/g, "").toUpperCase()}`;
+  const id = crypto.randomUUID();
+  const passwordHash = await bcrypt.hash(password, 10);
+  await env.DB.prepare(`INSERT INTO pending_artist_signups (id,reference,email,password_hash,artist_name,phone_number,provider,package_code,amount,currency,status) VALUES (?,?,?,?,?,?,?,?,?,'UGX','pending')`)
+    .bind(id,reference,email,passwordHash,artistName,phone,provider,packageCode,amount).run();
+  let response, result;
+  try {
+    response = await fetch(`${baseUrl}/payments`, {method:"POST",headers:{"Content-Type":"application/json","X-API-Key":apiKey},body:JSON.stringify({type:"COLLECTION",amount,currency:"UGX",phoneNumber:phone,provider,reference,description:`NileSoniQ ${packageCode} artist signup`,idempotencyKey:`nilesoniq-${reference}`})});
+    result = await response.json().catch(()=>({}));
+  } catch (e) {
+    console.error("Paid signup payment request outcome uncertain:",e.message);
+    return error(`Payment request outcome is uncertain. It remains pending; do not pay again. Reference: ${reference}`,502);
+  }
+  const data = result?.data && typeof result.data === "object" ? result.data : {};
+  const tx = result?.transaction && typeof result.transaction === "object" ? result.transaction : (data?.transaction && typeof data.transaction === "object" ? data.transaction : data);
+  const statuses = [tx?.status,tx?.transactionStatus,tx?.paymentStatus,data?.status,result?.status].filter(Boolean).map(v=>String(v).toUpperCase().replace(/[\s-]+/g,"_"));
+  const providerId = String(tx?.transactionId || tx?.transaction_id || data?.transactionId || result?.transactionId || "");
+  const failure = !response.ok || result?.success === false || data?.success === false || result?.error || data?.error || statuses.some(s=>["FAILED","FAILURE","ERROR","EXPIRED","REJECTED","DECLINED","CANCELLED","CANCELED","TIMED_OUT","TIMEOUT"].includes(s));
+  if (failure) {
+    const reason = String(result?.message || result?.error?.message || data?.message || "Payment provider rejected the request.");
+    await env.DB.prepare("UPDATE pending_artist_signups SET status='failed',failure_message=? WHERE reference=? AND status='pending'").bind(reason.slice(0,300),reference).run();
+    return error(reason, response.status >= 400 && response.status < 500 ? response.status : 502);
+  }
+  await env.DB.prepare("UPDATE pending_artist_signups SET provider_transaction_id=? WHERE reference=? AND status='pending'").bind(providerId,reference).run();
+  return json({success:true,status:"pending",reference,amount,currency:"UGX",package_code:packageCode,message:`Payment prompt requested for UGX ${amount}. Approve it on your phone. Your account and verification email will be created only after a verified successful payment.`},202);
+}
+
+async function completePaidArtistSignup(env, reference, status, transactionId, amount, currency, failureMessage="") {
+  await ensurePendingArtistSignups(env);
+  const row = await env.DB.prepare("SELECT * FROM pending_artist_signups WHERE reference=? LIMIT 1").bind(reference).first();
+  if (!row) return {matched:false};
+  if (row.status !== "pending") return {matched:true,changed:false,reason:"already_processed"};
+  const incomingTx = String(transactionId || "");
+  if (row.provider_transaction_id && incomingTx && row.provider_transaction_id !== incomingTx) return {matched:true,changed:false,reason:"transaction_id_mismatch"};
+  if (isSuccessfulPaymentStatus(status)) {
+    if (Number(amount) !== Number(row.amount) || String(currency || "").toUpperCase() !== "UGX") {
+      console.error("Paid signup payment amount/currency mismatch",{reference,expectedAmount:row.amount,receivedAmount:amount,receivedCurrency:currency});
+      return {matched:true,changed:false,reason:"amount_currency_mismatch"};
+    }
+    // Atomically claim this payment before creating anything. Duplicate/concurrent
+    // PesaJet webhooks cannot both create an account for the same reference.
+    const claim = await env.DB.prepare("UPDATE pending_artist_signups SET status='processing', provider_transaction_id=COALESCE(NULLIF(?,''),provider_transaction_id) WHERE reference=? AND status='pending'").bind(incomingTx,reference).run();
+    if (!claim?.meta || Number(claim.meta.changes || 0) !== 1) {
+      return {matched:true,changed:false,reason:"already_processing_or_processed"};
+    }
+    const existing = await env.DB.prepare("SELECT id FROM auth_users WHERE lower(email)=? AND deleted_at IS NULL LIMIT 1").bind(String(row.email).toLowerCase()).first();
+    if (existing) {
+      await env.DB.prepare("UPDATE pending_artist_signups SET status='failed',failure_message='An account with this email already exists.' WHERE reference=? AND status='processing'").bind(reference).run();
+      return {matched:true,changed:false,reason:"email_already_registered"};
+    }
+    const userId = crypto.randomUUID();
+    const artistId = crypto.randomUUID();
+    const metadata = JSON.stringify({artist_name:row.artist_name,package_name:row.package_code});
+    const token = crypto.randomUUID()+crypto.randomUUID().replace(/-/g,"");
+    const expiry = new Date(Date.now()+30*24*60*60*1000).toISOString();
+    const subscriptionId = crypto.randomUUID();
+    const subscriptionReference = `NILESONIQ-SIGNUP-SUB-${reference}`;
+    // Account, artist, package entitlement record, and payment completion commit together.
+    try {
+      await env.DB.batch([
+        env.DB.prepare(`INSERT INTO auth_users (id,email,encrypted_password,phone,raw_user_meta_data,confirmation_token,confirmation_sent_at,created_at,updated_at,is_anonymous,is_sso_user) VALUES (?,?,?,?,?,?,datetime('now'),datetime('now'),datetime('now'),0,0)`).bind(userId,row.email,row.password_hash,row.phone_number,metadata,token),
+        env.DB.prepare("INSERT INTO artists (id,user_id,name) VALUES (?,?,?)").bind(artistId,userId,row.artist_name),
+        env.DB.prepare(`INSERT INTO premium_subscriptions (id,user_id,artist_id,amount,currency,provider,phone_number,reference,status,created_at,paid_at,expires_at,provider_transaction_id,package_name) VALUES (?,?,?,?,'UGX',?,?,?,'active',datetime('now'),datetime('now'),?,?,?)`).bind(subscriptionId,userId,artistId,row.amount,row.provider,row.phone_number,subscriptionReference,expiry,incomingTx,row.package_code),
+        env.DB.prepare("UPDATE pending_artist_signups SET status='completed',provider_transaction_id=COALESCE(NULLIF(?,''),provider_transaction_id),completed_at=datetime('now'),user_id=? WHERE reference=? AND status='processing'").bind(incomingTx,userId,reference)
+      ]);
+    } catch (e) {
+      // Allow a retry if account/profile creation failed before the batch committed.
+      const user = await env.DB.prepare("SELECT id FROM auth_users WHERE lower(email)=? AND deleted_at IS NULL LIMIT 1").bind(String(row.email).toLowerCase()).first().catch(()=>null);
+      if (!user) await env.DB.prepare("UPDATE pending_artist_signups SET status='pending' WHERE reference=? AND status='processing'").bind(reference).run().catch(()=>{});
+      throw e;
+    }
+    const verificationUrl = `https://nilesoniq.com/api/auth/verify-email?token=${encodeURIComponent(token)}`;
+    try {
+      await sendResendEmail(env,{to:row.email,subject:"Verify your NileSoniQ email",text:`Hello ${row.artist_name},\n\nYour payment was confirmed and your NileSoniQ artist account has been created. Verify your email here: ${verificationUrl}\n\nThis link expires in 24 hours.`,html:`<div style="font-family:Arial,sans-serif;line-height:1.6;color:#222"><h2>Payment confirmed — welcome to NileSoniQ</h2><p>Hello ${String(row.artist_name).replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]))},</p><p>Your payment was confirmed and your artist account has been created. Verify your email address to continue.</p><p><a href="${verificationUrl}" style="display:inline-block;background:#ff7a00;color:#fff;padding:12px 18px;text-decoration:none;border-radius:6px">Verify email address</a></p><p>This link expires in 24 hours.</p></div>`});
+    } catch (e) { console.error("Paid signup verification email could not be sent:",e.message); }
+    try {
+      await syncArtistPremiumEntitlement(env,userId,artistId);
+    } catch (e) { console.error("Paid signup subscription was saved, but artist entitlement sync failed:",e.message); }
+    return {matched:true,changed:true,reason:"verified_success"};
+  }
+  if (["FAILED","FAILURE","ERROR","EXPIRED","REJECTED","DECLINED","CANCELLED","CANCELED","TIMED_OUT","TIMEOUT","TIME_OUT","INSUFFICIENT_BALANCE","INSUFFICIENT_FUNDS","AUTHORIZATION_FAILED","LIMIT_EXCEEDED"].includes(String(status||"").toUpperCase())) {
+    await env.DB.prepare("UPDATE pending_artist_signups SET status='failed',provider_transaction_id=COALESCE(NULLIF(?,''),provider_transaction_id),failure_message=? WHERE reference=? AND status='pending'").bind(incomingTx,String(failureMessage||status).slice(0,300),reference).run();
+  }
+  return {matched:true,changed:false,reason:"non_success_status"};
+}
+
 async function authRoute(request, env, path) {
   const url = new URL(request.url);
 
@@ -2021,6 +2160,30 @@ async function rpcRoute(request, env, name) {
   }
 }
 
+async function uploadPreflightRoute(request, env) {
+  if (request.method !== "POST") return error("Method not allowed",405);
+  const user = await currentUser(request,env);
+  if (!user) return error("Authentication required",401);
+  const body = await readBody(request);
+  const audioSize = Number(body.audio_size || 0);
+  const coverSize = Number(body.cover_size || 0);
+  if (!Number.isSafeInteger(audioSize) || audioSize <= 0 || audioSize > 50*1024*1024) return error("Audio file must be between 1 byte and 50 MB.",413);
+  if (!Number.isSafeInteger(coverSize) || coverSize <= 0 || coverSize > 5*1024*1024) return error("Cover image must be between 1 byte and 5 MB.",413);
+  const artist = await env.DB.prepare("SELECT id FROM artists WHERE user_id=? LIMIT 1").bind(user.id).first();
+  if (!artist) return error("Artist profile not found.",403);
+  let packageCode = "free";
+  try {
+    const sub = await env.DB.prepare(`SELECT package_name FROM premium_subscriptions WHERE user_id=? AND lower(status)='active' AND expires_at IS NOT NULL AND datetime(expires_at)>datetime('now') ORDER BY datetime(expires_at) DESC LIMIT 1`).bind(user.id).first();
+    if (sub?.package_name) packageCode = String(sub.package_name).toLowerCase();
+  } catch {}
+  const limits = {free:3,premium:6,hustler:15,hit_maker:Number.MAX_SAFE_INTEGER,star:Number.MAX_SAFE_INTEGER};
+  const limit = limits[packageCode] ?? 3;
+  const count = await env.DB.prepare(`SELECT COUNT(*) AS total FROM songs WHERE artist_id=? AND datetime(created_at)>=datetime('now','start of month')`).bind(user.id).first();
+  const used = Number(count?.total || 0);
+  if (used >= limit) return error(`Your ${packageCode.replace('_',' ')} package upload limit has been reached (${used}/${limit} songs this month). No files were uploaded.`,429);
+  return json({allowed:true,package_code:packageCode,used,limit:limit===Number.MAX_SAFE_INTEGER?null:limit,remaining:limit===Number.MAX_SAFE_INTEGER?null:limit-used});
+}
+
 async function storageRoute(request, env, path) {
   const parts = path.split("/");
   const bucket = parts[3];
@@ -2173,7 +2336,11 @@ async function storageRoute(request, env, path) {
       );
     }
 
+    const contentLength = Number(request.headers.get("Content-Length") || 0);
+    const maxBytes = bucket === "audio" ? 50*1024*1024 : bucket === "covers" ? 5*1024*1024 : 5*1024*1024;
+    if (contentLength > maxBytes) return error(`${bucket === "audio" ? "Audio" : "Image"} file exceeds the ${Math.floor(maxBytes/1024/1024)} MB limit.`,413);
     const bytes = await request.arrayBuffer();
+    if (!bytes.byteLength || bytes.byteLength > maxBytes) return error(`${bucket === "audio" ? "Audio" : "Image"} file must be between 1 byte and ${Math.floor(maxBytes/1024/1024)} MB.`,413);
 
     await env.MEDIA_BUCKET.put(
       `${bucket}/${objectPath}`,
@@ -2892,6 +3059,13 @@ async function paymentWebhookRoute(request, env) {
   }
 
   try {
+    const paidSignupResult = reference.startsWith("NILESONIQ-SIGNUP-")
+      ? await completePaidArtistSignup(env, reference, status, transactionId, webhookPayment.amount, webhookPayment.currency,
+          payload?.message || payload?.description || payload?.reason || payload?.failureMessage || payload?.failure_message || "")
+      : { matched: false };
+    if (paidSignupResult.matched) {
+      console.info("NileSoniQ paid signup webhook processed.",{reference,status,changed:Boolean(paidSignupResult.changed),reason:paidSignupResult.reason||null});
+    }
     // A reference belongs to one transaction table; the unmatched update is a no-op.
     await applyPlatformPaymentStatus(
       env,
