@@ -2884,6 +2884,12 @@ id="authPassword"
 type="password"
 placeholder="Password">
 
+<div style="text-align:right;margin-top:8px;">
+  <button type="button" onclick="forgotPassword()" style="background:none;border:0;padding:4px 0;color:#ff7a00;text-decoration:underline;cursor:pointer;font:inherit;">
+    Forgot password?
+  </button>
+</div>
+
 </div>
 
 <button id="authSubmit"
@@ -4181,6 +4187,34 @@ function setAuthMode(mode){
 }
 
 
+async function forgotPassword(){
+  const emailField = document.getElementById("authEmail");
+  const email = emailField.value.trim();
+
+  if(!email){
+    showMessage("authMessage","Enter your email address first, then tap Forgot password again.","error");
+    emailField.focus();
+    return;
+  }
+
+  try{
+    const response = await fetch(`${AUTH_API}/forgot-password`, {
+      method:"POST",
+      credentials:"include",
+      headers:{"Content-Type":"application/json","Accept":"application/json"},
+      body:JSON.stringify({email})
+    });
+    const data = await response.json().catch(()=>({}));
+    if(!response.ok || data.success === false){
+      throw new Error(data.error || data.message || "Could not request a password reset. Please try again.");
+    }
+    showMessage("authMessage",data.message || "If an account matches that email, a password reset link will be sent. Check your inbox and spam/junk folder.","success");
+  }catch(error){
+    console.error("Password reset request failed:",error);
+    showMessage("authMessage",error.message || "Could not request a password reset. Please try again.","error");
+  }
+}
+
 async function submitAuth(){
   const email = document.getElementById("authEmail").value.trim();
   const password = document.getElementById("authPassword").value;
@@ -4227,7 +4261,7 @@ async function submitAuth(){
     });
     if(error) throw error;
 
-    showMessage("authMessage", data?.session ? "Account created successfully. You can now use NileSoniq." : "Account created successfully. Please log in.","success");
+    showMessage("authMessage", data?.session ? "Account created successfully. You can now use NileSoniq." : "Account created. Check your email inbox and spam/junk folder for a NileSoniq verification link before logging in. Open the link to verify your email, then return here to log in.","success");
   }catch(error){
     console.error(error);
     showMessage("authMessage",error.message || "Authentication failed.","error");
