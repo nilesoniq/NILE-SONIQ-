@@ -4515,11 +4515,23 @@ function toggleSongUpload(){
   if(opening) form.scrollIntoView({behavior:"smooth",block:"start"});
 }
 
+function getArtistPackageBadgeLabel(artist){
+  const key = String(artist && artist.package_name || "premium").trim().toLowerCase().replace(/[ -]+/g, "_");
+  const packages = {
+    premium: "PREMIUM",
+    hustler: "HUSTLER",
+    hit_maker: "HIT MAKER",
+    star: "STAR"
+  };
+  return packages[key] || "PREMIUM";
+}
+
 function isArtistPremiumActive(artist){
   if(!artist) return false;
   const flag = artist.is_premium === true || artist.is_premium === 1 || artist.is_premium === "1";
-  if(!flag || !artist.premium_expiry_date) return false;
-  const expiry = Date.parse(artist.premium_expiry_date);
+  const expiryValue = artist.premium_expiry_date || artist.package_expiry_date;
+  if(!flag || !expiryValue) return false;
+  const expiry = Date.parse(expiryValue);
   return Number.isFinite(expiry) && expiry > Date.now();
 }
 
@@ -4534,7 +4546,10 @@ function renderDashboardArtistProfile(artist){
   const avatarEl = document.getElementById("dashboardArtistAvatar");
   if(nameEl) nameEl.textContent = name;
   const premiumBadge=document.getElementById("dashboardArtistPremiumBadge");
-  if(premiumBadge) premiumBadge.style.display=isArtistPremiumActive(artist)?"inline-flex":"none";
+  if(premiumBadge){
+    premiumBadge.textContent = "★ " + getArtistPackageBadgeLabel(artist) + " ARTIST";
+    premiumBadge.style.display = isArtistPremiumActive(artist) ? "inline-flex" : "none";
+  }
   if(locationEl) locationEl.textContent = location === "Add your location" ? location : "📍 " + location;
   if(bioEl) bioEl.textContent = bio;
   if(avatarEl){
@@ -6692,7 +6707,7 @@ async function openArtistProfile(artistId, fromPublicRoute=false){
 
           <h2>
             ${escapeHtml(artist.name || "Unknown Artist")}
-            ${isArtistPremiumActive(artist) ? '<span class="nilesoniq-premium-badge" aria-label="Active Premium artist">★ PREMIUM</span>' : ''}
+            ${isArtistPremiumActive(artist) ? '<span class="nilesoniq-premium-badge" aria-label="Active ' + escapeHtml(getArtistPackageBadgeLabel(artist)) + ' artist">★ ' + escapeHtml(getArtistPackageBadgeLabel(artist)) + '</span>' : ''}
           </h2>
 
           <p class="artist-profile-location">
@@ -7375,7 +7390,7 @@ async function loadArtists(){
           </div>
           <div class="artist-avatar">${avatar}</div>
           <h3>${escapeHtml(artist.name || "Unknown Artist")}</h3>
-          ${isArtistPremiumActive(artist) ? '<div class="nilesoniq-premium-badge" aria-label="Active Premium artist">★ PREMIUM ARTIST</div>' : ''}
+          ${isArtistPremiumActive(artist) ? '<div class="nilesoniq-premium-badge" aria-label="Active ' + escapeHtml(getArtistPackageBadgeLabel(artist)) + ' artist">★ ' + escapeHtml(getArtistPackageBadgeLabel(artist)) + ' ARTIST</div>' : ''}
           <p>${escapeHtml(artist.location || "Uganda")}</p>
         </div>`;
     }).join("");
