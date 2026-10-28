@@ -967,6 +967,28 @@ footer{
 }
 
 /* MODAL */
+/* MOBILE AUTH FORM: keep the full registration form reachable on short phone screens */
+#authModal{overflow-y:auto;overscroll-behavior:contain;}
+#authModal .modal-box{max-height:calc(100dvh - 24px);overflow-y:auto;overscroll-behavior:contain;margin:auto;}
+#authModal .modal-header{margin-bottom:12px;}
+#authModal .modal-box .field{margin-bottom:10px;}
+#authModal .modal-box input,
+#authModal .modal-box select{min-height:40px;padding:9px 11px;font-size:15px;}
+#authModal .modal-box p{line-height:1.35;}
+#authModal .modal-box .auth-tabs{margin-bottom:12px;}
+@media(max-width:600px){
+  #authModal{padding:8px;align-items:flex-start;}
+  #authModal .modal-box{width:100%;max-width:450px;max-height:calc(100dvh - 16px);padding:14px;border-radius:15px;margin:0 auto;}
+  #authModal .modal-header{margin-bottom:9px;}
+  #authModal .modal-header h2{font-size:20px;}
+  #authModal .modal-box .field{margin-bottom:8px;}
+  #authModal .modal-box .field p{font-size:11px!important;margin-top:4px!important;margin-bottom:0;}
+  #authModal .modal-box label{font-size:13px;}
+  #authModal .modal-box input,
+  #authModal .modal-box select{min-height:37px;padding:8px 10px;font-size:14px;}
+  #authModal .modal-box button{max-width:100%;}
+}
+
 
 .modal{
   display:none;
