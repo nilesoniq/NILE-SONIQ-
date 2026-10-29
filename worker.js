@@ -7,6 +7,7 @@ const EARNINGS_PER_PLAY = 0.5;
 const ARTIST_COMMISSION_RATE = 0.20;
 const ARTIST_TAX_ALLOCATION_RATE = 0.05;
 const ARTIST_NET_RATE = 1 - ARTIST_COMMISSION_RATE - ARTIST_TAX_ALLOCATION_RATE;
+const ARTIST_FREE_NET_PER_PLAY = EARNINGS_PER_PLAY * ARTIST_NET_RATE;
 const WITHDRAWAL_MINIMUM = 10000;
 // Rollout cutoff is stored in UTC because SQLite datetime('now') is UTC.
 // Songs created before this cutoff remain stored and are excluded from the
@@ -1311,6 +1312,13 @@ async function dbRoute(request, env, path) {
                   FROM songs
                   WHERE artist_id = ? AND approved = 1
                 ), 0) * ?
+                + COALESCE((
+                  SELECT SUM(net_amount - ?)
+                  FROM artist_earning_ledger
+                  WHERE artist_id = ?
+                    AND source_type = 'qualified_play'
+                    AND status = 'posted'
+                ), 0)
                 - COALESCE((
                   SELECT SUM(amount)
                   FROM withdrawal_requests
@@ -1330,7 +1338,9 @@ async function dbRoute(request, env, path) {
               newRow.created_at,
               amount,
               user.id,
-              (EARNINGS_PER_PLAY * ARTIST_NET_RATE),
+              ARTIST_FREE_NET_PER_PLAY,
+              ARTIST_FREE_NET_PER_PLAY,
+              user.id,
               user.id
             ).run();
 
@@ -1942,6 +1952,20 @@ async function rpcRoute(request, env, name) {
   const admin = user ? await getAdmin(env, user) : null;
 
   try {
+    if (name === "get_artist_earnings_adjustment") {
+      if (!user) {
+        return error("Authentication required", 401);
+      }
+      const result = await env.DB.prepare(`
+        SELECT COALESCE(SUM(net_amount - ?), 0) AS adjustment
+        FROM artist_earning_ledger
+        WHERE artist_id = ?
+          AND source_type = 'qualified_play'
+          AND status = 'posted'
+      `).bind(ARTIST_FREE_NET_PER_PLAY, user.id).first();
+      return json({ data: Number(result?.adjustment || 0), error: null });
+    }
+
     if (name === "get_platform_completed_total") {
       if (!admin || admin.role !== "super_admin") {
         return error("Super Admin access required", 403);
@@ -2105,9 +2129,9 @@ async function rpcRoute(request, env, name) {
       const incremented = Number(results?.[1]?.meta?.changes || 0) > 0;
 
       // Keep a per-qualified-play artist earnings audit trail. The unique event
-      // key makes retries safe; this records the agreed 20% commission and 5%
-      // tax allocation against gross earnings of UGX 0.50 per counted play.
-      // Existing historical plays are not silently backfilled or rewritten.
+      // key makes retries safe. The package rate is read from the latest active,
+      // unexpired subscription, so an expired package automatically falls back
+      // to Free for new plays. Existing historical plays are not rewritten.
       if (inserted && incremented) {
         const playLogId = Number(results?.[0]?.meta?.last_row_id || 0);
         if (playLogId > 0) {
@@ -2116,14 +2140,27 @@ async function rpcRoute(request, env, name) {
           ).bind(id).first();
           const artistId = String(song?.artist_id || "").trim();
           if (artistId) {
-            const artistPackage = await env.DB.prepare(`
-              SELECT package_name FROM artists WHERE id = ? LIMIT 1
+            const activePackage = await env.DB.prepare(`
+              SELECT package_name
+              FROM premium_subscriptions
+              WHERE user_id = ?
+                AND lower(status) = 'active'
+                AND expires_at IS NOT NULL
+                AND datetime(expires_at) > datetime('now')
+              ORDER BY datetime(COALESCE(paid_at, created_at)) DESC,
+                       datetime(created_at) DESC,
+                       datetime(expires_at) DESC
+              LIMIT 1
             `).bind(artistId).first();
+            const packageCode = String(activePackage?.package_name || 'free')
+              .trim().toLowerCase().replace(/[ -]+/g, '_');
             const earningRates = { free: 0.5, premium: 1, hustler: 1, hit_maker: 2, star: 3 };
-            const gross = earningRates[String(artistPackage?.package_name || 'free').toLowerCase()] ?? EARNINGS_PER_PLAY;
-            const commission = Math.round(gross * ARTIST_COMMISSION_RATE * 100) / 100;
-            const tax = Math.round(gross * ARTIST_TAX_ALLOCATION_RATE * 100) / 100;
-            const net = Math.round((gross - commission - tax) * 100) / 100;
+            const gross = earningRates[packageCode] ?? EARNINGS_PER_PLAY;
+            // Keep mill-UGX precision so Free net earnings remain 0.375 rather
+            // than rounding each play down to 0.37 before the balance is summed.
+            const commission = Math.round(gross * ARTIST_COMMISSION_RATE * 1000) / 1000;
+            const tax = Math.round(gross * ARTIST_TAX_ALLOCATION_RATE * 1000) / 1000;
+            const net = Math.round((gross - commission - tax) * 1000) / 1000;
             await env.DB.prepare(`
               INSERT OR IGNORE INTO artist_earning_ledger
                 (event_key, artist_id, source_type, source_id, gross_amount,
