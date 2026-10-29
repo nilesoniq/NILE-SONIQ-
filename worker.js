@@ -8,10 +8,11 @@ const ARTIST_COMMISSION_RATE = 0.20;
 const ARTIST_TAX_ALLOCATION_RATE = 0.05;
 const ARTIST_NET_RATE = 1 - ARTIST_COMMISSION_RATE - ARTIST_TAX_ALLOCATION_RATE;
 const WITHDRAWAL_MINIMUM = 10000;
-// Package limits apply to new uploads from this date onward. Songs uploaded
-// before the rollout remain stored and are grandfathered out of the initial
-// October 2026 monthly count; no existing song is deleted or changed.
-const PACKAGE_LIMITS_EFFECTIVE_AT = "2026-10-29 00:00:00";
+// Rollout cutoff is stored in UTC because SQLite datetime('now') is UTC.
+// Songs created before this cutoff remain stored and are excluded from the
+// rollout month's upload count. No existing song is deleted or changed.
+// 2026-10-29 07:48 UTC = 10:48 AM Uganda time.
+const PACKAGE_LIMITS_EFFECTIVE_AT = "2026-10-29 07:48:00";
 const ARTIST_PACKAGE_UPLOAD_LIMITS = Object.freeze({
   free: 3,
   premium: 6,
@@ -1239,14 +1240,14 @@ async function dbRoute(request, env, path) {
             ) < ?
           `).bind(
             ...insertKeys.map(k => safeRow[k] ?? null),
-            PACKAGE_LIMITS_EFFECTIVE_AT,
-            PACKAGE_LIMITS_EFFECTIVE_AT,
             user.id,
+            PACKAGE_LIMITS_EFFECTIVE_AT,
+            PACKAGE_LIMITS_EFFECTIVE_AT,
             uploadLimit
           ).run();
 
           if (Number(insertResult?.meta?.changes || 0) === 0) {
-            const limitLabel = uploadLimit >= 2147483647 ? 'unlimited' : String(uploadLimit);
+            const limitLabel = uploadLimit >= Number.MAX_SAFE_INTEGER ? 'unlimited' : String(uploadLimit);
             return error(
               `Monthly song upload limit reached for your ${packageCode} package (${limitLabel} songs per month). Upgrade or try again next month.`,
               429
