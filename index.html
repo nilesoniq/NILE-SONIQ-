@@ -7516,156 +7516,69 @@ function toggleArtistsList(){
 ========================================================= */
 
 async function loadMySongs(){
+  if(!currentUser) return;
 
-  if(!currentUser){
-    return;
-  }
-
-
-  const tbody =
-    document.getElementById(
-      "mySongsTable"
-    );
-
-
-  if(!tbody){
-    return;
-  }
-
+  const tbody = document.getElementById("mySongsTable");
+  if(!tbody) return;
 
   tbody.innerHTML = `
-    <tr>
-      <td colspan="4">
-        <div class="loading">
-          Loading your songs...
-        </div>
-      </td>
-    </tr>
+    <tr><td colspan="4"><div class="loading">Loading your songs...</div></td></tr>
   `;
 
-
   try{
-
-    const artistIds = [...new Set([currentUser?.id, currentArtist?.id].filter(Boolean).map(String))];
-    const songResults = await Promise.all(artistIds.map(id =>
-      sb.from("songs").select("*").eq("artist_id", id).order("created_at", {ascending:false})
-    ));
-    const successfulResults = songResults.filter(result => !result.error);
-    if(!successfulResults.length && songResults.some(result => result.error)){
-      throw songResults.find(result => result.error).error;
+    // Use the authenticated Cloudflare Worker endpoint so the song list, play
+    // counts, package-adjusted earnings, and available balance share one source.
+    const response = await fetch("/api/artist/dashboard", {
+      method: "GET",
+      credentials: "include",
+      headers: { "Accept": "application/json" },
+      cache: "no-store"
+    });
+    const payload = await response.json().catch(() => ({}));
+    if(!response.ok || payload.error || !payload.data){
+      throw new Error(payload.error || payload.message || `Could not load artist dashboard (HTTP ${response.status}).`);
     }
 
-    const songMap = new Map();
-    successfulResults.forEach(result => (result.data || []).forEach(song => {
-      const key = String(song.id || `${song.artist_id || ""}:${song.title || ""}:${song.created_at || ""}`);
-      if(!songMap.has(key)) songMap.set(key, song);
-    }));
-    const songs = [...songMap.values()].sort((a,b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
-
+    const songs = Array.isArray(payload.data.songs) ? payload.data.songs : [];
+    const stats = payload.data.stats || {};
     window.nileSoniqArtistSongs = songs;
 
-
     if(!songs.length){
-
       tbody.innerHTML = `
-        <tr>
-          <td colspan="4">
-            <div class="empty">
-              You have not uploaded any songs yet.
-            </div>
-          </td>
-        </tr>
+        <tr><td colspan="4"><div class="empty">You have not uploaded any songs yet.</div></td></tr>
       `;
-
     }else{
-
-      tbody.innerHTML =
-        songs.map(song => {
-
-          const approved = isSongApproved(song);
-
-
-          return `
-            <tr>
-
-              <td>
-                ${escapeHtml(
-                  song.title ||
-                  "Untitled"
-                )}
-              </td>
-
-              <td>
-                ${formatNumber(
-                  song.plays || 0
-                )}
-              </td>
-
-              <td>
-                ${formatNumber(
-                  song.likes || 0
-                )}
-              </td>
-
-              <td>
-
-                <span class="status ${
-                  approved
-                  ? "approved"
-                  : "pending"
-                }">
-
-                  ${
-                    approved
-                    ? "Approved"
-                    : "Pending"
-                  }
-
-                </span>
-
-              </td>
-
-            </tr>
-          `;
-
-        }).join("");
-
+      tbody.innerHTML = songs.map(song => {
+        const approved = isSongApproved(song) || String(song.review_status || "").toLowerCase() === "approved";
+        const status = approved ? "Approved" : (String(song.review_status || "").toLowerCase() === "rejected" ? "Rejected" : "Pending");
+        return `
+          <tr>
+            <td>${escapeHtml(song.title || "Untitled")}</td>
+            <td>${formatNumber(song.plays || 0)}</td>
+            <td>${formatNumber(song.likes || 0)}</td>
+            <td><span class="status ${approved ? "approved" : "pending"}">${status}</span></td>
+          </tr>
+        `;
+      }).join("");
     }
 
-
-    await updateDashboardStats(
-      songs
-    );
-
-    await updateAvailableBalance();
-
+    const totalPlaysEl = document.getElementById("totalPlays");
+    const totalSongsEl = document.getElementById("totalSongs");
+    const totalEarningsEl = document.getElementById("totalEarnings");
+    const availableBalanceEl = document.getElementById("availableBalance");
+    const amountWithdrawnEl = document.getElementById("amountWithdrawn");
+    if(totalPlaysEl) totalPlaysEl.textContent = formatNumber(stats.totalPlays || 0);
+    if(totalSongsEl) totalSongsEl.textContent = formatNumber(stats.totalSongs ?? songs.length);
+    if(totalEarningsEl) totalEarningsEl.textContent = "UGX " + formatNumber(Math.floor(Number(stats.earnings || 0)));
+    if(availableBalanceEl) availableBalanceEl.textContent = "UGX " + formatNumber(Math.floor(Number(stats.availableBalance || 0)));
+    if(amountWithdrawnEl) amountWithdrawnEl.textContent = "UGX " + formatNumber(Math.floor(Number(stats.amountWithdrawn || 0)));
   }catch(error){
-
-    console.error(
-      "My songs error:",
-      error
-    );
-
-
+    console.error("My songs/dashboard error:", error);
     tbody.innerHTML = `
-      <tr>
-        <td colspan="4">
-          <div class="empty">
-            ${escapeHtml(
-              error.message ||
-              "Could not load songs."
-            )}
-          </div>
-        </td>
-      </tr>
+      <tr><td colspan="4"><div class="empty">${escapeHtml(error.message || "Could not load your songs and earnings.")}</div></td></tr>
     `;
-
-    await updateAvailableBalance();
-
   }
-
 }
-
 
 /* =========================================================
    DASHBOARD STATS
@@ -7938,22 +7851,22 @@ async function getArtistEarningsAdjustment(){
 async function updateAvailableBalance(withdrawals=null){
   if(!currentUser) return;
   try{
-    if(!withdrawals){
-      const {data,error}=await sb.from("withdrawal_requests").select("amount,status").eq("artist_id",currentUser.id);
-      if(error) throw error; withdrawals=data||[];
-    }
-    const {data:songs,error:songsError}=await sb.from("songs").select("plays,approved").eq("artist_id",currentUser.id);
-    if(songsError) throw songsError;
-    const approvedPlays=(songs||[]).filter(s=>isSongApproved(s) || String(s.review_status || "").toLowerCase()==="approved").reduce((sum,s)=>sum+Math.max(0,Number(s.plays||0)),0);
-    // Match the Worker: historical plays use the Free net baseline, while
-    // ledgered plays adjust to the package rate actually earned for that play.
-    const earningsAdjustment=await getArtistEarningsAdjustment();
-    const currentBalance=Math.max(0,approvedPlays*EARNINGS_PER_PLAY+earningsAdjustment);
-    const reserved=(withdrawals||[]).reduce((sum,w)=>{const st=String(w.status||"").toLowerCase();return sum+((["pending","processing","paid","completed","success","successful"].includes(st))?(Number(w.amount)||0):0);},0);
-    const available=Math.max(0,currentBalance-reserved);
-    const a=document.getElementById("availableBalance");
-    if(a)a.textContent="UGX "+formatNumber(Math.floor(available));
-  }catch(error){console.error("Balance error:",error);}
+    const response = await fetch("/api/artist/dashboard", {
+      method: "GET",
+      credentials: "include",
+      headers: { "Accept": "application/json" },
+      cache: "no-store"
+    });
+    const payload = await response.json().catch(() => ({}));
+    if(!response.ok || payload.error || !payload.data) throw new Error(payload.error || "Could not refresh artist balance.");
+    const stats = payload.data.stats || {};
+    const available = document.getElementById("availableBalance");
+    const withdrawn = document.getElementById("amountWithdrawn");
+    if(available) available.textContent = "UGX " + formatNumber(Math.floor(Number(stats.availableBalance || 0)));
+    if(withdrawn) withdrawn.textContent = "UGX " + formatNumber(Math.floor(Number(stats.amountWithdrawn || 0)));
+  }catch(error){
+    console.error("Balance error:", error);
+  }
 }
 
 async function requestWithdrawal(){
