@@ -1493,6 +1493,13 @@ footer{
 .artist-card .nilesoniq-premium-badge{margin:5px 0 0;font-size:10px;padding:3px 7px}
 #dashboardArtistPremiumBadge{margin:0 0 8px}
 
+/* ARTIST DASHBOARD PROFILE ACTIONS */
+#artistProfileActionRow .btn{white-space:nowrap;}
+@media(max-width:520px){
+  #artistProfileActionRow{gap:7px;}
+  #artistProfileActionRow .btn{padding:9px 10px;font-size:12px;flex:1 1 auto;}
+}
+
 /* NILESONIQ PUBLIC ARTIST PROFILE */
 .artist-card{cursor:pointer;transition:transform .2s ease,border-color .2s ease,box-shadow .2s ease}
 .artist-card:hover{transform:translateY(-4px);border-color:var(--orange);box-shadow:0 12px 30px rgba(0,0,0,.25)}
@@ -1982,17 +1989,21 @@ Artist Login
 <div id="dashboardContent" class="hidden">
 
 <div class="dashboard-card" id="artistProfileSummaryCard" style="margin-bottom:18px;">
-  <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+  <div style="display:flex;flex-direction:column;align-items:flex-start;gap:12px;">
     <div id="dashboardArtistAvatar" style="width:96px;height:96px;flex:0 0 96px;border-radius:50%;overflow:hidden;background:#242424;border:3px solid var(--orange);display:flex;align-items:center;justify-content:center;color:var(--orange);font-size:30px;font-weight:800;">
       <span>NS</span>
     </div>
-    <div style="flex:1;min-width:180px;">
+    <div style="width:100%;min-width:0;">
       <h2 id="dashboardArtistName" style="margin:0 0 5px;">Your artist profile</h2>
       <div id="dashboardArtistPremiumBadge" class="nilesoniq-premium-badge" style="display:none;">★ PREMIUM ARTIST</div>
       <p id="dashboardArtistLocation" style="color:var(--muted);margin:0 0 8px;">Add your location</p>
       <p id="dashboardArtistBio" style="white-space:pre-wrap;line-height:1.6;margin:0;color:#bbb;">Your biography will appear here.</p>
     </div>
-    <button class="btn btn-orange" id="toggleArtistProfileEdit" type="button" aria-expanded="false" onclick="toggleArtistProfileEdit()">Edit Profile</button>
+    <div id="artistProfileActionRow" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;width:100%;">
+      <button class="btn btn-orange" id="toggleWithdrawalForm" type="button" aria-expanded="false" onclick="toggleWithdrawalForm()">Request Withdrawal</button>
+      <button class="btn btn-orange" id="toggleSongUpload" type="button" aria-expanded="false" onclick="toggleSongUpload()">Upload Song</button>
+      <button class="btn btn-orange" id="toggleArtistProfileEdit" type="button" aria-expanded="false" onclick="toggleArtistProfileEdit()">Edit Biography</button>
+    </div>
   </div>
 </div>
 
@@ -2094,8 +2105,7 @@ Save Profile
 <p style="font-size:12px;color:#888;margin-top:10px;">This starts a one-time 30-day payment request. Automatic monthly recurring collection is not enabled by this button.</p>
 </div>
 
-<div class="dashboard-card" id="withdrawalCard">
-<button class="btn btn-orange" id="toggleWithdrawalForm" type="button" aria-expanded="false" onclick="toggleWithdrawalForm()">Request Withdrawal</button>
+<div class="dashboard-card" id="withdrawalCard" style="background:transparent;border:0;padding:0;margin:0;box-shadow:none;">
 <div id="withdrawalFormPanel" class="hidden" style="margin-top:18px;">
 <h2>Withdraw Earnings</h2>
 
@@ -2195,8 +2205,7 @@ Submit Withdrawal Request
 
 </div>
 
-<div class="dashboard-card" id="songUploadCard">
-<button class="btn btn-orange" id="toggleSongUpload" type="button" aria-expanded="false" onclick="toggleSongUpload()">Upload a Song</button>
+<div class="dashboard-card" id="songUploadCard" style="background:transparent;border:0;padding:0;margin:0;box-shadow:none;">
 <div id="songUploadForm" class="hidden" style="margin-top:18px;">
 <h2>Upload a Song</h2>
 
@@ -4513,7 +4522,7 @@ function toggleArtistProfileEdit(){
   const opening=form.classList.contains("hidden");
   form.classList.toggle("hidden",!opening);
   button.setAttribute("aria-expanded",String(opening));
-  button.textContent=opening ? "Cancel Edit" : "Edit Profile";
+  button.textContent=opening ? "Cancel Edit" : "Edit Biography";
   if(opening){ form.scrollIntoView({behavior:"smooth",block:"center"}); document.getElementById("artistName")?.focus({preventScroll:true}); }
 }
 function toggleSongUpload(){
@@ -4563,7 +4572,12 @@ function renderDashboardArtistProfile(artist){
     premiumBadge.style.display = isArtistPremiumActive(artist) ? "inline-flex" : "none";
   }
   if(locationEl) locationEl.textContent = location === "Add your location" ? location : "📍 " + location;
-  if(bioEl) bioEl.textContent = bio;
+  if(bioEl){
+    const bioLimit = 220;
+    const cleanBio = String(bio || "Your biography will appear here.").trim();
+    bioEl.textContent = cleanBio.length > bioLimit ? cleanBio.slice(0, bioLimit).trimEnd() + "…" : cleanBio;
+    bioEl.title = cleanBio.length > bioLimit ? "Open Edit Biography to read or change the full biography." : "";
+  }
   if(avatarEl){
     avatarEl.replaceChildren();
     if(avatar){
@@ -4815,7 +4829,7 @@ async function saveArtistProfile(){
     const editForm = document.getElementById("artistProfileEditForm");
     const editButton = document.getElementById("toggleArtistProfileEdit");
     if (editForm) editForm.classList.add("hidden");
-    if (editButton) { editButton.textContent = "Edit Profile"; editButton.setAttribute("aria-expanded", "false"); }
+    if (editButton) { editButton.textContent = "Edit Biography"; editButton.setAttribute("aria-expanded", "false"); }
 
     showMessage(
       "profileMessage",
@@ -7463,31 +7477,21 @@ async function loadMySongs(){
 
   try{
 
-    const {
-      data,
-      error
-    } = await sb
-      .from("songs")
-      .select("*")
-      .eq(
-        "artist_id",
-        currentUser.id
-      )
-      .order(
-        "created_at",
-        {
-          ascending:false
-        }
-      );
-
-
-    if(error){
-      throw error;
+    const artistIds = [...new Set([currentUser?.id, currentArtist?.id].filter(Boolean).map(String))];
+    const songResults = await Promise.all(artistIds.map(id =>
+      sb.from("songs").select("*").eq("artist_id", id).order("created_at", {ascending:false})
+    ));
+    const successfulResults = songResults.filter(result => !result.error);
+    if(!successfulResults.length && songResults.some(result => result.error)){
+      throw songResults.find(result => result.error).error;
     }
 
-
-    const songs =
-      data || [];
+    const songMap = new Map();
+    successfulResults.forEach(result => (result.data || []).forEach(song => {
+      const key = String(song.id || `${song.artist_id || ""}:${song.title || ""}:${song.created_at || ""}`);
+      if(!songMap.has(key)) songMap.set(key, song);
+    }));
+    const songs = [...songMap.values()].sort((a,b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
 
     window.nileSoniqArtistSongs = songs;
 
