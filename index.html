@@ -3165,10 +3165,22 @@ function cfQuery(table, initial={}){
 const storageAdapter={from(bucket){return {
   async upload(path,file){
     let res;
+    const uploadUrl=`/api/storage/upload?bucket=${encodeURIComponent(bucket)}&path=${encodeURIComponent(path)}`;
+    const uploadOptions={method:"POST",credentials:"include",headers:{"Content-Type":file.type||"application/octet-stream"},body:file};
     try{
-      res=await fetch(`/api/storage/upload?bucket=${encodeURIComponent(bucket)}&path=${encodeURIComponent(path)}`,{method:"POST",credentials:"include",headers:{"Content-Type":file.type||"application/octet-stream"},body:file});
+      res=await fetch(uploadUrl,uploadOptions);
     }catch(fetchError){
-      return {data:null,error:new Error(fetchError?.message || "Could not reach the NileSoniq storage server.")};
+      // Only retry cover images after a network-level failure. Do not retry audio:
+      // repeating an audio upload can create another large orphan object.
+      if(bucket!=="covers"){
+        return {data:null,error:new Error(fetchError?.message || "Could not reach the NileSoniq storage server.")};
+      }
+      try{
+        // Reuse the exact same path so the retry cannot create a second named cover.
+        res=await fetch(uploadUrl,uploadOptions);
+      }catch(retryError){
+        return {data:null,error:new Error("Could not upload the cover image after one retry. Your audio may already be stored; please do not submit again until this is resolved.")};
+      }
     }
     let responseText="";
     let j=null;
