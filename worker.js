@@ -3133,10 +3133,19 @@ async function applyPremiumPaymentStatus(
     const feeMatchesObservedPattern = inferredFeeValue !== null &&
       inferredFeeValue === Math.round(expectedAmount * 0.025) &&
       amount === expectedAmount + Math.round(expectedAmount * 0.025);
-    const feeValue = suppliedFeeKnown ? suppliedFeeValue : (feeMatchesObservedPattern ? inferredFeeValue : null);
-    const feeKnown = suppliedFeeKnown || feeMatchesObservedPattern;
-    const feeInferred = !suppliedFeeKnown && feeMatchesObservedPattern;
-    const amountMatchesPackagePlusFee = feeKnown && feeValue > 0 && Number.isFinite(amount) && amount === expectedAmount + feeValue;
+    // Some PesaJet events may report fee=0 even when the customer-paid total
+    // includes the collection fee. If the total exactly matches the known
+    // 2.5% fee pattern, trust that narrowly defined total rather than a zero
+    // fee field. Never infer a fee for any other amount pattern.
+    const suppliedFeeMatchesTotal = suppliedFeeKnown && suppliedFeeValue > 0 &&
+      Number.isFinite(amount) && amount === expectedAmount + suppliedFeeValue;
+    const useInferredFee = feeMatchesObservedPattern && !suppliedFeeMatchesTotal &&
+      (!suppliedFeeKnown || suppliedFeeValue === 0 || !Number.isFinite(amount) || amount !== expectedAmount + suppliedFeeValue);
+    const feeValue = suppliedFeeMatchesTotal ? suppliedFeeValue : (useInferredFee ? inferredFeeValue : (suppliedFeeKnown ? suppliedFeeValue : null));
+    const feeKnown = suppliedFeeMatchesTotal || useInferredFee || suppliedFeeKnown;
+    const feeInferred = useInferredFee;
+    const amountMatchesPackagePlusFee = (suppliedFeeMatchesTotal || useInferredFee) &&
+      feeKnown && feeValue > 0 && Number.isFinite(amount) && amount === expectedAmount + feeValue;
     if (
       !Number.isFinite(amount) || !currency ||
       (!amountMatchesPackage && !amountMatchesPackagePlusFee) ||
@@ -3256,9 +3265,12 @@ function readPesaJetWebhookPaymentFields(payload) {
   const amountObject = rawAmount && typeof rawAmount === "object" ? rawAmount : null;
   const amountValue = amountObject ? (amountObject.value ?? amountObject.amount ?? null) : rawAmount;
   const currency = amountObject?.currency ?? data.currency ?? payload.currency ?? transaction.currency ?? "";
-  const rawFee = data.fee ?? data.transactionFee ?? data.transaction_fee ??
-    payload.fee ?? payload.transactionFee ?? payload.transaction_fee ??
-    transaction.fee ?? transaction.transactionFee ?? transaction.transaction_fee ?? null;
+  const rawFee = data.fee ?? data.feeAmount ?? data.fee_amount ?? data.transactionFee ?? data.transaction_fee ??
+    data.collectionFee ?? data.collection_fee ??
+    payload.fee ?? payload.feeAmount ?? payload.fee_amount ?? payload.transactionFee ?? payload.transaction_fee ??
+    payload.collectionFee ?? payload.collection_fee ??
+    transaction.fee ?? transaction.feeAmount ?? transaction.fee_amount ?? transaction.transactionFee ?? transaction.transaction_fee ??
+    transaction.collectionFee ?? transaction.collection_fee ?? null;
   const feeObject = rawFee && typeof rawFee === "object" ? rawFee : null;
   const feeValue = feeObject ? (feeObject.value ?? feeObject.amount ?? null) : rawFee;
 
