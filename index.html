@@ -2081,7 +2081,7 @@ Save Profile
 <option value="premium">Premium — UGX 5,000 · 1 UGX/play · 6 uploads/month</option>
 <option value="hustler">Hustler — UGX 10,000 · 1 UGX/play · 15 uploads/month</option>
 <option value="hit_maker">Hit Maker — UGX 20,000 · 2 UGX/play · Unlimited uploads</option>
-<option value="star">Star — UGX 30,000 · 3 UGX/play · Unlimited uploads + music videos + blue tick</option>
+<option value="star">Star — UGX 30,000 · 3 UGX/play · Unlimited uploads</option>
 </select>
 <p id="artistPackageDetails" style="font-size:12px;color:#999;margin-top:7px;">Free: 0.5 UGX per play; 3 song uploads per month.</p>
 </div>
@@ -10226,8 +10226,12 @@ async function refreshPremiumSubscriptionStatus(reference=null, fromPoll=false){
     const button=document.getElementById("premiumSubscribeButton");
     if(data.active){
       const until=data.expiresAt?new Date(data.expiresAt).toLocaleDateString():"the displayed expiry date";
-      statusEl.textContent=reference?`Payment confirmed — you're now a Premium member! Premium is active until ${until}.`:`Premium is active until ${until}.`;
-      if(button)button.textContent=`Renew ${NILE_ARTIST_PACKAGES[data.packageCode||document.getElementById("artistPackageChoice")?.value||"premium"]?.label||"package"}`;
+      const activePackageCode=String(data.packageCode||document.getElementById("artistPackageChoice")?.value||"premium").toLowerCase();
+      const activePackage=NILE_ARTIST_PACKAGES[activePackageCode]||NILE_ARTIST_PACKAGES.premium;
+      statusEl.textContent=reference
+        ?`Payment confirmed — your ${activePackage.label} package is active until ${until}.`
+        :`${activePackage.label} package is active until ${until}.`;
+      if(button)button.textContent=`Renew ${activePackage.label}`;
     }else if(data.status==="failed"){
       statusEl.textContent=data.message||"Mobile-money payment failed. Check your wallet balance and transaction limits, then try again.";
       if(button)button.textContent=`Try Again — UGX ${(NILE_ARTIST_PACKAGES[document.getElementById("artistPackageChoice")?.value||"premium"]||NILE_ARTIST_PACKAGES.premium).amount.toLocaleString()}`;
@@ -10238,7 +10242,7 @@ async function refreshPremiumSubscriptionStatus(reference=null, fromPoll=false){
       if(button)button.textContent=`Pay UGX ${(NILE_ARTIST_PACKAGES[document.getElementById("artistPackageChoice")?.value||"premium"]||NILE_ARTIST_PACKAGES.premium).amount.toLocaleString()} with MoMo`;
       if(!fromPoll&&data.reference)beginPremiumPaymentPolling(data.reference);
     }else{
-      statusEl.textContent="You are on the free plan. Premium is not active yet.";
+      statusEl.textContent="You are on the Free package. No paid package is currently active.";
       if(button)button.textContent=`Pay UGX ${(NILE_ARTIST_PACKAGES[document.getElementById("artistPackageChoice")?.value||"premium"]||NILE_ARTIST_PACKAGES.premium).amount.toLocaleString()} with MoMo`;
     }
     return data;
@@ -10270,7 +10274,7 @@ function beginPremiumPaymentPolling(reference){
 function updateArtistPackageDetails(){
  const key=document.getElementById("artistPackageChoice")?.value||"free",p=NILE_ARTIST_PACKAGES[key]||NILE_ARTIST_PACKAGES.free;
  const details=document.getElementById("artistPackageDetails"),button=document.getElementById("premiumSubscribeButton");
- if(details)details.textContent=`${p.label}: UGX ${p.rate} per play; ${p.uploads===Infinity?"unlimited song uploads":p.uploads+" song uploads per month"}${key==="star"?"; music videos and blue verification tick":key==="premium"?"; premium badge and enhanced profile":""}.`;
+ if(details)details.textContent=`${p.label}: UGX ${p.rate} per play; ${p.uploads===Infinity?"unlimited song uploads":p.uploads+" song uploads per month"}${key==="premium"?"; premium badge and enhanced profile":""}.`;
  if(button)button.textContent=key==="free"?"Free package selected — no payment":`Pay UGX ${p.amount.toLocaleString()} with MoMo`;
 }
 async function startPremiumSubscription(){
