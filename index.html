@@ -2971,43 +2971,39 @@ class="table-wrap">
 
 <div id="adminCopyrightPanel" class="dashboard-card hidden">
   <h2>Copyright Removal</h2>
-  <p>Remove infringing songs or artist profiles from public pages. Each action is recorded in the removal history; source files and account records are retained for audit.</p>
-
+  <p>Select an artist, then select the specific song or songs to remove. Only selected songs are removed from public pages. You can also remove an artist profile separately. Every action is recorded in the removal history; source files and account records are retained for audit.</p>
   <div id="copyrightRemovalMessage"></div>
-
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;">
-    <div class="field">
-      <label for="copyrightContentType">Content type</label>
-      <select id="copyrightContentType" onchange="loadCopyrightCandidates()">
-        <option value="song">Song</option>
-        <option value="artist">Artist profile</option>
-      </select>
-    </div>
-    <div class="field">
-      <label for="copyrightContentId">Content to remove</label>
-      <select id="copyrightContentId">
-        <option value="">Choose content...</option>
-      </select>
-    </div>
+  <div class="field">
+    <label for="copyrightRemovalMode">What should be removed?</label>
+    <select id="copyrightRemovalMode" onchange="updateCopyrightRemovalMode()">
+      <option value="songs">Selected song(s)</option>
+      <option value="artist">Artist profile (all songs may become unavailable)</option>
+    </select>
   </div>
-
+  <div class="field">
+    <label for="copyrightArtistId">Artist</label>
+    <select id="copyrightArtistId" onchange="loadCopyrightArtistSongs()"><option value="">Loading artists...</option></select>
+  </div>
+  <div class="field" id="copyrightSongsField">
+    <label for="copyrightSongIds">Songs to remove (you can select more than one)</label>
+    <select id="copyrightSongIds" multiple size="7" aria-describedby="copyrightSongHelp" style="width:100%;min-height:150px;">
+      <option value="">Choose an artist first...</option>
+    </select>
+    <small id="copyrightSongHelp">Select only the songs that should be removed. Multiple selections may work differently depending on your browser or phone.</small>
+  </div>
   <div class="field">
     <label for="copyrightRemovalReason">Copyright removal reason</label>
     <textarea id="copyrightRemovalReason" rows="3" placeholder="Explain the copyright concern and the basis for removal"></textarea>
   </div>
-
   <div style="display:flex;flex-wrap:wrap;gap:10px;margin:12px 0 24px;">
-    <button id="copyrightRemoveButton" class="btn btn-orange" onclick="submitCopyrightRemoval()">Remove Content</button>
+    <button id="copyrightRemoveButton" class="btn btn-orange" onclick="submitCopyrightRemoval()">Remove Selected Content</button>
     <button class="btn" onclick="loadCopyrightRemovals()">Refresh History</button>
   </div>
-
   <h3>Removal History</h3>
   <div class="table-wrap">
     <table>
       <thead><tr><th>Content</th><th>Type</th><th>Reason</th><th>Date</th></tr></thead>
-      <tbody id="copyrightRemovalTable">
-        <tr><td colspan="4">Open this tab to load removal history.</td></tr>
-      </tbody>
+      <tbody id="copyrightRemovalTable"><tr><td colspan="4">Open this tab to load removal history.</td></tr></tbody>
     </table>
   </div>
 </div>
@@ -4350,6 +4346,7 @@ async function showAdminTab(tab){
     }
     if(copyrightPanel) copyrightPanel.classList.remove("hidden");
     if(copyrightTab) copyrightTab.classList.add("active");
+    updateCopyrightRemovalMode();
     await loadCopyrightCandidates();
     await loadCopyrightRemovals();
   }
@@ -9474,51 +9471,56 @@ async function rejectSong(songId){
 
 async function loadCopyrightCandidates(){
   if(!isCurrentUserSuperAdmin()) return;
-
-  const typeSelect = document.getElementById("copyrightContentType");
-  const contentSelect = document.getElementById("copyrightContentId");
-  if(!typeSelect || !contentSelect) return;
-
-  const type = typeSelect.value === "artist" ? "artist" : "song";
-  contentSelect.innerHTML = `<option value="">Loading...</option>`;
-
+  const artistSelect=document.getElementById("copyrightArtistId");
+  const songSelect=document.getElementById("copyrightSongIds");
+  if(!artistSelect || !songSelect) return;
+  artistSelect.innerHTML='<option value="">Loading artists...</option>';
+  songSelect.innerHTML='<option value="">Choose an artist first...</option>';
   try{
-    let data = [];
-    let error = null;
-
-    if(type === "song"){
-      ({data,error} = await sb
-        .from("songs")
-        .select("id,title,artist,approved,review_status")
-        .order("created_at",{ascending:false})
-        .limit(500));
-    }else{
-      ({data,error} = await sb
-        .from("artists")
-        .select("id,name")
-        .order("created_at",{ascending:false})
-        .limit(500));
-    }
-
-    if(error) throw error;
-
-    const items = Array.isArray(data) ? data : [];
-    if(!items.length){
-      contentSelect.innerHTML = `<option value="">No content found</option>`;
-      return;
-    }
-
-    contentSelect.innerHTML = `<option value="">Choose content...</option>` +
-      items.map(item=>{
-        const title = type === "song"
-          ? `${item.title || "Untitled song"} — ${item.artist || "Unknown artist"}${isSongApproved(item) ? "" : " (not approved)"}`
-          : (item.name || "Unnamed artist");
-        return `<option value="${escapeAttribute(item.id)}">${escapeHtml(title)}</option>`;
-      }).join("");
+    const response=await fetch("/api/admin/copyright-removal-artists",{method:"GET",credentials:"include",headers:{"Accept":"application/json"},cache:"no-store"});
+    const result=await response.json().catch(()=>({}));
+    if(!response.ok || result.error) throw new Error(result.error || result.message || "Could not load artists.");
+    const artists=Array.isArray(result.data)?result.data:[];
+    if(!artists.length){artistSelect.innerHTML='<option value="">No artists found</option>';return;}
+    artistSelect.innerHTML='<option value="">Choose an artist...</option>'+artists.map(artist=>`<option value="${escapeAttribute(artist.id)}">${escapeHtml(artist.name || "Unnamed artist")}</option>`).join("");
   }catch(error){
-    console.error("Copyright candidates failed:",error);
-    contentSelect.innerHTML = `<option value="">Could not load content</option>`;
-    showMessage("copyrightRemovalMessage",error.message || "Could not load content.","error");
+    console.error("Copyright artists failed:",error);
+    artistSelect.innerHTML='<option value="">Could not load artists</option>';
+    showMessage("copyrightRemovalMessage",error.message || "Could not load artists.","error");
+  }
+}
+
+function updateCopyrightRemovalMode(){
+  const mode=document.getElementById("copyrightRemovalMode")?.value || "songs";
+  const songsField=document.getElementById("copyrightSongsField");
+  const songsSelect=document.getElementById("copyrightSongIds");
+  const button=document.getElementById("copyrightRemoveButton");
+  if(songsField) songsField.style.display=mode==="artist"?"none":"";
+  if(songsSelect) songsSelect.disabled=mode==="artist";
+  if(button) button.textContent=mode==="artist"?"Remove Artist Profile":"Remove Selected Content";
+}
+
+async function loadCopyrightArtistSongs(){
+  const artistId=document.getElementById("copyrightArtistId")?.value || "";
+  const songSelect=document.getElementById("copyrightSongIds");
+  if(!songSelect) return;
+  if(!artistId){songSelect.innerHTML='<option value="">Choose an artist first...</option>';return;}
+  songSelect.innerHTML='<option value="">Loading songs...</option>';
+  try{
+    const response=await fetch("/api/admin/copyright-removal-songs?artist_id="+encodeURIComponent(artistId),{method:"GET",credentials:"include",headers:{"Accept":"application/json"},cache:"no-store"});
+    const result=await response.json().catch(()=>({}));
+    if(!response.ok || result.error) throw new Error(result.error || result.message || "Could not load this artist’s songs.");
+    const songs=Array.isArray(result.data)?result.data:[];
+    if(!songs.length){songSelect.innerHTML='<option value="">No songs found for this artist</option>';return;}
+    songSelect.innerHTML=songs.map(song=>{
+      const title=song.title || "Untitled song";
+      const status=Number(song.approved)===1 || String(song.review_status||"").toLowerCase()==="approved" ? "Approved" : (song.review_status || "Not approved");
+      return `<option value="${escapeAttribute(song.id)}">${escapeHtml(title)} — ${escapeHtml(status)}</option>`;
+    }).join("");
+  }catch(error){
+    console.error("Copyright songs failed:",error);
+    songSelect.innerHTML='<option value="">Could not load songs</option>';
+    showMessage("copyrightRemovalMessage",error.message || "Could not load songs.","error");
   }
 }
 
@@ -9566,64 +9568,46 @@ async function submitCopyrightRemoval(){
     showMessage("copyrightRemovalMessage","Only the Super Admin can remove content.","error");
     return;
   }
-
-  const contentType = document.getElementById("copyrightContentType")?.value || "song";
-  const contentId = document.getElementById("copyrightContentId")?.value || "";
-  const reason = document.getElementById("copyrightRemovalReason")?.value.trim() || "";
-  const button = document.getElementById("copyrightRemoveButton");
-
-  if(!contentId){
-    showMessage("copyrightRemovalMessage","Choose the song or artist profile to remove.","error");
-    return;
-  }
-  if(reason.length < 5){
-    showMessage("copyrightRemovalMessage","Enter a copyright-removal reason of at least 5 characters.","error");
-    return;
-  }
-  if(!confirm("Remove this content from public pages and record the copyright removal? This keeps the source files and audit record.")){
-    return;
-  }
-
-  if(button){
-    button.disabled = true;
-    button.textContent = "Removing...";
-  }
-
+  const mode=document.getElementById("copyrightRemovalMode")?.value || "songs";
+  const artistId=document.getElementById("copyrightArtistId")?.value || "";
+  const songSelect=document.getElementById("copyrightSongIds");
+  const selectedSongIds=Array.from(songSelect?.selectedOptions || []).map(option=>option.value).filter(Boolean);
+  const reason=document.getElementById("copyrightRemovalReason")?.value.trim() || "";
+  const button=document.getElementById("copyrightRemoveButton");
+  if(!artistId){showMessage("copyrightRemovalMessage","Choose an artist first.","error");return;}
+  if(mode==="songs" && !selectedSongIds.length){showMessage("copyrightRemovalMessage","Select at least one song belonging to this artist.","error");return;}
+  if(reason.length<5){showMessage("copyrightRemovalMessage","Enter a copyright-removal reason of at least 5 characters.","error");return;}
+  const artistLabel=document.getElementById("copyrightArtistId")?.selectedOptions?.[0]?.textContent || "this artist";
+  const itemCount=mode==="artist"?"the artist profile and its associated content":`${selectedSongIds.length} selected song(s) by ${artistLabel}`;
+  if(!confirm(`Remove ${itemCount} from public pages and record the action? Source files and account records will be retained for audit.`)) return;
+  if(button){button.disabled=true;button.textContent="Removing...";}
   try{
-    const response = await fetch("/api/admin/copyright-removals",{
-      method:"POST",
-      credentials:"include",
-      headers:{
-        "Content-Type":"application/json",
-        "Accept":"application/json"
-      },
-      body:JSON.stringify({
-        content_type:contentType,
-        content_id:contentId,
-        reason
-      })
-    });
-    const result = await response.json().catch(()=>({}));
-    if(!response.ok || result.error || result.success !== true){
-      throw new Error(result.error || result.message || "Copyright removal failed.");
+    const ids=mode==="artist"?[artistId]:selectedSongIds;
+    const failures=[];
+    let successCount=0;
+    for(const contentId of ids){
+      try{
+        const response=await fetch("/api/admin/copyright-removals",{method:"POST",credentials:"include",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({content_type:mode==="artist"?"artist":"song",content_id:contentId,reason})});
+        const result=await response.json().catch(()=>({}));
+        if(!response.ok || result.error || result.success!==true) throw new Error(result.error || result.message || "Copyright removal failed.");
+        successCount++;
+      }catch(error){failures.push(error.message || "Removal failed");}
     }
-
-    document.getElementById("copyrightRemovalReason").value = "";
-    showMessage("copyrightRemovalMessage","Content removed from public pages and the action was recorded.","success");
-    await loadCopyrightCandidates();
-    await loadCopyrightRemovals();
-    await loadAdminSongs();
+    if(successCount>0){
+      document.getElementById("copyrightRemovalReason").value="";
+      if(failures.length) showMessage("copyrightRemovalMessage",`${successCount} item(s) removed. ${failures.length} item(s) failed: ${failures.join("; ")}`,"error");
+      else showMessage("copyrightRemovalMessage",mode==="artist"?"Artist profile removed from public pages and the action was recorded.":`${successCount} selected song(s) removed from public pages and recorded.`,"success");
+      await loadCopyrightArtistSongs();
+      await loadCopyrightRemovals();
+      await loadAdminSongs();
+    }else throw new Error(failures.join("; ") || "Copyright removal failed.");
   }catch(error){
     console.error("Copyright removal failed:",error);
     showMessage("copyrightRemovalMessage",error.message || "Copyright removal failed.","error");
   }finally{
-    if(button){
-      button.disabled = false;
-      button.textContent = "Remove Content";
-    }
+    if(button){button.disabled=false;updateCopyrightRemovalMode();}
   }
 }
-
 
 /* =========================================================
    ADMINISTRATORS
