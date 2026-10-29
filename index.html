@@ -8421,48 +8421,43 @@ async function loadAdminAnalytics(){
   if(topArtistsEl) topArtistsEl.innerHTML='<div class="analytics-chart-empty">Loading graph…</div>';
 
   try{
-    const [songsResult,artistsResult]=await Promise.all([
-      sb.from("songs").select("title,artist,artist_id,plays,likes,approved,review_status,created_at").limit(500),
-      sb.from("artists").select("user_id,name").limit(500)
-    ]);
-
-    if(songsResult.error) throw songsResult.error;
-    if(artistsResult.error) throw artistsResult.error;
-
-    const songs=songsResult.data || [];
-    const artists=artistsResult.data || [];
-
-    const approved=songs.filter(s=>isSongApproved(s));
-    const pending=songs.filter(s=>!isSongApproved(s) && String(s.review_status || "").toLowerCase() !== "rejected");
-    const plays=songs.reduce((n,s)=>n+Number(s.plays||0),0);
-    const likes=songs.reduce((n,s)=>n+Number(s.likes||0),0);
-
-    setAnalyticsValue("analyticsTotalSongs",songs.length);
-    setAnalyticsValue("analyticsApprovedSongs",approved.length);
-    setAnalyticsValue("analyticsPendingSongs",pending.length);
-    setAnalyticsValue("analyticsTotalArtists",artists.length);
-    setAnalyticsValue("analyticsTotalPlays",plays);
-    setAnalyticsValue("analyticsTotalLikes",likes);
-
-    const topSongs=[...songs].sort((a,b)=>Number(b.plays||0)-Number(a.plays||0)).slice(0,10);
-    if(topSongsEl){
-      const maxPlays=Math.max(1,...topSongs.map(song=>Number(song.plays||0)));
-      topSongsEl.innerHTML=topSongs.length ? topSongs.map(song=>{const value=Number(song.plays||0);const height=Math.max(3,Math.round(value/maxPlays*150));return `<div class="analytics-bar-item" title="${escapeAttribute(song.title||"Untitled")}: ${formatNumber(value)} plays"><div class="analytics-bar-value">${formatNumber(value)}</div><div class="analytics-bar" style="height:${height}px"></div><div class="analytics-bar-label">${escapeHtml(song.title||"Untitled")}</div></div>`;}).join("") : '<div class="analytics-chart-empty">No songs yet.</div>';
+    const response=await fetch("/api/admin/analytics",{
+      method:"GET",
+      credentials:"include",
+      headers:{"Accept":"application/json","Cache-Control":"no-cache"},
+      cache:"no-store"
+    });
+    const result=await response.json().catch(()=>({}));
+    if(!response.ok || result.error || !result.data){
+      throw new Error(result.error || result.message || `Analytics request failed (${response.status})`);
     }
 
-    const artistNames={};
-    artists.forEach(a=>{artistNames[a.user_id]=a.name||"Unknown Artist"});
-    const artistStats={};
-    songs.forEach(song=>{
-      const key=song.artist_id || song.artist || "unknown";
-      if(!artistStats[key]) artistStats[key]={name:artistNames[song.artist_id] || song.artist || "Unknown Artist",songs:0,plays:0};
-      artistStats[key].songs += 1;
-      artistStats[key].plays += Number(song.plays||0);
-    });
-    const topArtists=Object.values(artistStats).sort((a,b)=>b.plays-a.plays).slice(0,10);
+    const data=result.data;
+    setAnalyticsValue("analyticsTotalSongs",data.totalSongs);
+    setAnalyticsValue("analyticsApprovedSongs",data.approvedSongs);
+    setAnalyticsValue("analyticsPendingSongs",data.pendingSongs);
+    setAnalyticsValue("analyticsTotalArtists",data.totalArtists);
+    setAnalyticsValue("analyticsTotalPlays",data.totalPlays);
+    setAnalyticsValue("analyticsTotalLikes",data.totalLikes);
+
+    const topSongs=Array.isArray(data.topSongs)?data.topSongs:[];
+    if(topSongsEl){
+      const maxPlays=Math.max(1,...topSongs.map(song=>Number(song.plays||0)));
+      topSongsEl.innerHTML=topSongs.length ? topSongs.map(song=>{
+        const value=Number(song.plays||0);
+        const height=Math.max(3,Math.round(value/maxPlays*150));
+        return `<div class="analytics-bar-item" title="${escapeAttribute(song.title||"Untitled")}: ${formatNumber(value)} plays"><div class="analytics-bar-value">${formatNumber(value)}</div><div class="analytics-bar" style="height:${height}px"></div><div class="analytics-bar-label">${escapeHtml(song.title||"Untitled")}</div></div>`;
+      }).join("") : '<div class="analytics-chart-empty">No songs yet.</div>';
+    }
+
+    const topArtists=Array.isArray(data.topArtists)?data.topArtists:[];
     if(topArtistsEl){
-      const maxPlays=Math.max(1,...topArtists.map(a=>Number(a.plays||0)));
-      topArtistsEl.innerHTML=topArtists.length ? topArtists.map(a=>{const value=Number(a.plays||0);const height=Math.max(3,Math.round(value/maxPlays*150));return `<div class="analytics-bar-item" title="${escapeAttribute(a.name)}: ${formatNumber(value)} plays"><div class="analytics-bar-value">${formatNumber(value)}</div><div class="analytics-bar" style="height:${height}px"></div><div class="analytics-bar-label">${escapeHtml(a.name)}</div></div>`;}).join("") : '<div class="analytics-chart-empty">No artist data yet.</div>';
+      const maxPlays=Math.max(1,...topArtists.map(artist=>Number(artist.plays||0)));
+      topArtistsEl.innerHTML=topArtists.length ? topArtists.map(artist=>{
+        const value=Number(artist.plays||0);
+        const height=Math.max(3,Math.round(value/maxPlays*150));
+        return `<div class="analytics-bar-item" title="${escapeAttribute(artist.name||"Unknown Artist")}: ${formatNumber(value)} plays"><div class="analytics-bar-value">${formatNumber(value)}</div><div class="analytics-bar" style="height:${height}px"></div><div class="analytics-bar-label">${escapeHtml(artist.name||"Unknown Artist")}</div></div>`;
+      }).join("") : '<div class="analytics-chart-empty">No artist data yet.</div>';
     }
 
     if(!adminAnalyticsTimer){
@@ -8473,8 +8468,9 @@ async function loadAdminAnalytics(){
     }
   }catch(error){
     console.error("Analytics error:",error);
-    if(topSongsEl) topSongsEl.innerHTML=`<div class="analytics-chart-empty">${escapeHtml(error.message||"Could not load analytics.")}</div>`;
-    if(topArtistsEl) topArtistsEl.innerHTML=`<div class="analytics-chart-empty">${escapeHtml(error.message||"Could not load analytics.")}</div>`;
+    const message=error.message||"Could not load analytics.";
+    if(topSongsEl) topSongsEl.innerHTML=`<div class="analytics-chart-empty">${escapeHtml(message)}</div>`;
+    if(topArtistsEl) topArtistsEl.innerHTML=`<div class="analytics-chart-empty">${escapeHtml(message)}</div>`;
   }
 }
 
