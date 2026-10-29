@@ -8,7 +8,13 @@ const ARTIST_COMMISSION_RATE = 0.20;
 const ARTIST_TAX_ALLOCATION_RATE = 0.05;
 const ARTIST_NET_RATE = 1 - ARTIST_COMMISSION_RATE - ARTIST_TAX_ALLOCATION_RATE;
 const ARTIST_FREE_NET_PER_PLAY = EARNINGS_PER_PLAY * ARTIST_NET_RATE;
-const WITHDRAWAL_MINIMUM = 10000;
+const ARTIST_PACKAGE_WITHDRAWAL_MINIMUMS = Object.freeze({
+  free: 10000,
+  premium: 7000,
+  hustler: 5000,
+  hit_maker: 3000,
+  star: 1000
+});
 // Rollout cutoff is stored in UTC because SQLite datetime('now') is UTC.
 // Songs created before this cutoff remain stored and are excluded from the
 // rollout month's upload count. No existing song is deleted or changed.
@@ -1276,14 +1282,32 @@ async function dbRoute(request, env, path) {
             row.payment_details || ""
           ).trim();
 
+          // Enforce the minimum withdrawal for the artist's currently active
+          // package on the server. The entitlement is derived from active,
+          // unexpired subscription records, not from client-supplied package data.
+          let withdrawalEntitlement;
+          try {
+            withdrawalEntitlement = await syncArtistPremiumEntitlement(env, user.id);
+          } catch (entitlementError) {
+            console.error("Could not verify artist package before withdrawal:", entitlementError.message);
+            return error("We could not verify your artist package right now. No withdrawal request was created. Please try again shortly.", 503);
+          }
+
+          if (!withdrawalEntitlement?.artistFound) {
+            return error("Artist account not found. No withdrawal request was created.", 403);
+          }
+
+          const packageCode = String(withdrawalEntitlement.packageCode || "free").toLowerCase();
+          const minimumWithdrawal = ARTIST_PACKAGE_WITHDRAWAL_MINIMUMS[packageCode] ?? ARTIST_PACKAGE_WITHDRAWAL_MINIMUMS.free;
+
           if (
             !Number.isFinite(amount) ||
-            amount < WITHDRAWAL_MINIMUM ||
+            amount < minimumWithdrawal ||
             !paymentMethod ||
             !paymentDetails
           ) {
             return error(
-              "A valid amount of at least UGX 10,000, payment method, and payment details are required",
+              `A valid withdrawal amount of at least UGX ${minimumWithdrawal.toLocaleString("en-US")} for your ${packageCode.replace(/_/g, " ")} package, payment method, and payment details are required`,
               422
             );
           }
