@@ -3116,15 +3116,31 @@ async function applyPremiumPaymentStatus(
     const expectedAmount = Number(payment.amount);
     const expectedCurrency = String(payment.currency || "").trim().toUpperCase();
 
-    // Never grant a paid subscription unless the signed provider event includes
-    // an amount and currency matching the exact pending Premium transaction.
-    if (!Number.isFinite(amount) || !currency || amount !== expectedAmount || currency !== expectedCurrency || ![5000,10000,20000,30000].includes(expectedAmount) || expectedCurrency !== "UGX") {
+    // PesaJet receipts may report the customer total (package price + fee),
+    // while the pending subscription stores the package price alone. Accept
+    // either the exact package amount or package amount + the fee explicitly
+    // supplied by this signed provider event. Do not infer a fee or accept an
+    // unexplained amount difference.
+    const feeValue = confirmedFee === null || confirmedFee === undefined || confirmedFee === ""
+      ? null
+      : Number(confirmedFee);
+    const feeKnown = feeValue !== null && Number.isFinite(feeValue) && feeValue >= 0;
+    const amountMatchesPackage = Number.isFinite(amount) && amount === expectedAmount;
+    const amountMatchesPackagePlusFee = feeKnown && feeValue > 0 && Number.isFinite(amount) && amount === expectedAmount + feeValue;
+    if (
+      !Number.isFinite(amount) || !currency ||
+      (!amountMatchesPackage && !amountMatchesPackagePlusFee) ||
+      currency !== expectedCurrency ||
+      ![5000,10000,20000,30000].includes(expectedAmount) || expectedCurrency !== "UGX"
+    ) {
       console.error("Premium payment confirmation failed amount/currency validation", {
         reference: ref,
         receivedAmount: Number.isFinite(amount) ? amount : null,
         receivedCurrency: currency || null,
         expectedAmount,
-        expectedCurrency
+        expectedCurrency,
+        feeKnown,
+        receivedFee: feeKnown ? feeValue : null
       });
       return { matched: true, changed: false, reason: "amount_currency_mismatch" };
     }
@@ -3161,13 +3177,11 @@ async function applyPremiumPaymentStatus(
     if (changed) {
       // Record Premium revenue once, keyed to the subscription row. Only use
       // a fee explicitly supplied by the signed provider event.
-      const feeValue = confirmedFee === null || confirmedFee === undefined || confirmedFee === ""
-        ? null
-        : Number(confirmedFee);
-      const feeKnown = feeValue !== null && Number.isFinite(feeValue) && feeValue >= 0;
       // The ledger insert is the idempotency gate for crediting the wallet.
-      // Only credit once, and subtract a fee only when the signed provider event
-      // actually supplies it. Unknown fees remain explicitly flagged below.
+      // Keep the provider-reported collection total in the ledger and credit
+      // the platform wallet net of the confirmed fee, matching other PesaJet
+      // collection handling. For UGX 5,125 less UGX 125, the wallet receives
+      // UGX 5,000 while the artist's package price remains UGX 5,000.
       await env.DB.batch([
         env.DB.prepare(`
           INSERT OR IGNORE INTO platform_financial_ledger
@@ -3179,7 +3193,7 @@ async function applyPremiumPaymentStatus(
           `premium-subscription:${payment.id}`,
           payment.id,
           ref,
-          expectedAmount,
+          amount,
           feeKnown ? feeValue : 0,
           feeKnown ? "posted" : "fee_unverified",
           feeKnown
@@ -3192,7 +3206,7 @@ async function applyPremiumPaymentStatus(
               updated_at = datetime('now')
           WHERE id = (SELECT id FROM platform_wallet ORDER BY created_at LIMIT 1)
             AND changes() > 0
-        `).bind(expectedAmount, feeKnown ? feeValue : 0)
+        `).bind(amount, feeKnown ? feeValue : 0)
       ]);
     }
     // The artist entitlement mirrors the verified subscription expiry. Re-sync
