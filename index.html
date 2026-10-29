@@ -7633,7 +7633,7 @@ async function loadMySongs(){
     }
 
 
-    updateDashboardStats(
+    await updateDashboardStats(
       songs
     );
 
@@ -7671,7 +7671,7 @@ async function loadMySongs(){
    DASHBOARD STATS
 ========================================================= */
 
-function updateDashboardStats(
+async function updateDashboardStats(
   songs=[]
 ){
 
@@ -7695,10 +7695,15 @@ function updateDashboardStats(
       .filter(song=>isSongApproved(song) || String(song.review_status || "").toLowerCase() === "approved")
       .reduce((sum,song)=>sum+Math.max(0, Number(song.plays || 0)),0);
 
-  // EARNINGS_PER_PLAY is already the artist net rate: UGX 0.375
-  // per eligible play (UGX 0.50 gross less 20% commission and 5% tax).
-  // Do not apply the 75% allocation a second time.
-  const earnings = eligiblePlays * EARNINGS_PER_PLAY;
+  // Keep the historical Free-rate baseline, then adjust plays recorded in the
+  // earnings ledger to their actual package-specific net amount.
+  let earningsAdjustment = 0;
+  try {
+    earningsAdjustment = await getArtistEarningsAdjustment();
+  } catch (error) {
+    console.error("Artist earnings ledger could not be loaded:", error);
+  }
+  const earnings = Math.max(0, eligiblePlays * EARNINGS_PER_PLAY + earningsAdjustment);
 
 
   document.getElementById(
@@ -7923,6 +7928,13 @@ async function loadMyWithdrawals(){
    BALANCE
 ========================================================= */
 
+async function getArtistEarningsAdjustment(){
+  if(!currentUser) return 0;
+  const {data,error}=await sb.rpc("get_artist_earnings_adjustment");
+  if(error) throw error;
+  return Number(data)||0;
+}
+
 async function updateAvailableBalance(withdrawals=null){
   if(!currentUser) return;
   try{
@@ -7933,8 +7945,10 @@ async function updateAvailableBalance(withdrawals=null){
     const {data:songs,error:songsError}=await sb.from("songs").select("plays,approved").eq("artist_id",currentUser.id);
     if(songsError) throw songsError;
     const approvedPlays=(songs||[]).filter(s=>isSongApproved(s) || String(s.review_status || "").toLowerCase()==="approved").reduce((sum,s)=>sum+Math.max(0,Number(s.plays||0)),0);
-    // Available balance uses the same net rate as the Worker withdrawal check.
-    const currentBalance=approvedPlays*EARNINGS_PER_PLAY;
+    // Match the Worker: historical plays use the Free net baseline, while
+    // ledgered plays adjust to the package rate actually earned for that play.
+    const earningsAdjustment=await getArtistEarningsAdjustment();
+    const currentBalance=Math.max(0,approvedPlays*EARNINGS_PER_PLAY+earningsAdjustment);
     const reserved=(withdrawals||[]).reduce((sum,w)=>{const st=String(w.status||"").toLowerCase();return sum+((["pending","processing","paid","completed","success","successful"].includes(st))?(Number(w.amount)||0):0);},0);
     const available=Math.max(0,currentBalance-reserved);
     const a=document.getElementById("availableBalance");
