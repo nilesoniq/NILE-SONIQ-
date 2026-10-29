@@ -8,13 +8,7 @@ const ARTIST_COMMISSION_RATE = 0.20;
 const ARTIST_TAX_ALLOCATION_RATE = 0.05;
 const ARTIST_NET_RATE = 1 - ARTIST_COMMISSION_RATE - ARTIST_TAX_ALLOCATION_RATE;
 const ARTIST_FREE_NET_PER_PLAY = EARNINGS_PER_PLAY * ARTIST_NET_RATE;
-const ARTIST_PACKAGE_WITHDRAWAL_MINIMUMS = Object.freeze({
-  free: 10000,
-  premium: 7000,
-  hustler: 5000,
-  hit_maker: 3000,
-  star: 1000
-});
+const WITHDRAWAL_MINIMUM = 10000;
 // Rollout cutoff is stored in UTC because SQLite datetime('now') is UTC.
 // Songs created before this cutoff remain stored and are excluded from the
 // rollout month's upload count. No existing song is deleted or changed.
@@ -27,6 +21,9 @@ const ARTIST_PACKAGE_UPLOAD_LIMITS = Object.freeze({
   hit_maker: Number.MAX_SAFE_INTEGER,
   star: Number.MAX_SAFE_INTEGER
 });
+
+// Cache the one-time D1 verification-column check within this Worker isolate.
+let starPackageVerificationColumnReady = false;
 
 const PUBLIC_READ_TABLES = new Set([
   "songs", "artists", "comments", "likes",
@@ -1282,32 +1279,14 @@ async function dbRoute(request, env, path) {
             row.payment_details || ""
           ).trim();
 
-          // Enforce the minimum withdrawal for the artist's currently active
-          // package on the server. The entitlement is derived from active,
-          // unexpired subscription records, not from client-supplied package data.
-          let withdrawalEntitlement;
-          try {
-            withdrawalEntitlement = await syncArtistPremiumEntitlement(env, user.id);
-          } catch (entitlementError) {
-            console.error("Could not verify artist package before withdrawal:", entitlementError.message);
-            return error("We could not verify your artist package right now. No withdrawal request was created. Please try again shortly.", 503);
-          }
-
-          if (!withdrawalEntitlement?.artistFound) {
-            return error("Artist account not found. No withdrawal request was created.", 403);
-          }
-
-          const packageCode = String(withdrawalEntitlement.packageCode || "free").toLowerCase();
-          const minimumWithdrawal = ARTIST_PACKAGE_WITHDRAWAL_MINIMUMS[packageCode] ?? ARTIST_PACKAGE_WITHDRAWAL_MINIMUMS.free;
-
           if (
             !Number.isFinite(amount) ||
-            amount < minimumWithdrawal ||
+            amount < WITHDRAWAL_MINIMUM ||
             !paymentMethod ||
             !paymentDetails
           ) {
             return error(
-              `A valid withdrawal amount of at least UGX ${minimumWithdrawal.toLocaleString("en-US")} for your ${packageCode.replace(/_/g, " ")} package, payment method, and payment details are required`,
+              "A valid amount of at least UGX 10,000, payment method, and payment details are required",
               422
             );
           }
@@ -2871,9 +2850,26 @@ function premiumPaymentFailureMessage(value) {
   return raw ? `Payment could not be completed: ${raw}` : "Mobile-money payment failed. Check your wallet balance and transaction limits, then try again.";
 }
 
+async function ensureStarPackageVerificationColumn(env) {
+  if (starPackageVerificationColumnReady) return;
+  try {
+    await env.DB.prepare("ALTER TABLE artists ADD COLUMN star_package_verified INTEGER NOT NULL DEFAULT 0").run();
+    starPackageVerificationColumnReady = true;
+  } catch (error) {
+    // D1 has no portable IF NOT EXISTS form for ADD COLUMN. Confirm that the
+    // column already exists; otherwise preserve and surface the real error.
+    const info = await env.DB.prepare("PRAGMA table_info(artists)").all();
+    const columns = Array.isArray(info?.results) ? info.results : [];
+    if (!columns.some(column => String(column.name || "") === "star_package_verified")) throw error;
+    starPackageVerificationColumnReady = true;
+  }
+}
+
 async function syncArtistPremiumEntitlement(env, userId, preferredArtistId = null) {
   const uid = String(userId || "").trim();
   if (!uid) return { artistFound: false, isPremium: false, expiresAt: null };
+
+  await ensureStarPackageVerificationColumn(env);
 
   const artist = preferredArtistId
     ? await env.DB.prepare("SELECT id FROM artists WHERE id = ? AND user_id = ? LIMIT 1").bind(preferredArtistId, uid).first()
@@ -2899,11 +2895,14 @@ async function syncArtistPremiumEntitlement(env, userId, preferredArtistId = nul
   await env.DB.prepare(`
     UPDATE artists
     SET is_premium = ?, premium_expiry_date = ?, package_name = ?,
-        package_expiry_date = ?, earnings_rate = ?
+        package_expiry_date = ?, earnings_rate = ?,
+        star_package_verified = ?
     WHERE id = ? AND user_id = ?
-  `).bind(isPremium ? 1 : 0, expiresAt, packageCode, expiresAt, rate, artist.id, uid).run();
+  `).bind(isPremium ? 1 : 0, expiresAt, packageCode, expiresAt, rate,
+          isPremium && packageCode === "star" ? 1 : 0, artist.id, uid).run();
 
-  return { artistFound: true, artistId: artist.id, isPremium, expiresAt, packageCode, rate };
+  return { artistFound: true, artistId: artist.id, isPremium, expiresAt, packageCode, rate,
+    starPackageVerified: isPremium && packageCode === "star" };
 }
 
 async function premiumSubscriptionRoute(request, env) {
@@ -3140,36 +3139,17 @@ async function applyPremiumPaymentStatus(
     const expectedAmount = Number(payment.amount);
     const expectedCurrency = String(payment.currency || "").trim().toUpperCase();
 
-    // PesaJet receipts can show the customer total (package price + collection
-    // fee), while the subscription stores only the package price. Prefer the
-    // fee in the signed webhook. If PesaJet omits the fee field, accept only the
-    // exact 2.5% total pattern confirmed by the reported UGX 5,000 + UGX 125
-    // receipt. Do not accept arbitrary overpayments or infer a fee for any
-    // other amount pattern.
-    const suppliedFeeValue = confirmedFee === null || confirmedFee === undefined || confirmedFee === ""
+    // PesaJet receipts may report the customer total (package price + fee),
+    // while the pending subscription stores the package price alone. Accept
+    // either the exact package amount or package amount + the fee explicitly
+    // supplied by this signed provider event. Do not infer a fee or accept an
+    // unexplained amount difference.
+    const feeValue = confirmedFee === null || confirmedFee === undefined || confirmedFee === ""
       ? null
       : Number(confirmedFee);
-    const suppliedFeeKnown = suppliedFeeValue !== null && Number.isFinite(suppliedFeeValue) && suppliedFeeValue >= 0;
+    const feeKnown = feeValue !== null && Number.isFinite(feeValue) && feeValue >= 0;
     const amountMatchesPackage = Number.isFinite(amount) && amount === expectedAmount;
-    const inferredFeeValue = Number.isFinite(amount) && Number.isFinite(expectedAmount) && amount > expectedAmount
-      ? amount - expectedAmount
-      : null;
-    const feeMatchesObservedPattern = inferredFeeValue !== null &&
-      inferredFeeValue === Math.round(expectedAmount * 0.025) &&
-      amount === expectedAmount + Math.round(expectedAmount * 0.025);
-    // Some PesaJet events may report fee=0 even when the customer-paid total
-    // includes the collection fee. If the total exactly matches the known
-    // 2.5% fee pattern, trust that narrowly defined total rather than a zero
-    // fee field. Never infer a fee for any other amount pattern.
-    const suppliedFeeMatchesTotal = suppliedFeeKnown && suppliedFeeValue > 0 &&
-      Number.isFinite(amount) && amount === expectedAmount + suppliedFeeValue;
-    const useInferredFee = feeMatchesObservedPattern && !suppliedFeeMatchesTotal &&
-      (!suppliedFeeKnown || suppliedFeeValue === 0 || !Number.isFinite(amount) || amount !== expectedAmount + suppliedFeeValue);
-    const feeValue = suppliedFeeMatchesTotal ? suppliedFeeValue : (useInferredFee ? inferredFeeValue : (suppliedFeeKnown ? suppliedFeeValue : null));
-    const feeKnown = suppliedFeeMatchesTotal || useInferredFee || suppliedFeeKnown;
-    const feeInferred = useInferredFee;
-    const amountMatchesPackagePlusFee = (suppliedFeeMatchesTotal || useInferredFee) &&
-      feeKnown && feeValue > 0 && Number.isFinite(amount) && amount === expectedAmount + feeValue;
+    const amountMatchesPackagePlusFee = feeKnown && feeValue > 0 && Number.isFinite(amount) && amount === expectedAmount + feeValue;
     if (
       !Number.isFinite(amount) || !currency ||
       (!amountMatchesPackage && !amountMatchesPackagePlusFee) ||
@@ -3239,11 +3219,9 @@ async function applyPremiumPaymentStatus(
           amount,
           feeKnown ? feeValue : 0,
           feeKnown ? "posted" : "fee_unverified",
-          suppliedFeeKnown
-            ? "Premium subscription confirmed. Actual PesaJet fee supplied by the signed provider event."
-            : feeInferred
-              ? "Premium subscription confirmed. PesaJet webhook omitted the fee; fee inferred only from the observed exact 2.5% receipt pattern."
-              : "Premium subscription confirmed. Actual PesaJet collection fee was not supplied by the confirmed transaction event; zero here does not mean fee-free."
+          feeKnown
+            ? "Premium subscription confirmed. Actual PesaJet fee supplied by the confirmed provider event."
+            : "Premium subscription confirmed. Actual PesaJet collection fee was not supplied by the confirmed transaction event; zero here does not mean fee-free."
         ),
         env.DB.prepare(`
           UPDATE platform_wallet
@@ -3289,12 +3267,9 @@ function readPesaJetWebhookPaymentFields(payload) {
   const amountObject = rawAmount && typeof rawAmount === "object" ? rawAmount : null;
   const amountValue = amountObject ? (amountObject.value ?? amountObject.amount ?? null) : rawAmount;
   const currency = amountObject?.currency ?? data.currency ?? payload.currency ?? transaction.currency ?? "";
-  const rawFee = data.fee ?? data.feeAmount ?? data.fee_amount ?? data.transactionFee ?? data.transaction_fee ??
-    data.collectionFee ?? data.collection_fee ??
-    payload.fee ?? payload.feeAmount ?? payload.fee_amount ?? payload.transactionFee ?? payload.transaction_fee ??
-    payload.collectionFee ?? payload.collection_fee ??
-    transaction.fee ?? transaction.feeAmount ?? transaction.fee_amount ?? transaction.transactionFee ?? transaction.transaction_fee ??
-    transaction.collectionFee ?? transaction.collection_fee ?? null;
+  const rawFee = data.fee ?? data.transactionFee ?? data.transaction_fee ??
+    payload.fee ?? payload.transactionFee ?? payload.transaction_fee ??
+    transaction.fee ?? transaction.transactionFee ?? transaction.transaction_fee ?? null;
   const feeObject = rawFee && typeof rawFee === "object" ? rawFee : null;
   const feeValue = feeObject ? (feeObject.value ?? feeObject.amount ?? null) : rawFee;
 
