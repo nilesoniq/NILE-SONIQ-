@@ -913,7 +913,8 @@ async function dbRoute(request, env, path) {
     // This applies even when a caller supplies a custom `select` parameter.
     const publicArtistColumns = new Set([
       "id", "name", "bio", "avatar_url", "location",
-      "total_plays", "verified", "is_premium", "premium_expiry_date", "created_at"
+      "total_plays", "verified", "is_premium", "premium_expiry_date",
+      "package_name", "package_expiry_date", "created_at"
     ]);
 
     if (
@@ -943,7 +944,7 @@ async function dbRoute(request, env, path) {
 
     const effectiveColumns =
       publicArtistRead && columns.includes("*")
-        ? "id, name, bio, avatar_url, location, total_plays, verified, is_premium, premium_expiry_date, created_at"
+        ? "id, name, bio, avatar_url, location, total_plays, verified, is_premium, premium_expiry_date, package_name, package_expiry_date, created_at"
         : columns.join(",");
 
     let query = `SELECT ${effectiveColumns} FROM ${table}${where}`;
