@@ -1568,7 +1568,8 @@ footer{
 /* NILESONIQ PUBLIC ARTIST PROFILE */
 .artist-card{cursor:pointer;transition:transform .2s ease,border-color .2s ease,box-shadow .2s ease}
 .artist-card:hover{transform:translateY(-4px);border-color:var(--orange);box-shadow:0 12px 30px rgba(0,0,0,.25)}
-.artist-verified-tick{display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;margin-left:5px;border-radius:50%;background:#1688f8;color:#fff;font-size:12px;font-weight:900;line-height:1;vertical-align:middle;flex:none}
+/* Blue verified badge inspired by major social platforms; original NileSoniQ styling. */
+.artist-verified-tick{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;box-sizing:border-box;margin-left:5px;border-radius:50%;background:#1877f2;border:1.5px solid #fff;color:#fff;font-family:Arial,sans-serif;font-size:12px;font-weight:900;line-height:1;vertical-align:middle;flex:0 0 18px;box-shadow:0 0 0 1px rgba(24,119,242,.25)}
 #artistProfileModal{position:fixed;inset:0;z-index:9999;display:none;align-items:center;justify-content:center;padding:20px}
 #artistProfileModal.show{display:flex}
 .artist-profile-overlay{position:absolute;inset:0;background:rgba(0,0,0,.82);backdrop-filter:blur(8px)}
@@ -4824,7 +4825,11 @@ function renderDashboardArtistProfile(artist){
   const locationEl = document.getElementById("dashboardArtistLocation");
   const bioEl = document.getElementById("dashboardArtistBio");
   const avatarEl = document.getElementById("dashboardArtistAvatar");
-  if(nameEl) nameEl.textContent = name;
+  if(nameEl){
+    nameEl.innerHTML = escapeHtml(name) + (isArtistVerified(artist)
+      ? ' <span class="artist-verified-tick" role="img" aria-label="Verified artist" title="Verified artist">✓</span>'
+      : "");
+  }
   const premiumBadge=document.getElementById("dashboardArtistPremiumBadge");
   if(premiumBadge){
     premiumBadge.textContent = "★ " + getArtistPackageBadgeLabel(artist) + " ARTIST";
