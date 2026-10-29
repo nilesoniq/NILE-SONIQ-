@@ -1724,6 +1724,138 @@ footer{
 }
 @media(max-height:700px) and (max-width:600px){#authModal .modal-box{padding:10px;}#authModal .modal-header{margin-bottom:6px;}#authModal .modal-box .field{margin-bottom:5px;}#authModal .modal-box p{font-size:11px!important;}}
 
+
+/* NILESONIQ PHONE LAYOUT — layout-only overrides; existing dashboard features remain intact. */
+@media (max-width: 640px) {
+  #dashboardPage .container,
+  #adminPage .container {
+    width: calc(100% - 20px);
+    max-width: none;
+  }
+
+  #dashboardPage .dashboard-header,
+  #adminPage .dashboard-header {
+    padding: 20px 0 14px;
+  }
+
+  #dashboardPage .dashboard-header h1,
+  #adminPage .dashboard-header h1 {
+    font-size: clamp(21px, 6vw, 28px);
+    overflow-wrap: anywhere;
+  }
+
+  #dashboardPage .stats-grid,
+  #adminPage .stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  #dashboardPage .artist-summary-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  #dashboardPage .artist-summary-stats .stat-card {
+    padding: 10px;
+  }
+
+  #dashboardPage .artist-summary-stats .stat-card strong {
+    font-size: clamp(14px, 4vw, 20px);
+  }
+
+  #dashboardPage .artist-summary-stats .stat-card span {
+    font-size: 11px;
+    min-height: 0;
+  }
+
+  #dashboardPage .artist-summary-stats .stat-card p,
+  #dashboardPage .artist-summary-stats .stat-card small {
+    display: block !important;
+  }
+
+  #dashboardPage .dashboard-card,
+  #adminPage .dashboard-card {
+    min-width: 0;
+    max-width: 100%;
+    padding: 12px;
+    overflow-wrap: anywhere;
+  }
+
+  #dashboardPage .form-grid,
+  #adminPage .form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  #dashboardPage .field,
+  #adminPage .field,
+  #dashboardPage .form-grid > *,
+  #adminPage .form-grid > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  #dashboardPage .field input,
+  #dashboardPage .field textarea,
+  #dashboardPage .field select,
+  #adminPage .field input,
+  #adminPage .field textarea,
+  #adminPage .field select {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  #dashboardPage .table-wrap,
+  #adminPage .table-wrap {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  #dashboardPage button,
+  #adminPage button {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  #artistProfileModal {
+    padding: 8px;
+  }
+
+  #artistProfileModal .artist-profile-box {
+    width: 100%;
+    max-height: calc(100dvh - 16px);
+    padding: 16px;
+    border-radius: 16px;
+  }
+
+  #artistProfileModal .artist-profile-header {
+    align-items: flex-start;
+    gap: 12px;
+    padding-right: 38px;
+  }
+
+  #artistProfileModal .artist-profile-photo {
+    width: 76px;
+    height: 76px;
+  }
+
+  #artistProfileModal .artist-profile-main {
+    min-width: 0;
+  }
+
+  #artistProfileModal .artist-profile-main h2 {
+    font-size: 22px;
+    overflow-wrap: anywhere;
+  }
+
+  #artistProfileModal .nilesoniq-premium-badge {
+    margin-left: 0;
+    margin-top: 5px;
+    white-space: normal;
+  }
+}
+
 </style>
 </head>
 
@@ -4618,10 +4750,30 @@ function getArtistPackageBadgeLabel(artist){
 
 function isArtistPremiumActive(artist){
   if(!artist) return false;
-  const flag = artist.is_premium === true || artist.is_premium === 1 || artist.is_premium === "1";
-  const expiryValue = artist.premium_expiry_date || artist.package_expiry_date;
-  if(!flag || !expiryValue) return false;
-  const expiry = Date.parse(expiryValue);
+
+  const rawFlag = artist.is_premium;
+  const flag = rawFlag === true || rawFlag === 1 ||
+    (typeof rawFlag === "string" &&
+      ["1", "true"].includes(rawFlag.trim().toLowerCase()));
+  if(!flag) return false;
+
+  const expiryValue = String(
+    artist.premium_expiry_date || artist.package_expiry_date || ""
+  ).trim();
+  if(!expiryValue) return false;
+
+  // Cloudflare D1/SQLite commonly returns "YYYY-MM-DD HH:mm:ss" in UTC.
+  // Normalize that format before parsing so Safari/macOS handles it reliably.
+  let normalizedExpiry = expiryValue;
+  if(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/.test(normalizedExpiry)){
+    normalizedExpiry = normalizedExpiry.replace(" ", "T") + "Z";
+  }else if(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/.test(normalizedExpiry)){
+    normalizedExpiry += "Z";
+  }else if(/^\d{4}-\d{2}-\d{2}$/.test(normalizedExpiry)){
+    normalizedExpiry += "T00:00:00Z";
+  }
+
+  const expiry = Date.parse(normalizedExpiry);
   return Number.isFinite(expiry) && expiry > Date.now();
 }
 
