@@ -2276,7 +2276,7 @@ Save Profile
 <div class="artist-summary-stats">
 <div class="stat-card"><span>Total Plays</span><strong id="totalPlays">0</strong></div>
 <div class="stat-card"><span>Estimated Artist Net Earnings</span><strong id="totalEarnings">UGX 0</strong><small style="display:block;color:#888;font-size:11px;margin-top:5px;">After 20% platform commission and 5% tax allocation</small></div>
-<div class="stat-card balance-card"><span>Available Balance</span><strong id="availableBalance">UGX 0</strong><p style="color:#777;font-size:12px;margin-top:8px;">Amount currently available for withdrawal. Minimum withdrawal: UGX 10,000</p></div>
+<div class="stat-card balance-card"><span>Available Balance</span><strong id="availableBalance">UGX 0</strong><p id="availableBalanceMinimumText" style="color:#777;font-size:12px;margin-top:8px;">Amount currently available for withdrawal. Minimum withdrawal: UGX 10,000</p></div>
 <div class="stat-card balance-card"><span>Amount Withdrawn</span><strong id="amountWithdrawn">UGX 0</strong><p style="color:#777;font-size:12px;margin-top:8px;">Total amount from completed withdrawals.</p></div>
 </div>
 <div class="stats-grid artist-song-count" style="margin-top:16px;">
@@ -2312,7 +2312,7 @@ Save Profile
 
 <p class="withdrawal-minimum">
 You can request a withdrawal when your available balance
-is at least <strong>UGX 10,000</strong>.
+is at least <strong id="withdrawalMinimumAmount">UGX 10,000</strong>.
 </p>
 
 <div id="withdrawalMessage"
@@ -2329,7 +2329,7 @@ id="withdrawAmount"
 type="number"
 placeholder="e.g. 10000"
 min="10000"
-step="1000">
+step="100">
 
 </div>
 
@@ -3418,7 +3418,38 @@ const publicSb=cloudflareData;
    EARNINGS
 ========================================================= */
 
-const WITHDRAWAL_MINIMUM = 10000;
+const ARTIST_PACKAGE_WITHDRAWAL_MINIMUMS = Object.freeze({
+  free: 10000,
+  premium: 7000,
+  hustler: 5000,
+  hit_maker: 3000,
+  star: 1000
+});
+
+function getCurrentArtistWithdrawalMinimum(){
+  const packageCode = String(
+    currentArtist?.package_name || currentArtist?.artist_package || "free"
+  ).trim().toLowerCase().replace(/[ -]+/g, "_");
+  return ARTIST_PACKAGE_WITHDRAWAL_MINIMUMS[packageCode] ??
+    ARTIST_PACKAGE_WITHDRAWAL_MINIMUMS.free;
+}
+
+function updateArtistWithdrawalMinimumDisplay(){
+  const minimum = getCurrentArtistWithdrawalMinimum();
+  const formattedMinimum = "UGX " + minimum.toLocaleString("en-US");
+  const balanceHint = document.getElementById("availableBalanceMinimumText");
+  const formAmount = document.getElementById("withdrawalMinimumAmount");
+  const amountInput = document.getElementById("withdrawAmount");
+
+  if(balanceHint){
+    balanceHint.textContent = "Amount currently available for withdrawal. Minimum withdrawal: " + formattedMinimum;
+  }
+  if(formAmount) formAmount.textContent = formattedMinimum;
+  if(amountInput){
+    amountInput.min = String(minimum);
+    amountInput.placeholder = "e.g. " + minimum;
+  }
+}
 const EARNINGS_PER_PLAY = 0.375; // UGX 0.50 gross less 20% commission and 5% tax allocation
 
 
@@ -4775,6 +4806,7 @@ function isArtistPremiumActive(artist){
 }
 
 function renderDashboardArtistProfile(artist){
+  updateArtistWithdrawalMinimumDisplay();
   const name = (artist && artist.name) || document.getElementById("artistName")?.value?.trim() || "Your artist profile";
   const location = (artist && artist.location) || document.getElementById("artistLocation")?.value?.trim() || "Add your location";
   const bio = (artist && artist.bio) || document.getElementById("artistBio")?.value?.trim() || "Your biography will appear here.";
@@ -4856,6 +4888,8 @@ async function loadArtistProfile(){
 
     currentArtist = data;
 
+
+        updateArtistWithdrawalMinimumDisplay();
 
     if(!data){
 
@@ -8056,14 +8090,17 @@ async function requestWithdrawal(){
     );
 
 
+  const withdrawalMinimum = getCurrentArtistWithdrawalMinimum();
+
   if(
     !amount ||
-    amount < WITHDRAWAL_MINIMUM
+    amount < withdrawalMinimum
   ){
 
     showMessage(
       "withdrawalMessage",
-      "The minimum withdrawal amount is UGX 10,000.",
+      "The minimum withdrawal amount for your current package is UGX " +
+        withdrawalMinimum.toLocaleString("en-US") + ".",
       "error"
     );
 
@@ -10299,6 +10336,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   /* Premium status is refreshed after authentication and artist-profile loading. */
   updatePremiumSubscriptionCardVisibility(Boolean(currentUser && currentArtist));
   updateArtistPackageDetails();
+  updateArtistWithdrawalMinimumDisplay();
   await handleAuthEmailLink();
 });
 
