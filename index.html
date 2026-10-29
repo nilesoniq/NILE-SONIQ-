@@ -1649,7 +1649,13 @@ footer{
 .wallet-balance{font-size:34px;font-weight:900;margin:8px 0 18px}
 .wallet-note{color:#888;font-size:12px;line-height:1.5;margin-top:10px}
 @media(max-width:900px){.analytics-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.analytics-two{grid-template-columns:1fr}}
-@media(max-width:520px){.analytics-grid{grid-template-columns:1fr}.wallet-balance{font-size:28px}}
+@media(max-width:520px){
+  .analytics-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:12px 0}
+  .analytics-grid .analytics-card{min-width:0;padding:10px;border-radius:12px}
+  .analytics-grid .analytics-card span{font-size:10px;line-height:1.25;margin-bottom:5px;overflow-wrap:anywhere}
+  .analytics-grid .analytics-card strong{font-size:clamp(16px,5vw,21px);line-height:1.2;overflow-wrap:anywhere}
+  .wallet-balance{font-size:28px}
+}
 
 
 
