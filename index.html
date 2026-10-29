@@ -1568,6 +1568,7 @@ footer{
 /* NILESONIQ PUBLIC ARTIST PROFILE */
 .artist-card{cursor:pointer;transition:transform .2s ease,border-color .2s ease,box-shadow .2s ease}
 .artist-card:hover{transform:translateY(-4px);border-color:var(--orange);box-shadow:0 12px 30px rgba(0,0,0,.25)}
+.artist-verified-tick{display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;margin-left:5px;border-radius:50%;background:#1688f8;color:#fff;font-size:12px;font-weight:900;line-height:1;vertical-align:middle;flex:none}
 #artistProfileModal{position:fixed;inset:0;z-index:9999;display:none;align-items:center;justify-content:center;padding:20px}
 #artistProfileModal.show{display:flex}
 .artist-profile-overlay{position:absolute;inset:0;background:rgba(0,0,0,.82);backdrop-filter:blur(8px)}
@@ -4776,6 +4777,14 @@ function getArtistPackageBadgeLabel(artist){
   return packages[key] || "PREMIUM";
 }
 
+function isArtistVerified(artist){
+  if(!artist) return false;
+  const value = artist.verified;
+  return value === true || value === 1 ||
+    (typeof value === "string" &&
+      ["1", "true"].includes(value.trim().toLowerCase()));
+}
+
 function isArtistPremiumActive(artist){
   if(!artist) return false;
 
@@ -6887,18 +6896,11 @@ async function openArtistProfile(artistId, fromPublicRoute=false){
 
   try{
 
-    const {
-      data:artist,
-      error:artistError
-    } = await sb
-      .from("artists")
-      .select("*")
-      .eq("id",artistId)
-      .maybeSingle();
-
-    if(artistError){
-      throw artistError;
-    }
+    // Load public artist details from the Cloudflare Worker-backed API.
+    const publicArtists = await loadPublicTable("artists", { limit: 500 });
+    const artist = (publicArtists || []).find(item =>
+      String(item.id) === String(artistId)
+    );
 
     if(!artist){
 
@@ -6984,7 +6986,7 @@ async function openArtistProfile(artistId, fromPublicRoute=false){
         <div class="artist-profile-main">
 
           <h2>
-            ${escapeHtml(artist.name || "Unknown Artist")}
+            ${escapeHtml(artist.name || "Unknown Artist")}${isArtistVerified(artist) ? ' <span class="artist-verified-tick" role="img" aria-label="Verified artist" title="Verified artist">✓</span>' : ""}
             ${isArtistPremiumActive(artist) ? '<span class="nilesoniq-premium-badge" aria-label="Active ' + escapeHtml(getArtistPackageBadgeLabel(artist)) + ' artist">★ ' + escapeHtml(getArtistPackageBadgeLabel(artist)) + '</span>' : ''}
           </h2>
 
@@ -7667,7 +7669,7 @@ async function loadArtists(){
             <div style="font-size:12px;color:#aaa;font-weight:700;">${formatNumber(artist.__artistPlays || 0)} views</div>
           </div>
           <div class="artist-avatar">${avatar}</div>
-          <h3>${escapeHtml(artist.name || "Unknown Artist")}</h3>
+          <h3>${escapeHtml(artist.name || "Unknown Artist")}${isArtistVerified(artist) ? ' <span class="artist-verified-tick" role="img" aria-label="Verified artist" title="Verified artist">✓</span>' : ""}</h3>
           ${isArtistPremiumActive(artist) ? '<div class="nilesoniq-premium-badge" aria-label="Active ' + escapeHtml(getArtistPackageBadgeLabel(artist)) + ' artist">★ ' + escapeHtml(getArtistPackageBadgeLabel(artist)) + ' ARTIST</div>' : ''}
           <p>${escapeHtml(artist.location || "Uganda")}</p>
         </div>`;
