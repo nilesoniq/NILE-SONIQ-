@@ -8,7 +8,14 @@ const ARTIST_COMMISSION_RATE = 0.20;
 const ARTIST_TAX_ALLOCATION_RATE = 0.05;
 const ARTIST_NET_RATE = 1 - ARTIST_COMMISSION_RATE - ARTIST_TAX_ALLOCATION_RATE;
 const ARTIST_FREE_NET_PER_PLAY = EARNINGS_PER_PLAY * ARTIST_NET_RATE;
-const WITHDRAWAL_MINIMUM = 10000;
+const ARTIST_PACKAGE_WITHDRAWAL_MINIMUMS = Object.freeze({
+  free: 10000,
+  premium: 7000,
+  hustler: 5000,
+  hit_maker: 3000,
+  star: 1000
+});
+const DEFAULT_WITHDRAWAL_MINIMUM = ARTIST_PACKAGE_WITHDRAWAL_MINIMUMS.free;
 // Rollout cutoff is stored in UTC because SQLite datetime('now') is UTC.
 // Songs created before this cutoff remain stored and are excluded from the
 // rollout month's upload count. No existing song is deleted or changed.
@@ -21,9 +28,6 @@ const ARTIST_PACKAGE_UPLOAD_LIMITS = Object.freeze({
   hit_maker: Number.MAX_SAFE_INTEGER,
   star: Number.MAX_SAFE_INTEGER
 });
-
-// Cache the one-time D1 verification-column check within this Worker isolate.
-let starPackageVerificationColumnReady = false;
 
 const PUBLIC_READ_TABLES = new Set([
   "songs", "artists", "comments", "likes",
@@ -83,6 +87,27 @@ function json(data, status = 200, headers = {}) {
 
 function error(message, status = 400) {
   return json({ error: message }, status);
+}
+
+// Temporary, explicitly labelled CEO test credits are stored separately from
+// public song plays and the real artist earnings ledger. They can affect only
+// the account's available-balance and withdrawal-limit calculations.
+async function ensureArtistTestAdjustmentsTable(env) {
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS artist_test_adjustments (
+      id TEXT PRIMARY KEY,
+      artist_id TEXT NOT NULL,
+      amount REAL NOT NULL CHECK (amount > 0),
+      note TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'active',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      expires_at TEXT
+    )
+  `).run();
+  await env.DB.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_artist_test_adjustments_artist_status
+    ON artist_test_adjustments (artist_id, status)
+  `).run();
 }
 
 function makeCookie(token, maxAge) {
@@ -1271,6 +1296,19 @@ async function dbRoute(request, env, path) {
           // Force ownership server-side, regardless of client input.
           row.artist_id = user.id;
 
+          // Determine the withdrawal minimum from the provider-confirmed,
+          // currently active package. Never trust a package supplied by the client.
+          let packageCode = "free";
+          try {
+            const entitlement = await syncArtistPremiumEntitlement(env, user.id);
+            packageCode = String(entitlement?.packageCode || "free").trim().toLowerCase();
+          } catch (entitlementError) {
+            console.error("Could not verify artist package before withdrawal:", entitlementError.message);
+            return error("We could not verify your artist package right now. Please try again shortly.", 503);
+          }
+          const withdrawalMinimum =
+            ARTIST_PACKAGE_WITHDRAWAL_MINIMUMS[packageCode] ?? DEFAULT_WITHDRAWAL_MINIMUM;
+
           const amount = Number(row.amount);
           const paymentMethod = String(
             row.payment_method || ""
@@ -1281,12 +1319,12 @@ async function dbRoute(request, env, path) {
 
           if (
             !Number.isFinite(amount) ||
-            amount < WITHDRAWAL_MINIMUM ||
+            amount < withdrawalMinimum ||
             !paymentMethod ||
             !paymentDetails
           ) {
             return error(
-              "A valid amount of at least UGX 10,000, payment method, and payment details are required",
+              `A valid amount of at least UGX ${withdrawalMinimum.toLocaleString("en-US")}, payment method, and payment details are required for your ${packageCode.replace(/_/g, " ")} package`,
               422
             );
           }
@@ -1300,6 +1338,9 @@ async function dbRoute(request, env, path) {
             status: "pending",
             created_at: new Date().toISOString()
           };
+
+          // Test adjustments are separate from real plays and the real earnings ledger.
+          await ensureArtistTestAdjustmentsTable(env);
 
           // Check available earnings and create the reservation in one SQL
           // statement. Concurrent requests cannot both spend the same balance.
@@ -1322,6 +1363,13 @@ async function dbRoute(request, env, path) {
                     AND source_type = 'qualified_play'
                     AND status = 'posted'
                 ), 0)
+                + COALESCE((
+                  SELECT SUM(amount)
+                  FROM artist_test_adjustments
+                  WHERE artist_id = ?
+                    AND status = 'active'
+                    AND (expires_at IS NULL OR datetime(expires_at) > datetime('now'))
+                ), 0)
                 - COALESCE((
                   SELECT SUM(amount)
                   FROM withdrawal_requests
@@ -1343,6 +1391,7 @@ async function dbRoute(request, env, path) {
               user.id,
               ARTIST_FREE_NET_PER_PLAY,
               ARTIST_FREE_NET_PER_PLAY,
+              user.id,
               user.id,
               user.id
             ).run();
@@ -2070,13 +2119,24 @@ async function rpcRoute(request, env, name) {
       if (!user) {
         return error("Authentication required", 401);
       }
+      await ensureArtistTestAdjustmentsTable(env);
       const result = await env.DB.prepare(`
-        SELECT COALESCE(SUM(net_amount - ?), 0) AS adjustment
-        FROM artist_earning_ledger
-        WHERE artist_id = ?
-          AND source_type = 'qualified_play'
-          AND status = 'posted'
-      `).bind(ARTIST_FREE_NET_PER_PLAY, user.id).first();
+        SELECT
+          COALESCE((
+            SELECT SUM(net_amount - ?)
+            FROM artist_earning_ledger
+            WHERE artist_id = ?
+              AND source_type = 'qualified_play'
+              AND status = 'posted'
+          ), 0)
+          + COALESCE((
+            SELECT SUM(amount)
+            FROM artist_test_adjustments
+            WHERE artist_id = ?
+              AND status = 'active'
+              AND (expires_at IS NULL OR datetime(expires_at) > datetime('now'))
+          ), 0) AS adjustment
+      `).bind(ARTIST_FREE_NET_PER_PLAY, user.id, user.id).first();
       return json({ data: Number(result?.adjustment || 0), error: null });
     }
 
@@ -2850,26 +2910,9 @@ function premiumPaymentFailureMessage(value) {
   return raw ? `Payment could not be completed: ${raw}` : "Mobile-money payment failed. Check your wallet balance and transaction limits, then try again.";
 }
 
-async function ensureStarPackageVerificationColumn(env) {
-  if (starPackageVerificationColumnReady) return;
-  try {
-    await env.DB.prepare("ALTER TABLE artists ADD COLUMN star_package_verified INTEGER NOT NULL DEFAULT 0").run();
-    starPackageVerificationColumnReady = true;
-  } catch (error) {
-    // D1 has no portable IF NOT EXISTS form for ADD COLUMN. Confirm that the
-    // column already exists; otherwise preserve and surface the real error.
-    const info = await env.DB.prepare("PRAGMA table_info(artists)").all();
-    const columns = Array.isArray(info?.results) ? info.results : [];
-    if (!columns.some(column => String(column.name || "") === "star_package_verified")) throw error;
-    starPackageVerificationColumnReady = true;
-  }
-}
-
 async function syncArtistPremiumEntitlement(env, userId, preferredArtistId = null) {
   const uid = String(userId || "").trim();
   if (!uid) return { artistFound: false, isPremium: false, expiresAt: null };
-
-  await ensureStarPackageVerificationColumn(env);
 
   const artist = preferredArtistId
     ? await env.DB.prepare("SELECT id FROM artists WHERE id = ? AND user_id = ? LIMIT 1").bind(preferredArtistId, uid).first()
@@ -2895,14 +2938,11 @@ async function syncArtistPremiumEntitlement(env, userId, preferredArtistId = nul
   await env.DB.prepare(`
     UPDATE artists
     SET is_premium = ?, premium_expiry_date = ?, package_name = ?,
-        package_expiry_date = ?, earnings_rate = ?,
-        star_package_verified = ?
+        package_expiry_date = ?, earnings_rate = ?
     WHERE id = ? AND user_id = ?
-  `).bind(isPremium ? 1 : 0, expiresAt, packageCode, expiresAt, rate,
-          isPremium && packageCode === "star" ? 1 : 0, artist.id, uid).run();
+  `).bind(isPremium ? 1 : 0, expiresAt, packageCode, expiresAt, rate, artist.id, uid).run();
 
-  return { artistFound: true, artistId: artist.id, isPremium, expiresAt, packageCode, rate,
-    starPackageVerified: isPremium && packageCode === "star" };
+  return { artistFound: true, artistId: artist.id, isPremium, expiresAt, packageCode, rate };
 }
 
 async function premiumSubscriptionRoute(request, env) {
@@ -3670,6 +3710,7 @@ async function artistDashboardRoute(request, env) {
     ).bind(user.id).first().catch(() => null);
     const artistId = String(artist?.id || user.id);
     const ids = [...new Set([String(user.id), artistId])];
+    await ensureArtistTestAdjustmentsTable(env);
     const [songResult, ledgerResult, withdrawalResult] = await Promise.all([
       env.DB.prepare(`
         SELECT * FROM songs
@@ -3678,12 +3719,22 @@ async function artistDashboardRoute(request, env) {
         LIMIT 500
       `).bind(ids[0], ids[1]).all(),
       env.DB.prepare(`
-        SELECT COALESCE(SUM(net_amount - ?), 0) AS adjustment
-        FROM artist_earning_ledger
-        WHERE artist_id IN (?, ?)
-          AND source_type = 'qualified_play'
-          AND status = 'posted'
-      `).bind(ARTIST_FREE_NET_PER_PLAY, ids[0], ids[1]).first(),
+        SELECT
+          COALESCE((
+            SELECT SUM(net_amount - ?)
+            FROM artist_earning_ledger
+            WHERE artist_id IN (?, ?)
+              AND source_type = 'qualified_play'
+              AND status = 'posted'
+          ), 0)
+          + COALESCE((
+            SELECT SUM(amount)
+            FROM artist_test_adjustments
+            WHERE artist_id IN (?, ?)
+              AND status = 'active'
+              AND (expires_at IS NULL OR datetime(expires_at) > datetime('now'))
+          ), 0) AS adjustment
+      `).bind(ARTIST_FREE_NET_PER_PLAY, ids[0], ids[1], ids[0], ids[1]).first(),
       env.DB.prepare(`
         SELECT
           COALESCE(SUM(CASE WHEN lower(status) IN ('pending','processing','paid','completed','success','successful') THEN amount ELSE 0 END), 0) AS reserved,
