@@ -1613,6 +1613,69 @@ async function adminRoute(request, env, path) {
   const superAdmin = admin.role === "super_admin";
   const url = new URL(request.url);
 
+  if (request.method === "GET" && path === "/api/admin/analytics") {
+    if (!superAdmin) return error("Super Admin access required", 403);
+    try {
+      const [songResult, artistResult] = await Promise.all([
+        env.DB.prepare(`
+          SELECT id, title, artist, artist_id, plays, likes, approved, review_status, created_at
+          FROM songs
+          ORDER BY rowid DESC
+          LIMIT 5000
+        `).all(),
+        env.DB.prepare(`
+          SELECT id, user_id, name
+          FROM artists
+          ORDER BY created_at DESC
+          LIMIT 5000
+        `).all()
+      ]);
+      const songs = songResult.results || [];
+      const artists = artistResult.results || [];
+      const approved = songs.filter(song => {
+        const status = String(song.review_status || "").toLowerCase();
+        return status === "approved" || (!status && Number(song.approved) === 1);
+      });
+      const pending = songs.filter(song => {
+        const status = String(song.review_status || "").toLowerCase();
+        return status === "pending" || (!status && Number(song.approved) !== 1);
+      });
+      const totalPlays = songs.reduce((sum, song) => sum + Math.max(0, Number(song.plays || 0)), 0);
+      const totalLikes = songs.reduce((sum, song) => sum + Math.max(0, Number(song.likes || 0)), 0);
+      const artistNames = new Map();
+      for (const artist of artists) {
+        if (artist.id) artistNames.set(String(artist.id), artist.name || "Unknown Artist");
+        if (artist.user_id) artistNames.set(String(artist.user_id), artist.name || "Unknown Artist");
+      }
+      const artistStats = new Map();
+      for (const song of songs) {
+        const key = String(song.artist_id || song.artist || "unknown");
+        if (!artistStats.has(key)) {
+          artistStats.set(key, { name: artistNames.get(key) || song.artist || "Unknown Artist", songs: 0, plays: 0 });
+        }
+        const stat = artistStats.get(key);
+        stat.songs += 1;
+        stat.plays += Math.max(0, Number(song.plays || 0));
+      }
+      return json({
+        data: {
+          totalSongs: songs.length,
+          approvedSongs: approved.length,
+          pendingSongs: pending.length,
+          totalArtists: artists.length,
+          totalPlays,
+          totalLikes,
+          topSongs: [...songs].sort((a, b) => Number(b.plays || 0) - Number(a.plays || 0)).slice(0, 10),
+          topArtists: [...artistStats.values()].sort((a, b) => b.plays - a.plays).slice(0, 10)
+        },
+        error: null
+      });
+    } catch (e) {
+      console.error("Admin analytics load failed:", e.message);
+      return error("Could not load admin analytics", 500);
+    }
+  }
+
   if (request.method === "GET" && path === "/api/admins") {
     if (!superAdmin) {
       return error("Super Admin access required", 403);
@@ -3512,14 +3575,10 @@ async function artistNotificationsRoute(request, env) {
   }
 }
 
-// One authenticated source of truth for the artist dashboard. It returns the
-// signed-in artist's songs (including pending submissions), lifetime plays,
-// package-adjusted net earnings, and the balance after reserved withdrawals.
 async function artistDashboardRoute(request, env) {
   const user = await currentUser(request, env);
   if (!user) return error("Authentication required", 401);
   if (request.method !== "GET") return error("Method not allowed", 405);
-
   try {
     const artist = await env.DB.prepare(
       "SELECT id FROM artists WHERE user_id = ? LIMIT 1"
@@ -3547,15 +3606,12 @@ async function artistDashboardRoute(request, env) {
         FROM withdrawal_requests WHERE artist_id = ?
       `).bind(user.id).first()
     ]);
-
     const songs = songResult.results || [];
     const totalPlays = songs.reduce((sum, song) => sum + Math.max(0, Number(song.plays || 0)), 0);
-    const approvedPlays = songs.filter(song => Number(song.approved) === 1 || String(song.review_status || '').toLowerCase() === 'approved')
-      .reduce((sum, song) => sum + Math.max(0, Number(song.plays || 0)), 0);
+    const approvedPlays = songs.filter(song => Number(song.approved) === 1 || String(song.review_status || "").toLowerCase() === "approved").reduce((sum, song) => sum + Math.max(0, Number(song.plays || 0)), 0);
     const earnings = Math.max(0, approvedPlays * ARTIST_FREE_NET_PER_PLAY + Number(ledgerResult?.adjustment || 0));
     const reserved = Math.max(0, Number(withdrawalResult?.reserved || 0));
     const availableBalance = Math.max(0, earnings - reserved);
-
     return json({
       data: {
         songs,
@@ -3669,6 +3725,7 @@ export default {
         path.startsWith("/api/admins/") ||
         path === "/api/admin/songs" ||
         path.startsWith("/api/admin/songs/") ||
+        path === "/api/admin/analytics" ||
         path === "/api/admin/copyright-removals"
       ) {
         response = await adminRoute(request, env, path);
