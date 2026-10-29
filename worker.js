@@ -1221,9 +1221,10 @@ async function dbRoute(request, env, path) {
           const packageCode = String(entitlement?.packageCode || 'free').toLowerCase();
           const uploadLimit = ARTIST_PACKAGE_UPLOAD_LIMITS[packageCode] ?? ARTIST_PACKAGE_UPLOAD_LIMITS.free;
 
-          // Pending/rejected submissions count toward the monthly limit. The
-          // insert and count are one SQL statement so simultaneous uploads cannot
-          // exceed the allowance. In the rollout month, pre-cutoff songs are
+          // Only approved songs count toward the monthly package limit.
+          // Pending and rejected submissions do not consume an allowance.
+          // The insert and count remain one SQL statement to handle simultaneous
+          // uploads safely. In the rollout month, pre-cutoff songs are
           // grandfathered; later months count from the calendar-month start.
           const insertResult = await env.DB.prepare(`
             INSERT INTO songs (${insertKeys.join(",")})
@@ -1231,6 +1232,7 @@ async function dbRoute(request, env, path) {
             WHERE (
               SELECT COUNT(*) FROM songs
               WHERE artist_id = ?
+                AND approved = 1
                 AND datetime(created_at) >= CASE
                   WHEN datetime('now', 'start of month') > datetime(?)
                     THEN datetime('now', 'start of month')
@@ -1851,22 +1853,72 @@ async function adminRoute(request, env, path) {
 
     try {
       const song = await env.DB.prepare(
-        "SELECT id FROM songs WHERE id = ? LIMIT 1"
+        "SELECT id, artist_id, approved FROM songs WHERE id = ? LIMIT 1"
       ).bind(songId).first();
 
       if (!song) {
         return error("Song not found", 404);
       }
 
-      await env.DB.prepare(`
-        UPDATE songs
-        SET approved = ?, review_status = ?
-        WHERE id = ?
-      `).bind(
-        status === "approved" ? 1 : 0,
-        status,
-        songId
-      ).run();
+      // Approval is the moment a song starts consuming the artist's monthly
+      // allowance. Pending and rejected songs do not count. Keep this check
+      // inside the UPDATE statement so two simultaneous approvals cannot
+      // both exceed the artist's package limit.
+      let uploadLimit = null;
+      if (status === "approved" && Number(song.approved) !== 1) {
+        let entitlement;
+        try {
+          entitlement = await syncArtistPremiumEntitlement(env, song.artist_id);
+        } catch (entitlementError) {
+          console.error("Could not verify artist package before approval:", entitlementError.message);
+          return error("Could not verify the artist's package. The song was not approved. Please try again.", 503);
+        }
+
+        const packageCode = String(entitlement?.packageCode || "free").toLowerCase();
+        uploadLimit = ARTIST_PACKAGE_UPLOAD_LIMITS[packageCode] ?? ARTIST_PACKAGE_UPLOAD_LIMITS.free;
+
+        const updateResult = await env.DB.prepare(`
+          UPDATE songs
+          SET approved = 1, review_status = 'approved'
+          WHERE id = ?
+            AND (
+              SELECT COUNT(*)
+              FROM songs AS counted
+              WHERE counted.artist_id = songs.artist_id
+                AND counted.approved = 1
+                AND counted.id != songs.id
+                AND datetime(counted.created_at) >= CASE
+                  WHEN datetime('now', 'start of month') > datetime(?)
+                    THEN datetime('now', 'start of month')
+                  ELSE datetime(?)
+                END
+                AND datetime(counted.created_at) < datetime('now', 'start of month', '+1 month')
+            ) < ?
+        `).bind(
+          songId,
+          PACKAGE_LIMITS_EFFECTIVE_AT,
+          PACKAGE_LIMITS_EFFECTIVE_AT,
+          uploadLimit
+        ).run();
+
+        if (Number(updateResult?.meta?.changes || 0) === 0) {
+          const limitLabel = uploadLimit >= Number.MAX_SAFE_INTEGER ? "unlimited" : String(uploadLimit);
+          return error(
+            `This song cannot be approved because the artist has reached the ${packageCode.replace(/_/g, " ")} package limit (${limitLabel} approved songs this month). Pending and rejected songs do not count.`,
+            429
+          );
+        }
+      } else {
+        await env.DB.prepare(`
+          UPDATE songs
+          SET approved = ?, review_status = ?
+          WHERE id = ?
+        `).bind(
+          status === "approved" ? 1 : 0,
+          status,
+          songId
+        ).run();
+      }
 
       return json({
         success: true,
@@ -2202,6 +2254,7 @@ async function uploadPreflightRoute(request, env) {
       SELECT COUNT(*) AS total
       FROM songs
       WHERE artist_id = ?
+        AND approved = 1
         AND datetime(created_at) >= CASE
           WHEN datetime('now', 'start of month') > datetime(?)
             THEN datetime('now', 'start of month')
