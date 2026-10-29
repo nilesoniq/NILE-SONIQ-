@@ -8,6 +8,17 @@ const ARTIST_COMMISSION_RATE = 0.20;
 const ARTIST_TAX_ALLOCATION_RATE = 0.05;
 const ARTIST_NET_RATE = 1 - ARTIST_COMMISSION_RATE - ARTIST_TAX_ALLOCATION_RATE;
 const WITHDRAWAL_MINIMUM = 10000;
+// Package limits apply to new uploads from this date onward. Songs uploaded
+// before the rollout remain stored and are grandfathered out of the initial
+// October 2026 monthly count; no existing song is deleted or changed.
+const PACKAGE_LIMITS_EFFECTIVE_AT = "2026-10-29 00:00:00";
+const ARTIST_PACKAGE_UPLOAD_LIMITS = Object.freeze({
+  free: 3,
+  premium: 6,
+  hustler: 15,
+  hit_maker: Number.MAX_SAFE_INTEGER,
+  star: Number.MAX_SAFE_INTEGER
+});
 
 const PUBLIC_READ_TABLES = new Set([
   "songs", "artists", "comments", "likes",
@@ -1196,33 +1207,40 @@ async function dbRoute(request, env, path) {
 
           const insertKeys = Object.keys(safeRow);
 
-          // Server-side package entitlement. Pending/rejected submissions count
-          // toward monthly limits. A paid package only applies while its verified
-          // provider-confirmed subscription is active and unexpired.
-          const activePackage = await env.DB.prepare(`
-            SELECT package_name, amount, expires_at
-            FROM premium_subscriptions
-            WHERE user_id = ? AND lower(status) = 'active'
-              AND expires_at IS NOT NULL AND datetime(expires_at) > datetime('now')
-            ORDER BY datetime(expires_at) DESC LIMIT 1
-          `).bind(user.id).first();
-          const packageCode = String(activePackage?.package_name || 'free').toLowerCase();
-          const uploadLimits = { free: 3, premium: 6, hustler: 15, hit_maker: 2147483647, star: 2147483647 };
-          const uploadLimit = uploadLimits[packageCode] ?? 3;
+          // Refresh the artist's server-side entitlement from provider-confirmed,
+          // unexpired subscriptions. A database failure must stop the upload; it
+          // must never silently downgrade a paid artist to Free.
+          let entitlement;
+          try {
+            entitlement = await syncArtistPremiumEntitlement(env, user.id);
+          } catch (entitlementError) {
+            console.error("Could not verify artist package before upload:", entitlementError.message);
+            return error("We could not verify your artist package right now. No song was uploaded. Please try again shortly.", 503);
+          }
+          const packageCode = String(entitlement?.packageCode || 'free').toLowerCase();
+          const uploadLimit = ARTIST_PACKAGE_UPLOAD_LIMITS[packageCode] ?? ARTIST_PACKAGE_UPLOAD_LIMITS.free;
 
-          // Keep the count and insert in one SQL statement to avoid parallel
-          // uploads exceeding the package limit.
+          // Pending/rejected submissions count toward the monthly limit. The
+          // insert and count are one SQL statement so simultaneous uploads cannot
+          // exceed the allowance. In the rollout month, pre-cutoff songs are
+          // grandfathered; later months count from the calendar-month start.
           const insertResult = await env.DB.prepare(`
             INSERT INTO songs (${insertKeys.join(",")})
             SELECT ${insertKeys.map(() => "?").join(",")}
             WHERE (
               SELECT COUNT(*) FROM songs
               WHERE artist_id = ?
-                AND datetime(created_at) >= datetime('now', 'start of month')
+                AND datetime(created_at) >= CASE
+                  WHEN datetime('now', 'start of month') > datetime(?)
+                    THEN datetime('now', 'start of month')
+                  ELSE datetime(?)
+                END
                 AND datetime(created_at) < datetime('now', 'start of month', '+1 month')
             ) < ?
           `).bind(
             ...insertKeys.map(k => safeRow[k] ?? null),
+            PACKAGE_LIMITS_EFFECTIVE_AT,
+            PACKAGE_LIMITS_EFFECTIVE_AT,
             user.id,
             uploadLimit
           ).run();
@@ -2161,27 +2179,55 @@ async function rpcRoute(request, env, name) {
 }
 
 async function uploadPreflightRoute(request, env) {
-  if (request.method !== "POST") return error("Method not allowed",405);
-  const user = await currentUser(request,env);
-  if (!user) return error("Authentication required",401);
+  if (request.method !== "POST") return error("Method not allowed", 405);
+  const user = await currentUser(request, env);
+  if (!user) return error("Authentication required", 401);
   const body = await readBody(request);
   const audioSize = Number(body.audio_size || 0);
   const coverSize = Number(body.cover_size || 0);
-  if (!Number.isSafeInteger(audioSize) || audioSize <= 0 || audioSize > 50*1024*1024) return error("Audio file must be between 1 byte and 50 MB.",413);
-  if (!Number.isSafeInteger(coverSize) || coverSize <= 0 || coverSize > 5*1024*1024) return error("Cover image must be between 1 byte and 5 MB.",413);
-  const artist = await env.DB.prepare("SELECT id FROM artists WHERE user_id=? LIMIT 1").bind(user.id).first();
-  if (!artist) return error("Artist profile not found.",403);
-  let packageCode = "free";
+  if (!Number.isSafeInteger(audioSize) || audioSize <= 0 || audioSize > 50 * 1024 * 1024) return error("Audio file must be between 1 byte and 50 MB.", 413);
+  if (!Number.isSafeInteger(coverSize) || coverSize <= 0 || coverSize > 5 * 1024 * 1024) return error("Cover image must be between 1 byte and 5 MB.", 413);
+
   try {
-    const sub = await env.DB.prepare(`SELECT package_name FROM premium_subscriptions WHERE user_id=? AND lower(status)='active' AND expires_at IS NOT NULL AND datetime(expires_at)>datetime('now') ORDER BY datetime(expires_at) DESC LIMIT 1`).bind(user.id).first();
-    if (sub?.package_name) packageCode = String(sub.package_name).toLowerCase();
-  } catch {}
-  const limits = {free:3,premium:6,hustler:15,hit_maker:Number.MAX_SAFE_INTEGER,star:Number.MAX_SAFE_INTEGER};
-  const limit = limits[packageCode] ?? 3;
-  const count = await env.DB.prepare(`SELECT COUNT(*) AS total FROM songs WHERE artist_id=? AND datetime(created_at)>=datetime('now','start of month')`).bind(user.id).first();
-  const used = Number(count?.total || 0);
-  if (used >= limit) return error(`Your ${packageCode.replace('_',' ')} package upload limit has been reached (${used}/${limit} songs this month). No files were uploaded.`,429);
-  return json({allowed:true,package_code:packageCode,used,limit:limit===Number.MAX_SAFE_INTEGER?null:limit,remaining:limit===Number.MAX_SAFE_INTEGER?null:limit-used});
+    const artist = await env.DB.prepare("SELECT id FROM artists WHERE user_id = ? LIMIT 1").bind(user.id).first();
+    if (!artist) return error("Artist profile not found.", 403);
+
+    // Use the same verified subscription source as the actual song insert and
+    // keep the artist package/rate fields synchronized with that entitlement.
+    const entitlement = await syncArtistPremiumEntitlement(env, user.id, artist.id);
+    const packageCode = String(entitlement?.packageCode || "free").toLowerCase();
+    const limit = ARTIST_PACKAGE_UPLOAD_LIMITS[packageCode] ?? ARTIST_PACKAGE_UPLOAD_LIMITS.free;
+    const count = await env.DB.prepare(`
+      SELECT COUNT(*) AS total
+      FROM songs
+      WHERE artist_id = ?
+        AND datetime(created_at) >= CASE
+          WHEN datetime('now', 'start of month') > datetime(?)
+            THEN datetime('now', 'start of month')
+          ELSE datetime(?)
+        END
+        AND datetime(created_at) < datetime('now', 'start of month', '+1 month')
+    `).bind(user.id, PACKAGE_LIMITS_EFFECTIVE_AT, PACKAGE_LIMITS_EFFECTIVE_AT).first();
+    if (!count || count.total === undefined || count.total === null) {
+      return error("We could not verify your monthly upload count. No files were uploaded. Please try again shortly.", 503);
+    }
+    const used = Number(count.total);
+    if (!Number.isFinite(used)) return error("We could not verify your monthly upload count. No files were uploaded. Please try again shortly.", 503);
+    if (used >= limit) {
+      const label = limit >= Number.MAX_SAFE_INTEGER ? "unlimited" : String(limit);
+      return error(`Your ${packageCode.replace(/_/g, " ")} package upload limit has been reached (${used}/${label} songs this month). No files were uploaded.`, 429);
+    }
+    return json({
+      allowed: true,
+      package_code: packageCode,
+      used,
+      limit: limit >= Number.MAX_SAFE_INTEGER ? null : limit,
+      remaining: limit >= Number.MAX_SAFE_INTEGER ? null : limit - used
+    });
+  } catch (e) {
+    console.error("Artist upload preflight failed:", e.message);
+    return error("We could not verify your package or upload count. No files were uploaded. Please try again shortly.", 503);
+  }
 }
 
 async function storageRoute(request, env, path) {
@@ -2616,7 +2662,7 @@ async function syncArtistPremiumEntitlement(env, userId, preferredArtistId = nul
     FROM premium_subscriptions
     WHERE user_id = ? AND lower(status) = 'active' AND expires_at IS NOT NULL
       AND datetime(expires_at) > datetime('now')
-    ORDER BY datetime(expires_at) DESC LIMIT 1
+    ORDER BY datetime(COALESCE(paid_at, created_at)) DESC, datetime(created_at) DESC, datetime(expires_at) DESC LIMIT 1
   `).bind(uid).first();
 
   const expiresAt = latest?.expires_at || null;
@@ -2643,7 +2689,7 @@ async function premiumSubscriptionRoute(request, env) {
     const requestedReference = new URL(request.url).searchParams.get("reference");
     if (requestedReference) {
       const payment = await env.DB.prepare(`
-        SELECT status, reference, expires_at, failure_message
+        SELECT status, reference, expires_at, failure_message, package_name
         FROM premium_subscriptions
         WHERE user_id = ? AND reference = ?
         LIMIT 1
@@ -2673,7 +2719,7 @@ async function premiumSubscriptionRoute(request, env) {
       SELECT status, expires_at, package_name FROM premium_subscriptions
       WHERE user_id = ? AND lower(status) = 'active' AND expires_at IS NOT NULL
         AND datetime(expires_at) > datetime('now')
-      ORDER BY datetime(expires_at) DESC LIMIT 1
+      ORDER BY datetime(COALESCE(paid_at, created_at)) DESC, datetime(created_at) DESC, datetime(expires_at) DESC LIMIT 1
     `).bind(user.id).first();
     const pendingRow = await env.DB.prepare(`
       SELECT reference FROM premium_subscriptions
