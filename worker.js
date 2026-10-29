@@ -3116,16 +3116,26 @@ async function applyPremiumPaymentStatus(
     const expectedAmount = Number(payment.amount);
     const expectedCurrency = String(payment.currency || "").trim().toUpperCase();
 
-    // PesaJet receipts may report the customer total (package price + fee),
-    // while the pending subscription stores the package price alone. Accept
-    // either the exact package amount or package amount + the fee explicitly
-    // supplied by this signed provider event. Do not infer a fee or accept an
-    // unexplained amount difference.
-    const feeValue = confirmedFee === null || confirmedFee === undefined || confirmedFee === ""
+    // PesaJet receipts can show the customer total (package price + collection
+    // fee), while the subscription stores only the package price. Prefer the
+    // fee in the signed webhook. If PesaJet omits the fee field, accept only the
+    // exact 2.5% total pattern confirmed by the reported UGX 5,000 + UGX 125
+    // receipt. Do not accept arbitrary overpayments or infer a fee for any
+    // other amount pattern.
+    const suppliedFeeValue = confirmedFee === null || confirmedFee === undefined || confirmedFee === ""
       ? null
       : Number(confirmedFee);
-    const feeKnown = feeValue !== null && Number.isFinite(feeValue) && feeValue >= 0;
+    const suppliedFeeKnown = suppliedFeeValue !== null && Number.isFinite(suppliedFeeValue) && suppliedFeeValue >= 0;
     const amountMatchesPackage = Number.isFinite(amount) && amount === expectedAmount;
+    const inferredFeeValue = Number.isFinite(amount) && Number.isFinite(expectedAmount) && amount > expectedAmount
+      ? amount - expectedAmount
+      : null;
+    const feeMatchesObservedPattern = inferredFeeValue !== null &&
+      inferredFeeValue === Math.round(expectedAmount * 0.025) &&
+      amount === expectedAmount + Math.round(expectedAmount * 0.025);
+    const feeValue = suppliedFeeKnown ? suppliedFeeValue : (feeMatchesObservedPattern ? inferredFeeValue : null);
+    const feeKnown = suppliedFeeKnown || feeMatchesObservedPattern;
+    const feeInferred = !suppliedFeeKnown && feeMatchesObservedPattern;
     const amountMatchesPackagePlusFee = feeKnown && feeValue > 0 && Number.isFinite(amount) && amount === expectedAmount + feeValue;
     if (
       !Number.isFinite(amount) || !currency ||
@@ -3196,9 +3206,11 @@ async function applyPremiumPaymentStatus(
           amount,
           feeKnown ? feeValue : 0,
           feeKnown ? "posted" : "fee_unverified",
-          feeKnown
-            ? "Premium subscription confirmed. Actual PesaJet fee supplied by the confirmed provider event."
-            : "Premium subscription confirmed. Actual PesaJet collection fee was not supplied by the confirmed transaction event; zero here does not mean fee-free."
+          suppliedFeeKnown
+            ? "Premium subscription confirmed. Actual PesaJet fee supplied by the signed provider event."
+            : feeInferred
+              ? "Premium subscription confirmed. PesaJet webhook omitted the fee; fee inferred only from the observed exact 2.5% receipt pattern."
+              : "Premium subscription confirmed. Actual PesaJet collection fee was not supplied by the confirmed transaction event; zero here does not mean fee-free."
         ),
         env.DB.prepare(`
           UPDATE platform_wallet
