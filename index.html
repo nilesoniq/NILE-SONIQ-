@@ -2295,7 +2295,7 @@ Save Profile
 <option value="premium">Premium — UGX 5,000 · 1 UGX/play · 6 uploads/month</option>
 <option value="hustler">Hustler — UGX 10,000 · 1 UGX/play · 15 uploads/month</option>
 <option value="hit_maker">Hit Maker — UGX 20,000 · 2 UGX/play · Unlimited uploads</option>
-<option value="star">Star — UGX 30,000 · 3 UGX/play · Unlimited uploads</option>
+<option value="star">Star — UGX 30,000 · 3 UGX/play · Unlimited uploads · Blue verification tick</option>
 </select>
 <p id="artistPackageDetails" style="font-size:12px;color:#999;margin-top:7px;">Free: 0.5 UGX per play; 3 song uploads per month.</p>
 </div>
@@ -3144,7 +3144,7 @@ placeholder="you@example.com">
 <option value="premium">Premium — UGX 5,000 per 30 days</option>
 <option value="hustler">Hustler — UGX 10,000 per 30 days</option>
 <option value="hit_maker">Hit Maker — UGX 20,000 per 30 days</option>
-<option value="star">Star — UGX 30,000 per 30 days</option>
+<option value="star">Star — UGX 30,000 per 30 days · Blue verification tick</option>
 </select>
 <p style="color:#999;font-size:12px;margin-top:7px;">Paid packages activate only after mobile-money payment is confirmed. Choosing a package does not charge you immediately.</p>
 </div>
@@ -4780,10 +4780,20 @@ function getArtistPackageBadgeLabel(artist){
 
 function isArtistVerified(artist){
   if(!artist) return false;
-  const value = artist.verified;
-  return value === true || value === 1 ||
-    (typeof value === "string" &&
-      ["1", "true"].includes(value.trim().toLowerCase()));
+  const rawVerified = artist.verified;
+  const manuallyVerified = rawVerified === true || rawVerified === 1 ||
+    (typeof rawVerified === "string" &&
+      ["1", "true"].includes(rawVerified.trim().toLowerCase()));
+  if(manuallyVerified) return true;
+
+  // Star package verification is granted by the Worker only after confirmed
+  // payment, and is displayed only while that Star entitlement is active.
+  const rawStarFlag = artist.star_package_verified;
+  const starFlag = rawStarFlag === true || rawStarFlag === 1 ||
+    (typeof rawStarFlag === "string" &&
+      ["1", "true"].includes(rawStarFlag.trim().toLowerCase()));
+  const packageName = String(artist.package_name || "").trim().toLowerCase().replace(/[ -]+/g, "_");
+  return starFlag && packageName === "star" && isArtistPremiumActive(artist);
 }
 
 function isArtistPremiumActive(artist){
@@ -10463,7 +10473,7 @@ function beginPremiumPaymentPolling(reference){
 function updateArtistPackageDetails(){
  const key=document.getElementById("artistPackageChoice")?.value||"free",p=NILE_ARTIST_PACKAGES[key]||NILE_ARTIST_PACKAGES.free;
  const details=document.getElementById("artistPackageDetails"),button=document.getElementById("premiumSubscribeButton");
- if(details)details.textContent=`${p.label}: UGX ${p.rate} per play; ${p.uploads===Infinity?"unlimited song uploads":p.uploads+" song uploads per month"}${key==="premium"?"; premium badge and enhanced profile":""}.`;
+ if(details)details.textContent=`${p.label}: UGX ${p.rate} per play; ${p.uploads===Infinity?"unlimited song uploads":p.uploads+" song uploads per month"}${key==="premium"?"; premium badge and enhanced profile":""}${key==="star"?"; blue verification tick while the paid Star package is active":""}.`;
  if(button)button.textContent=key==="free"?"Free package selected — no payment":`Pay UGX ${p.amount.toLocaleString()} with MoMo`;
 }
 async function startPremiumSubscription(){
