@@ -3512,6 +3512,70 @@ async function artistNotificationsRoute(request, env) {
   }
 }
 
+// One authenticated source of truth for the artist dashboard. It returns the
+// signed-in artist's songs (including pending submissions), lifetime plays,
+// package-adjusted net earnings, and the balance after reserved withdrawals.
+async function artistDashboardRoute(request, env) {
+  const user = await currentUser(request, env);
+  if (!user) return error("Authentication required", 401);
+  if (request.method !== "GET") return error("Method not allowed", 405);
+
+  try {
+    const artist = await env.DB.prepare(
+      "SELECT id FROM artists WHERE user_id = ? LIMIT 1"
+    ).bind(user.id).first().catch(() => null);
+    const artistId = String(artist?.id || user.id);
+    const ids = [...new Set([String(user.id), artistId])];
+    const [songResult, ledgerResult, withdrawalResult] = await Promise.all([
+      env.DB.prepare(`
+        SELECT * FROM songs
+        WHERE artist_id IN (?, ?)
+        ORDER BY datetime(COALESCE(created_at, '1970-01-01')) DESC
+        LIMIT 500
+      `).bind(ids[0], ids[1]).all(),
+      env.DB.prepare(`
+        SELECT COALESCE(SUM(net_amount - ?), 0) AS adjustment
+        FROM artist_earning_ledger
+        WHERE artist_id IN (?, ?)
+          AND source_type = 'qualified_play'
+          AND status = 'posted'
+      `).bind(ARTIST_FREE_NET_PER_PLAY, ids[0], ids[1]).first(),
+      env.DB.prepare(`
+        SELECT
+          COALESCE(SUM(CASE WHEN lower(status) IN ('pending','processing','paid','completed','success','successful') THEN amount ELSE 0 END), 0) AS reserved,
+          COALESCE(SUM(CASE WHEN lower(status) IN ('paid','completed','success','successful') THEN amount ELSE 0 END), 0) AS withdrawn
+        FROM withdrawal_requests WHERE artist_id = ?
+      `).bind(user.id).first()
+    ]);
+
+    const songs = songResult.results || [];
+    const totalPlays = songs.reduce((sum, song) => sum + Math.max(0, Number(song.plays || 0)), 0);
+    const approvedPlays = songs.filter(song => Number(song.approved) === 1 || String(song.review_status || '').toLowerCase() === 'approved')
+      .reduce((sum, song) => sum + Math.max(0, Number(song.plays || 0)), 0);
+    const earnings = Math.max(0, approvedPlays * ARTIST_FREE_NET_PER_PLAY + Number(ledgerResult?.adjustment || 0));
+    const reserved = Math.max(0, Number(withdrawalResult?.reserved || 0));
+    const availableBalance = Math.max(0, earnings - reserved);
+
+    return json({
+      data: {
+        songs,
+        stats: {
+          totalPlays,
+          totalSongs: songs.length,
+          approvedPlays,
+          earnings,
+          availableBalance,
+          amountWithdrawn: Math.max(0, Number(withdrawalResult?.withdrawn || 0))
+        }
+      },
+      error: null
+    });
+  } catch (e) {
+    console.error("Artist dashboard load failed:", e.message);
+    return error("Could not load artist songs and earnings", 500);
+  }
+}
+
 function slugForShare(value) {
   return String(value || "")
     .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
@@ -3589,6 +3653,8 @@ export default {
         response = await uploadPreflightRoute(request, env);
       } else if (path === "/api/artist/notifications") {
         response = await artistNotificationsRoute(request, env);
+      } else if (path === "/api/artist/dashboard") {
+        response = await artistDashboardRoute(request, env);
       } else if (path === "/api/auth/register-paid") {
         // Paid artist signup must use the dedicated pending-payment flow.
         // The account and verification email are created only after a verified
