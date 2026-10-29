@@ -913,8 +913,7 @@ async function dbRoute(request, env, path) {
     // This applies even when a caller supplies a custom `select` parameter.
     const publicArtistColumns = new Set([
       "id", "name", "bio", "avatar_url", "location",
-      "total_plays", "verified", "is_premium", "premium_expiry_date",
-      "package_name", "package_expiry_date", "created_at"
+      "total_plays", "verified", "is_premium", "premium_expiry_date", "created_at"
     ]);
 
     if (
@@ -944,7 +943,7 @@ async function dbRoute(request, env, path) {
 
     const effectiveColumns =
       publicArtistRead && columns.includes("*")
-        ? "id, name, bio, avatar_url, location, total_plays, verified, is_premium, premium_expiry_date, package_name, package_expiry_date, created_at"
+        ? "id, name, bio, avatar_url, location, total_plays, verified, is_premium, premium_expiry_date, created_at"
         : columns.join(",");
 
     let query = `SELECT ${effectiveColumns} FROM ${table}${where}`;
@@ -1831,6 +1830,54 @@ async function adminRoute(request, env, path) {
     } catch (e) {
       console.error("Admin update failed:", e.message);
       return error("Could not update administrator", 500);
+    }
+  }
+
+  if (request.method === "GET" && path === "/api/admin/copyright-removal-artists") {
+    if (!superAdmin) return error("Super Admin access required", 403);
+    try {
+      const result = await env.DB.prepare(`
+        SELECT id, user_id, name
+        FROM artists
+        ORDER BY name COLLATE NOCASE ASC
+        LIMIT 2000
+      `).all();
+      return json({ data: result.results || [], error: null });
+    } catch (e) {
+      console.error("Copyright artist list failed:", e.message);
+      return error("Could not load artists for copyright removal", 500);
+    }
+  }
+
+  if (request.method === "GET" && path === "/api/admin/copyright-removal-songs") {
+    if (!superAdmin) return error("Super Admin access required", 403);
+    const artistId = String(url.searchParams.get("artist_id") || "").trim();
+    if (!artistId) return error("Choose an artist first", 422);
+    try {
+      const artist = await env.DB.prepare(`
+        SELECT id, user_id, name
+        FROM artists
+        WHERE id = ? OR user_id = ?
+        LIMIT 1
+      `).bind(artistId, artistId).first();
+      if (!artist) return error("Artist not found", 404);
+
+      const ownerId = String(artist.user_id || "");
+      const profileId = String(artist.id || "");
+      const artistName = String(artist.name || "");
+      const result = await env.DB.prepare(`
+        SELECT id, title, artist, artist_id, approved, review_status, created_at
+        FROM songs
+        WHERE artist_id = ?
+           OR artist_id = ?
+           OR LOWER(TRIM(COALESCE(artist, ''))) = LOWER(TRIM(?))
+        ORDER BY rowid DESC
+        LIMIT 1000
+      `).bind(ownerId || profileId, profileId || ownerId, artistName).all();
+      return json({ data: result.results || [], error: null });
+    } catch (e) {
+      console.error("Copyright artist songs failed:", e.message);
+      return error("Could not load songs for this artist", 500);
     }
   }
 
@@ -3727,7 +3774,9 @@ export default {
         path === "/api/admin/songs" ||
         path.startsWith("/api/admin/songs/") ||
         path === "/api/admin/analytics" ||
-        path === "/api/admin/copyright-removals"
+        path === "/api/admin/copyright-removals" ||
+        path === "/api/admin/copyright-removal-artists" ||
+        path === "/api/admin/copyright-removal-songs"
       ) {
         response = await adminRoute(request, env, path);
       } else if (path.startsWith("/api/rpc/")) {
