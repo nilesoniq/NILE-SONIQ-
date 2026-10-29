@@ -3495,7 +3495,9 @@ export default {
 
       let response;
 
-      if (path === "/api/artist/notifications") {
+      if (path === "/api/uploads/check") {
+        response = await uploadPreflightRoute(request, env);
+      } else if (path === "/api/artist/notifications") {
         response = await artistNotificationsRoute(request, env);
       } else if (path === "/api/auth/register-paid") {
         // Paid artist signup must use the dedicated pending-payment flow.
