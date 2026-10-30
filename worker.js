@@ -1055,9 +1055,13 @@ async function dbRoute(request, env, path) {
     );
   }
 
+  let withdrawalDiagnosticStage = "before request processing";
   try {
     if (method === "POST") {
       const body = await readBody(request);
+      if (table === "withdrawal_requests" && !admin) {
+        withdrawalDiagnosticStage = "reading withdrawal request";
+      }
       const rows = Array.isArray(body) ? body : [body];
 
       if (!rows.length || rows.length > 50) {
@@ -1341,11 +1345,13 @@ async function dbRoute(request, env, path) {
           };
 
           // Test adjustments are separate from real plays and the real earnings ledger.
+          withdrawalDiagnosticStage = "checking the test-adjustments table";
           await ensureArtistTestAdjustmentsTable(env);
 
           // Check available earnings and create the reservation in one SQL
           // statement. Concurrent requests cannot both spend the same balance.
           try {
+            withdrawalDiagnosticStage = "inserting the withdrawal request";
             const inserted = await env.DB.prepare(`
               INSERT INTO withdrawal_requests
                 (id, artist_id, amount, payment_method, payment_details, status, created_at)
@@ -1544,6 +1550,11 @@ async function dbRoute(request, env, path) {
     return error("Method not allowed", 405);
   } catch (e) {
     console.error("Database write failed:", e.message);
+    if (table === "withdrawal_requests" && method === "POST" && !admin) {
+      const detail = String(e?.message || e || "Unknown error").replace(/[\\r\\n]+/g, " ").slice(0, 220);
+      console.error("Artist withdrawal diagnostic:", withdrawalDiagnosticStage, detail);
+      return error(`Withdrawal diagnostic at ${withdrawalDiagnosticStage}: ${detail}`, 500);
+    }
     return error("Database request failed", 500);
   }
 }
