@@ -8069,177 +8069,144 @@ async function updateAvailableBalance(withdrawals=null){
   }
 }
 
+async function getVerifiedArtistAvailableBalance(){
+  // Always ask the authenticated Worker for the current balance immediately
+  // before submitting. Do not trust a stale number displayed in the browser.
+  const response = await fetch("/api/artist/dashboard", {
+    method: "GET",
+    credentials: "include",
+    headers: { "Accept": "application/json" },
+    cache: "no-store"
+  });
+  const payload = await response.json().catch(() => ({}));
+  if(!response.ok || payload.error || !payload.data || !payload.data.stats){
+    throw new Error(payload.error || "Could not verify your available balance. Please refresh your dashboard and try again.");
+  }
+  const available = Number(payload.data.stats.availableBalance);
+  if(!Number.isFinite(available) || available < 0){
+    throw new Error("Your available balance could not be verified. Please refresh your dashboard and try again.");
+  }
+  const balanceEl = document.getElementById("availableBalance");
+  if(balanceEl) balanceEl.textContent = "UGX " + formatNumber(Math.floor(available));
+  return Math.floor(available);
+}
+
 async function requestWithdrawal(){
-
   if(!currentUser){
-
     openAuthModal("artist");
-
     return;
-
   }
 
+  const amountInput = document.getElementById("withdrawAmount");
+  const methodInput = document.getElementById("paymentMethod");
+  const detailsInput = document.getElementById("paymentDetails");
+  if(!amountInput || !methodInput || !detailsInput){
+    showMessage("withdrawalMessage", "The withdrawal form is not ready. Please refresh the page and try again.", "error");
+    return;
+  }
 
-  const amountInput =
-    document.getElementById(
-      "withdrawAmount"
-    );
-
-  const paymentMethod =
-    document
-      .getElementById(
-        "paymentMethod"
-      )
-      .value
-      .trim();
-
-  const paymentDetails =
-    document
-      .getElementById(
-        "paymentDetails"
-      )
-      .value
-      .trim();
-
-  const amount =
-    Number(
-      amountInput.value
-    );
-
-
+  const amount = Number(amountInput.value);
+  const paymentMethod = methodInput.value.trim();
+  const paymentDetails = detailsInput.value.trim();
   const withdrawalMinimum = getCurrentArtistWithdrawalMinimum();
 
-  if(
-    !amount ||
-    amount < withdrawalMinimum
-  ){
-
+  if(!Number.isFinite(amount) || amount <= 0 || amount < withdrawalMinimum){
     showMessage(
       "withdrawalMessage",
       "The minimum withdrawal amount for your current package is UGX " +
         withdrawalMinimum.toLocaleString("en-US") + ".",
       "error"
     );
-
     return;
-
   }
-
 
   if(!paymentMethod){
-
-    showMessage(
-      "withdrawalMessage",
-      "Please select a payment method.",
-      "error"
-    );
-
+    showMessage("withdrawalMessage", "Please select a payment method.", "error");
     return;
-
   }
-
 
   if(!paymentDetails){
-
-    showMessage(
-      "withdrawalMessage",
-      "Please enter your payment details.",
-      "error"
-    );
-
+    showMessage("withdrawalMessage", "Please enter your payment details.", "error");
     return;
-
   }
 
-
-  const button =
-    document.getElementById(
-      "withdrawButton"
-    );
-
-
-  button.disabled = true;
-
-  button.textContent =
-    "Submitting...";
-
+  const button = document.getElementById("withdrawButton");
+  if(button){
+    button.disabled = true;
+    button.textContent = "Checking balance...";
+  }
 
   try{
+    const availableBalance = await getVerifiedArtistAvailableBalance();
 
-
-    const {
-      error:insertError
-    } = await sb
-      .from("withdrawal_requests")
-      .insert({
-
-        artist_id:
-          currentUser.id,
-
-        amount:
-          amount,
-
-        payment_method:
-          paymentMethod,
-
-        payment_details:
-          paymentDetails,
-
-        status:
-          "pending"
-
-      });
-
-
-    if(insertError){
-      throw insertError;
+    if(amount > availableBalance){
+      showMessage(
+        "withdrawalMessage",
+        "Insufficient balance. You requested UGX " +
+          formatNumber(Math.floor(amount)) +
+          ", but your available balance is UGX " +
+          formatNumber(availableBalance) +
+          ". Your current package minimum is UGX " +
+          formatNumber(withdrawalMinimum) +
+          ". Please enter an amount within your available balance.",
+        "error"
+      );
+      return;
     }
 
+    if(button) button.textContent = "Submitting...";
+
+    // The Worker enforces the package minimum and available-balance check
+    // again inside the database insert, preventing stale-balance and race issues.
+    // Require the Worker to return the newly saved row before showing success.
+    const { data: savedRequest, error: insertError } = await sb
+      .from("withdrawal_requests")
+      .insert({
+        artist_id: currentUser.id,
+        amount: amount,
+        payment_method: paymentMethod,
+        payment_details: paymentDetails,
+        status: "pending"
+      })
+      .select("*")
+      .single();
+
+    if(insertError) throw insertError;
+    if(!savedRequest || !savedRequest.id){
+      throw new Error("The server did not confirm that your withdrawal request was saved. No success was assumed. Please check My Withdrawal Requests before trying again.");
+    }
 
     showMessage(
       "withdrawalMessage",
-      "Withdrawal request submitted successfully.",
+      "Withdrawal request submitted successfully. Your request is now saved and awaiting admin review.",
       "success"
     );
 
-
     amountInput.value = "";
-
-    document.getElementById(
-      "paymentMethod"
-    ).value = "";
-
-    document.getElementById(
-      "paymentDetails"
-    ).value = "";
-
+    methodInput.value = "";
+    detailsInput.value = "";
 
     await loadMyWithdrawals();
-
+    await updateAvailableBalance();
   }catch(error){
-
-    console.error(
-      "Withdrawal request error:",
-      error
-    );
-
-
-    showMessage(
-      "withdrawalMessage",
-      error.message ||
-      "Could not submit withdrawal request.",
-      "error"
-    );
-
+    console.error("Withdrawal request error:", error);
+    const message = String(error?.message || "Could not submit withdrawal request.");
+    if(/insufficient available artist earnings|insufficient balance/i.test(message)){
+      showMessage(
+        "withdrawalMessage",
+        "Insufficient balance. Your available earnings are lower than the amount requested. Please refresh your dashboard and enter an amount within your available balance.",
+        "error"
+      );
+      await updateAvailableBalance();
+    }else{
+      showMessage("withdrawalMessage", message, "error");
+    }
   }finally{
-
-    button.disabled = false;
-
-    button.textContent =
-      "Request Withdrawal";
-
+    if(button){
+      button.disabled = false;
+      button.textContent = "Request Withdrawal";
+    }
   }
-
 }
 
 
