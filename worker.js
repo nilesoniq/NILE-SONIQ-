@@ -1665,6 +1665,32 @@ async function adminRoute(request, env, path) {
   const superAdmin = admin.role === "super_admin";
   const url = new URL(request.url);
 
+  if (request.method === "GET" && path === "/api/admin/withdrawals") {
+    try {
+      const result = await env.DB.prepare(`
+        SELECT
+          wr.*,
+          COALESCE(
+            (SELECT a.name FROM artists AS a WHERE a.user_id = wr.artist_id LIMIT 1),
+            (SELECT a.name FROM artists AS a WHERE a.id = wr.artist_id LIMIT 1),
+            (SELECT u.email FROM auth_users AS u WHERE u.id = wr.artist_id LIMIT 1),
+            'Unknown Artist'
+          ) AS artist_name
+        FROM withdrawal_requests AS wr
+        ORDER BY datetime(wr.created_at) DESC
+        LIMIT 1000
+      `).all();
+
+      return json({
+        data: result.results || [],
+        error: null
+      });
+    } catch (e) {
+      console.error("Admin withdrawals load failed:", e.message);
+      return error("Could not load withdrawal requests from the database", 500);
+    }
+  }
+
   if (request.method === "GET" && path === "/api/admin/analytics") {
     if (!superAdmin) return error("Super Admin access required", 403);
     try {
@@ -3861,6 +3887,7 @@ export default {
         path.startsWith("/api/admins/") ||
         path === "/api/admin/songs" ||
         path.startsWith("/api/admin/songs/") ||
+        path === "/api/admin/withdrawals" ||
         path === "/api/admin/analytics" ||
         path === "/api/admin/copyright-removals" ||
         path === "/api/admin/copyright-removal-artists" ||
