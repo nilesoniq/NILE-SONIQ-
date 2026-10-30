@@ -8220,226 +8220,114 @@ async function loadWithdrawals(){
     return;
   }
 
-
   if(!await isCurrentUserAdmin()){
     return;
   }
 
-
-  const tbody =
-    document.getElementById(
-      "withdrawalsTable"
-    );
-
+  const tbody = document.getElementById("withdrawalsTable");
+  if(!tbody) return;
 
   tbody.innerHTML = `
     <tr>
       <td colspan="6">
-        <div class="loading">
-          Loading withdrawals...
-        </div>
+        <div class="loading">Loading withdrawals...</div>
       </td>
     </tr>
   `;
 
-
   try{
-
-    const {
-      data,
-      error
-    } = await sb
-      .from("withdrawal_requests")
-      .select("*")
-      .order(
-        "created_at",
-        {
-          ascending:false
-        }
-      );
-
-
-    if(error){
-      throw error;
-    }
-
-
-    const {
-      data:artists
-    } = await sb
-      .from("artists")
-      .select(
-        "user_id,name"
-      );
-
-
-    const artistMap = {};
-
-
-    (artists || [])
-    .forEach(artist => {
-
-      artistMap[
-        artist.user_id
-      ] =
-        artist.name ||
-        "Unknown Artist";
-
+    const response = await fetch("/api/admin/withdrawals", {
+      method: "GET",
+      credentials: "include",
+      headers: {
+        "Accept": "application/json",
+        "Cache-Control": "no-cache"
+      },
+      cache: "no-store"
     });
 
+    const payload = await response.json().catch(() => ({}));
+    if(!response.ok || payload.error){
+      throw new Error(
+        payload.error || payload.message ||
+        `Could not load withdrawals (HTTP ${response.status}).`
+      );
+    }
 
-    const withdrawals =
-      data || [];
-
+    const withdrawals = Array.isArray(payload.data) ? payload.data : [];
 
     if(!withdrawals.length){
-
       tbody.innerHTML = `
         <tr>
           <td colspan="6">
-            <div class="empty">
-              No withdrawal requests yet.
-            </div>
+            <div class="empty">No withdrawal requests yet.</div>
           </td>
         </tr>
       `;
-
       return;
-
     }
 
+    tbody.innerHTML = withdrawals.map(item => {
+      const status = String(item.status || "pending").toLowerCase();
+      const artistName = item.artist_name || item.artist_id || "Unknown Artist";
+      let actions = "";
 
-    tbody.innerHTML =
-      withdrawals.map(item => {
-
-        const status =
-          item.status ||
-          "pending";
-
-        const artistName =
-          artistMap[
-            item.artist_id
-          ] ||
-          item.artist_id ||
-          "Unknown Artist";
-
-
-        let actions = "";
-
-
-        if(status === "pending"){
-
-          actions = `
-            <button
-              class="btn btn-warning"
-              onclick="processWithdrawal('${escapeAttribute(item.id)}')">
-              Process
-            </button>
-
-            <button
-              class="btn btn-danger"
-              style="margin-left:4px;"
-              onclick="rejectWithdrawal('${escapeAttribute(item.id)}')">
-              Reject
-            </button>
-          `;
-
-        }else if(status === "processing"){
-
-          actions = `
-            <button
-              class="btn btn-success"
-              onclick="markWithdrawalPaid('${escapeAttribute(item.id)}')">
-              Mark Paid
-            </button>
-
-            <button
-              class="btn btn-danger"
-              style="margin-left:4px;"
-              onclick="rejectWithdrawal('${escapeAttribute(item.id)}')">
-              Reject
-            </button>
-          `;
-
-        }else{
-
-          actions =
-            `<span style="color:#777;">
-              Completed
-            </span>`;
-
-        }
-
-
-        return `
-          <tr>
-
-            <td>
-              ${escapeHtml(artistName)}
-            </td>
-
-            <td>
-              UGX ${formatNumber(
-                item.amount || 0
-              )}
-            </td>
-
-            <td>
-              ${escapeHtml(
-                item.payment_method || ""
-              )}
-            </td>
-
-            <td>
-              ${escapeHtml(
-                item.payment_details || ""
-              )}
-            </td>
-
-            <td>
-
-              <span class="status ${escapeHtml(status)}">
-                ${escapeHtml(
-                  formatStatus(status)
-                )}
-              </span>
-
-            </td>
-
-            <td>
-              ${actions}
-            </td>
-
-          </tr>
+      if(status === "pending"){
+        actions = `
+          <button class="btn btn-warning"
+            onclick="processWithdrawal('${escapeAttribute(item.id)}')">
+            Process
+          </button>
+          <button class="btn btn-danger" style="margin-left:4px;"
+            onclick="rejectWithdrawal('${escapeAttribute(item.id)}')">
+            Reject
+          </button>
         `;
+      }else if(status === "processing"){
+        actions = `
+          <button class="btn btn-success"
+            onclick="markWithdrawalPaid('${escapeAttribute(item.id)}')">
+            Mark Paid
+          </button>
+          <button class="btn btn-danger" style="margin-left:4px;"
+            onclick="rejectWithdrawal('${escapeAttribute(item.id)}')">
+            Reject
+          </button>
+        `;
+      }else{
+        actions = `<span style="color:#777;">Completed</span>`;
+      }
 
-      }).join("");
+      return `
+        <tr>
+          <td>${escapeHtml(artistName)}</td>
+          <td>UGX ${formatNumber(item.amount || 0)}</td>
+          <td>${escapeHtml(item.payment_method || "")}</td>
+          <td>${escapeHtml(item.payment_details || "")}</td>
+          <td>
+            <span class="status ${escapeHtml(status)}">
+              ${escapeHtml(formatStatus(status))}
+            </span>
+          </td>
+          <td>${actions}</td>
+        </tr>
+      `;
+    }).join("");
 
   }catch(error){
-
-    console.error(
-      "Withdrawals error:",
-      error
-    );
-
-
+    console.error("Withdrawals error:", error);
     tbody.innerHTML = `
       <tr>
         <td colspan="6">
           <div class="empty">
-            ${escapeHtml(
-              error.message ||
-              "Could not load withdrawals."
-            )}
+            Could not load withdrawal requests:
+            ${escapeHtml(error.message || "Unknown error")}
           </div>
         </td>
       </tr>
     `;
-
   }
-
 }
-
 
 /* =========================================================
    WITHDRAWAL STATUS
