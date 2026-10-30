@@ -8283,17 +8283,21 @@ async function loadWithdrawals(){
             Reject
           </button>
         `;
-      }else if(status === "processing"){
+      }else if(status === "processing" && !item.payout_reference){
         actions = `
           <button class="btn btn-success"
-            onclick="markWithdrawalPaid('${escapeAttribute(item.id)}')">
-            Mark Paid
+            onclick="payArtistWithdrawal('${escapeAttribute(item.id)}')">
+            Approve &amp; Pay with PesaJet
           </button>
           <button class="btn btn-danger" style="margin-left:4px;"
             onclick="rejectWithdrawal('${escapeAttribute(item.id)}')">
             Reject
           </button>
         `;
+      }else if(status === "processing"){
+        actions = `<span style="color:#f1c40f;">PesaJet processing</span>`;
+      }else if(status === "failed"){
+        actions = `<span style="color:#ff7777;">Payment failed — balance released</span>`;
       }else{
         actions = `<span style="color:#777;">Completed</span>`;
       }
@@ -8308,6 +8312,7 @@ async function loadWithdrawals(){
             <span class="status ${escapeHtml(status)}">
               ${escapeHtml(formatStatus(status))}
             </span>
+            ${status === "failed" && item.payout_failure_message ? `<div style="font-size:12px;color:#ff9999;margin-top:4px;">${escapeHtml(item.payout_failure_message)}</div>` : ""}
           </td>
           <td>${actions}</td>
         </tr>
@@ -8443,19 +8448,36 @@ async function rejectWithdrawal(id){
 }
 
 
-async function markWithdrawalPaid(id){
-
-  if(!confirm(
-    "Confirm that this payment has been made manually?"
-  )){
+async function payArtistWithdrawal(id){
+  if(!await isCurrentUserAdmin()){
+    alert("You are not authorized.");
     return;
   }
+  if(!confirm("Send this artist's withdrawal to the saved mobile-money number through PesaJet now? The payment will be marked Paid only after PesaJet confirms it.")) return;
+  try{
+    showMessage("withdrawalAdminMessage", "Submitting artist payout to PesaJet...", "success");
+    const response = await fetch(`/api/admin/withdrawals/${encodeURIComponent(id)}/pay`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Accept": "application/json", "Content-Type": "application/json" },
+      body: "{}"
+    });
+    const payload = await response.json().catch(() => ({}));
+    if(!response.ok || payload.error){
+      throw new Error(payload.error || payload.message || `PesaJet payout failed (HTTP ${response.status}).`);
+    }
+    showMessage("withdrawalAdminMessage", payload.message || `PesaJet payout status: ${payload.status || "PROCESSING"}.`, "success");
+    await loadWithdrawals();
+  }catch(error){
+    console.error("Artist withdrawal payout error:", error);
+    showMessage("withdrawalAdminMessage", error.message || "Could not submit the artist payout.", "error");
+    await loadWithdrawals();
+  }
+}
 
-  await updateWithdrawalStatus(
-    id,
-    "paid"
-  );
-
+async function markWithdrawalPaid(id){
+  // Backward-compatible name for any already-rendered admin button.
+  return payArtistWithdrawal(id);
 }
 
 
@@ -9970,7 +9992,8 @@ function formatStatus(status){
     pending:"Pending",
     processing:"Processing",
     paid:"Paid",
-    rejected:"Rejected"
+    rejected:"Rejected",
+    failed:"Payment Failed"
 
   };
 
