@@ -1367,7 +1367,10 @@ async function dbRoute(request, env, path) {
                 + COALESCE((
                   SELECT SUM(amount)
                   FROM artist_test_adjustments
-                  WHERE artist_id = ?
+                  WHERE artist_id IN (
+                    ?,
+                    (SELECT id FROM artists WHERE user_id = ? LIMIT 1)
+                  )
                     AND status = 'active'
                     AND (expires_at IS NULL OR datetime(expires_at) > datetime('now'))
                 ), 0)
@@ -1392,6 +1395,7 @@ async function dbRoute(request, env, path) {
               user.id,
               ARTIST_FREE_NET_PER_PLAY,
               ARTIST_FREE_NET_PER_PLAY,
+              user.id,
               user.id,
               user.id,
               user.id
