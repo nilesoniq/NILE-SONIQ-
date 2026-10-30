@@ -1034,7 +1034,8 @@ async function dbRoute(request, env, path) {
     !INTERACTION_TABLES.has(table) &&
     table !== "artists" &&
     table !== "songs" &&
-    !admin
+    !admin &&
+    !artistWithdrawalCreate
   ) {
     return error(
       "Admin access required for this operation",
