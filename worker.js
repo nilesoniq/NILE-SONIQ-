@@ -918,8 +918,15 @@ async function dbRoute(request, env, path) {
           ? "user_id"
           : "artist_id";
 
-      where = appendCondition(where, `${ownerColumn} = ?`);
-      values = [...values, user.id];
+      if (ownerColumn === "artist_id") {
+        const artistProfile = await env.DB.prepare("SELECT id FROM artists WHERE user_id = ? LIMIT 1").bind(user.id).first();
+        const artistProfileId = String(artistProfile?.id || user.id);
+        where = appendCondition(where, `${ownerColumn} IN (?, ?)`);
+        values = [...values, user.id, artistProfileId];
+      } else {
+        where = appendCondition(where, `${ownerColumn} = ?`);
+        values = [...values, user.id];
+      }
     }
 
     // Non-admin users may read approved songs and their own submissions.
@@ -1313,6 +1320,8 @@ async function dbRoute(request, env, path) {
           }
           const withdrawalMinimum =
             ARTIST_PACKAGE_WITHDRAWAL_MINIMUMS[packageCode] ?? DEFAULT_WITHDRAWAL_MINIMUM;
+          const artistProfile = await env.DB.prepare("SELECT id FROM artists WHERE user_id = ? LIMIT 1").bind(user.id).first();
+          const artistProfileId = String(artistProfile?.id || user.id);
 
           const amount = Number(row.amount);
           const paymentMethod = String(
@@ -1323,7 +1332,7 @@ async function dbRoute(request, env, path) {
           ).trim();
 
           if (
-            !Number.isFinite(amount) ||
+            !Number.isInteger(amount) ||
             amount < withdrawalMinimum ||
             !paymentMethod ||
             !paymentDetails
@@ -1361,29 +1370,26 @@ async function dbRoute(request, env, path) {
                 COALESCE((
                   SELECT SUM(COALESCE(plays, 0))
                   FROM songs
-                  WHERE artist_id = ? AND approved = 1
+                  WHERE artist_id IN (?, ?) AND (approved = 1 OR lower(COALESCE(review_status, '')) = 'approved')
                 ), 0) * ?
                 + COALESCE((
                   SELECT SUM(net_amount - ?)
                   FROM artist_earning_ledger
-                  WHERE artist_id = ?
+                  WHERE artist_id IN (?, ?)
                     AND source_type = 'qualified_play'
                     AND status = 'posted'
                 ), 0)
                 + COALESCE((
                   SELECT SUM(amount)
                   FROM artist_test_adjustments
-                  WHERE artist_id IN (
-                    ?,
-                    (SELECT id FROM artists WHERE user_id = ? LIMIT 1)
-                  )
+                  WHERE artist_id IN (?, ?)
                     AND status = 'active'
                     AND (expires_at IS NULL OR datetime(expires_at) > datetime('now'))
                 ), 0)
                 - COALESCE((
                   SELECT SUM(amount)
                   FROM withdrawal_requests
-                  WHERE artist_id = ?
+                  WHERE artist_id IN (?, ?)
                     AND lower(status) IN (
                       'pending', 'processing', 'paid', 'completed',
                       'success', 'successful'
@@ -1399,12 +1405,15 @@ async function dbRoute(request, env, path) {
               newRow.created_at,
               amount,
               user.id,
+              artistProfileId,
               ARTIST_FREE_NET_PER_PLAY,
               ARTIST_FREE_NET_PER_PLAY,
               user.id,
+              artistProfileId,
               user.id,
+              artistProfileId,
               user.id,
-              user.id
+              artistProfileId
             ).run();
 
             if (Number(inserted?.meta?.changes || 0) === 0) {
@@ -1501,8 +1510,16 @@ async function dbRoute(request, env, path) {
 
       let withdrawalRows = [];
       if (table === "withdrawal_requests" && Object.prototype.hasOwnProperty.call(body, "status")) {
-        const prior = await env.DB.prepare(`SELECT id, artist_id, amount, status FROM withdrawal_requests${where}`).bind(...values).all();
+        const requestedStatus = String(body.status || "").toLowerCase();
+        if (["paid", "completed", "success", "successful"].includes(requestedStatus)) {
+          return error("A withdrawal can only be marked Paid after PesaJet confirms the artist payout.", 403);
+        }
+        await ensureArtistWithdrawalPayoutColumns(env);
+        const prior = await env.DB.prepare(`SELECT id, artist_id, amount, status, payout_reference FROM withdrawal_requests${where}`).bind(...values).all();
         withdrawalRows = prior.results || [];
+        if (withdrawalRows.some(item => item.payout_reference)) {
+          return error("This request already has a PesaJet payout in progress. Its status can only be changed by the verified payment result.", 409);
+        }
       }
 
       const sql = `
@@ -1684,8 +1701,14 @@ async function adminRoute(request, env, path) {
   const superAdmin = admin.role === "super_admin";
   const url = new URL(request.url);
 
+  const artistPayoutMatch = path.match(/^\/api\/admin\/withdrawals\/([^/]+)\/pay$/);
+  if (request.method === "POST" && artistPayoutMatch) {
+    return artistWithdrawalPayoutRoute(env, path);
+  }
+
   if (request.method === "GET" && path === "/api/admin/withdrawals") {
     try {
+      await ensureArtistWithdrawalPayoutColumns(env);
       const result = await env.DB.prepare(`
         SELECT
           wr.*,
@@ -3436,7 +3459,22 @@ async function paymentWebhookRoute(request, env) {
     if (paidSignupResult.matched) {
       console.info("NileSoniQ paid signup webhook processed.",{reference,status,changed:Boolean(paidSignupResult.changed),reason:paidSignupResult.reason||null});
     }
-    // A reference belongs to one transaction table; the unmatched update is a no-op.
+    const artistWithdrawalResult = reference.startsWith("NILESONIQ-ARTIST-WITHDRAWAL-")
+      ? await applyArtistWithdrawalPaymentStatus(
+          env,
+          reference,
+          status,
+          transactionId,
+          webhookPayment.amount,
+          webhookPayment.currency,
+          payload?.message || payload?.description || payload?.reason || payload?.failureMessage || payload?.failure_message || ""
+        )
+      : { matched: false, changed: false };
+    if (artistWithdrawalResult.matched) {
+      console.info("NileSoniQ artist withdrawal webhook processed.", { reference, status, changed: Boolean(artistWithdrawalResult.changed), reason: artistWithdrawalResult.reason || null });
+    }
+
+    // A reference belongs to one transaction table; unmatched updates are no-ops.
     await applyPlatformPaymentStatus(
       env,
       "collection",
@@ -3725,6 +3763,167 @@ async function ensureArtistNotificationsTable(env) {
   )`).run();
 }
 
+async function ensureArtistWithdrawalPayoutColumns(env) {
+  const result = await env.DB.prepare("PRAGMA table_info(withdrawal_requests)").all();
+  const columns = new Set((result.results || []).map(column => String(column.name).toLowerCase()));
+  if (!columns.size) throw new Error("withdrawal_requests table is unavailable");
+  const required = {
+    payout_reference: "TEXT",
+    pesajet_transaction_id: "TEXT",
+    payout_failure_message: "TEXT"
+  };
+  for (const [name, type] of Object.entries(required)) {
+    if (columns.has(name)) continue;
+    try {
+      await env.DB.prepare(`ALTER TABLE withdrawal_requests ADD COLUMN ${name} ${type}`).run();
+    } catch (e) {
+      const refreshed = await env.DB.prepare("PRAGMA table_info(withdrawal_requests)").all();
+      const now = new Set((refreshed.results || []).map(column => String(column.name).toLowerCase()));
+      if (!now.has(name)) throw e;
+    }
+  }
+}
+
+async function notifyArtistWithdrawalStatus(env, row, status, detail = "") {
+  try {
+    await ensureArtistNotificationsTable(env);
+    const amount = Math.floor(Number(row.amount) || 0).toLocaleString("en-US");
+    const message = status === "paid"
+      ? `Your withdrawal of UGX ${amount} has been paid successfully.`
+      : status === "failed"
+        ? `Your withdrawal of UGX ${amount} could not be completed. ${detail || "The payment failed; your available balance has been released."}`
+        : `Your withdrawal of UGX ${amount} is now ${status}.`;
+    await env.DB.prepare(`INSERT INTO artist_notifications (id, artist_id, notification_type, message, related_id, created_at) VALUES (?, ?, 'withdrawal', ?, ?, ?)`)
+      .bind(crypto.randomUUID(), row.artist_id, message, row.id, new Date().toISOString()).run();
+  } catch (e) {
+    console.error("Artist withdrawal notification could not be saved:", e.message);
+  }
+}
+
+async function applyArtistWithdrawalPaymentStatus(env, reference, status, transactionId = "", amount = null, currency = "", failureMessage = "") {
+  await ensureArtistWithdrawalPayoutColumns(env);
+  const row = await env.DB.prepare(`
+    SELECT id, artist_id, amount, status, payout_reference
+    FROM withdrawal_requests WHERE payout_reference = ? LIMIT 1
+  `).bind(reference).first();
+  if (!row) return { matched: false, changed: false };
+
+  const normalized = String(status || "").toUpperCase();
+  if (isSuccessfulPaymentStatus(normalized)) {
+    if (amount === null || !Number.isFinite(Number(amount)) || Number(amount) !== Number(row.amount) || String(currency || "").toUpperCase() !== "UGX") {
+      console.error("Artist withdrawal payout confirmation did not match the requested amount/currency.", { reference, expectedAmount: Number(row.amount), receivedAmount: amount, receivedCurrency: currency });
+      return { matched: true, changed: false, reason: "amount_currency_mismatch" };
+    }
+    const updated = await env.DB.prepare(`
+      UPDATE withdrawal_requests
+      SET status='paid', processed_at=datetime('now'),
+          pesajet_transaction_id=COALESCE(NULLIF(?,''),pesajet_transaction_id),
+          payout_failure_message=NULL
+      WHERE id=? AND payout_reference=? AND lower(status)='processing'
+    `).bind(String(transactionId || ""), row.id, reference).run();
+    const changed = Number(updated?.meta?.changes || 0) === 1;
+    if (changed) await notifyArtistWithdrawalStatus(env, row, "paid");
+    return { matched: true, changed, reason: changed ? "paid" : "already_processed" };
+  }
+
+  if (["FAILED", "FAILURE", "ERROR", "EXPIRED", "REJECTED", "DECLINED", "CANCELLED", "CANCELED", "TIMED_OUT", "TIMEOUT", "TIME_OUT", "INSUFFICIENT_BALANCE", "INSUFFICIENT_FUNDS", "AUTHORIZATION_FAILED", "LIMIT_EXCEEDED"].includes(normalized)) {
+    const detail = String(failureMessage || normalized).slice(0, 300);
+    const updated = await env.DB.prepare(`
+      UPDATE withdrawal_requests
+      SET status='failed', processed_at=datetime('now'),
+          pesajet_transaction_id=COALESCE(NULLIF(?,''),pesajet_transaction_id),
+          payout_failure_message=?
+      WHERE id=? AND payout_reference=? AND lower(status)='processing'
+    `).bind(String(transactionId || ""), detail, row.id, reference).run();
+    const changed = Number(updated?.meta?.changes || 0) === 1;
+    if (changed) await notifyArtistWithdrawalStatus(env, row, "failed", "Your available balance has been released.");
+    return { matched: true, changed, reason: changed ? "failed" : "already_processed" };
+  }
+  return { matched: true, changed: false, reason: "non_terminal_status" };
+}
+
+async function artistWithdrawalPayoutRoute(env, path) {
+  await ensureArtistWithdrawalPayoutColumns(env);
+  const match = path.match(/^\/api\/admin\/withdrawals\/([^/]+)\/pay$/);
+  if (!match) return error("Invalid artist withdrawal payout route", 404);
+  const requestId = decodeURIComponent(match[1]);
+  const row = await env.DB.prepare(`
+    SELECT id, artist_id, amount, payment_method, payment_details, status, payout_reference
+    FROM withdrawal_requests WHERE id=? LIMIT 1
+  `).bind(requestId).first();
+  if (!row) return error("Artist withdrawal request not found", 404);
+  if (String(row.status || "").toLowerCase() !== "processing") {
+    return error("Move this request to Processing before approving the payout.", 409);
+  }
+  if (row.payout_reference) {
+    return error("A PesaJet payout has already been submitted for this request. Check its status before taking any further action.", 409);
+  }
+
+  const amount = Number(row.amount);
+  const phone = normalizeUgandanPhone(row.payment_details);
+  const method = String(row.payment_method || "").toLowerCase();
+  const provider = method.includes("airtel") ? "airtel" : method.includes("mtn") ? "mtn" : "";
+  if (!Number.isInteger(amount) || amount < 1000 || !/^\+256\d{9}$/.test(phone) || !provider) {
+    return error("The saved withdrawal amount, mobile-money number, or network is invalid. Correct the request before paying.", 422);
+  }
+  const apiKey = env.PESAJET_API_KEY || env.PESAJET_TOKEN;
+  const baseUrl = String(env.PESAJET_API_BASE_URL || "https://payments.pesajet.com/api/v1").replace(/\/+$/, "");
+  if (!apiKey) return error("Payment service is not configured.", 503);
+
+  const reference = `NILESONIQ-ARTIST-WITHDRAWAL-${row.id}`;
+  const claimed = await env.DB.prepare(`
+    UPDATE withdrawal_requests
+    SET payout_reference=?, payout_failure_message=NULL
+    WHERE id=? AND lower(status)='processing' AND (payout_reference IS NULL OR payout_reference='')
+  `).bind(reference, row.id).run();
+  if (Number(claimed?.meta?.changes || 0) !== 1) {
+    return error("This withdrawal has already been submitted or is being processed. Refresh the admin dashboard.", 409);
+  }
+
+  let response, result;
+  try {
+    response = await fetch(`${baseUrl}/payments`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-API-Key": apiKey },
+      body: JSON.stringify({
+        type: "DISBURSEMENT", amount, currency: "UGX", phoneNumber: phone, provider,
+        reference, description: `NileSoniQ artist withdrawal ${row.id}`,
+        idempotencyKey: `nilesoniq-${reference}`
+      })
+    });
+    result = await response.json().catch(() => ({}));
+  } catch (e) {
+    console.error("Artist PesaJet payout outcome uncertain:", e.message);
+    return error("PesaJet could not confirm the payout request. The request remains Processing to prevent a duplicate payment. Check the PesaJet dashboard before retrying.", 502);
+  }
+
+  const transaction = result?.transaction && typeof result.transaction === "object"
+    ? result.transaction
+    : result?.data && typeof result.data === "object" ? result.data : result;
+  const status = String(transaction?.status || transaction?.transactionStatus || result?.status || "PENDING").toUpperCase().replace(/[\s-]+/g, "_");
+  const transactionId = String(transaction?.transactionId || transaction?.transaction_id || result?.transactionId || result?.transaction_id || "");
+  const explicitFailure = !response.ok || result?.success === false || ["FAILED", "FAILURE", "ERROR", "EXPIRED", "REJECTED", "DECLINED", "CANCELLED", "CANCELED", "TIMED_OUT", "TIMEOUT", "INSUFFICIENT_BALANCE", "INSUFFICIENT_FUNDS", "LIMIT_EXCEEDED"].includes(status);
+  if (explicitFailure) {
+    const definitive = (response.status >= 400 && response.status < 500) || result?.success === false || ["FAILED", "FAILURE", "ERROR", "EXPIRED", "REJECTED", "DECLINED", "CANCELLED", "CANCELED", "TIMED_OUT", "TIMEOUT", "INSUFFICIENT_BALANCE", "INSUFFICIENT_FUNDS", "LIMIT_EXCEEDED"].includes(status);
+    if (definitive) {
+      await applyArtistWithdrawalPaymentStatus(env, reference, "FAILED", transactionId, amount, "UGX", String(result?.message || result?.error?.message || result?.error || status));
+      return error(String(result?.message || result?.error?.message || result?.error || "PesaJet rejected the payout."), response.status >= 400 && response.status < 500 ? response.status : 502);
+    }
+    return error("PesaJet's response is uncertain. The request remains Processing; check PesaJet before retrying.", 502);
+  }
+
+  if (isSuccessfulPaymentStatus(status)) {
+    const applied = await applyArtistWithdrawalPaymentStatus(env, reference, status, transactionId, amount, "UGX");
+    if (!applied.changed && applied.reason !== "already_processed") {
+      return error("PesaJet reported success, but the payment confirmation could not be matched safely. Please contact support before taking further action.", 502);
+    }
+    return json({ success: true, status: "PAID", reference, transactionId, message: "PesaJet confirmed the artist payout." });
+  }
+
+  await env.DB.prepare(`UPDATE withdrawal_requests SET pesajet_transaction_id=COALESCE(NULLIF(?,''),pesajet_transaction_id) WHERE id=? AND payout_reference=? AND lower(status)='processing'`).bind(transactionId, row.id, reference).run();
+  return json({ success: true, status: "PROCESSING", reference, transactionId: transactionId || null, message: "PesaJet accepted the artist payout request. The artist's balance will be deducted only after payment confirmation." }, 202);
+}
+
 async function artistNotificationsRoute(request, env) {
   const user = await currentUser(request, env);
   if (!user) return error("Authentication required", 401);
@@ -3784,8 +3983,8 @@ async function artistDashboardRoute(request, env) {
         SELECT
           COALESCE(SUM(CASE WHEN lower(status) IN ('pending','processing','paid','completed','success','successful') THEN amount ELSE 0 END), 0) AS reserved,
           COALESCE(SUM(CASE WHEN lower(status) IN ('paid','completed','success','successful') THEN amount ELSE 0 END), 0) AS withdrawn
-        FROM withdrawal_requests WHERE artist_id = ?
-      `).bind(user.id).first()
+        FROM withdrawal_requests WHERE artist_id IN (?, ?)
+      `).bind(ids[0], ids[1]).first()
     ]);
     const songs = songResult.results || [];
     const totalPlays = songs.reduce((sum, song) => sum + Math.max(0, Number(song.plays || 0)), 0);
@@ -3907,6 +4106,7 @@ export default {
         path === "/api/admin/songs" ||
         path.startsWith("/api/admin/songs/") ||
         path === "/api/admin/withdrawals" ||
+        path.startsWith("/api/admin/withdrawals/") ||
         path === "/api/admin/analytics" ||
         path === "/api/admin/copyright-removals" ||
         path === "/api/admin/copyright-removal-artists" ||
