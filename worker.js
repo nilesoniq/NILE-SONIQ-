@@ -1419,8 +1419,11 @@ async function dbRoute(request, env, path) {
               e.message
             );
 
+            const detail = String(e?.message || e || "Unknown database error")
+              .replace(/[\r\n]+/g, " ")
+              .slice(0, 220);
             return error(
-              "Could not create withdrawal request. Please check the withdrawal table schema.",
+              `Withdrawal diagnostic at ${withdrawalDiagnosticStage}: ${detail}`,
               500
             );
           }
