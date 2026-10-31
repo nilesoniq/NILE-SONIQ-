@@ -5872,7 +5872,7 @@ function renderTrendingSongTicker(){
   const cover=song.cover_url?'<img class="trending-song-cover" src="'+escapeAttribute(song.cover_url)+'" alt="" loading="lazy">':'<div class="trending-song-cover" style="display:flex;align-items:center;justify-content:center;font-size:23px;color:var(--orange)">♪</div>';
   tickers.forEach(ticker=>{
     ticker.classList.remove('is-changing');
-    ticker.innerHTML='<div class="trending-song-rank">#'+(trendingSongsIndex+1)+'</div>'+cover+'<div class="trending-song-content"><strong>'+escapeHtml(song.title||'Untitled')+'</strong><span>'+escapeHtml(song.artist||'Unknown Artist')+' · '+formatNumber(song.plays||0)+' plays</span></div><button class="trending-song-play" type="button" data-song-id="'+escapeAttribute(song.id)+'" onclick="playSong(this.dataset.songId)">▶ Play</button>';
+    ticker.innerHTML = `<div class="trending-song-rank">#${trendingSongsIndex+1}</div><a href="${escapeAttribute(songPublicUrl(song))}" aria-label="Open song" onclick="event.preventDefault();openSongLink(window.__nileSongRegistry['${escapeAttribute(song.id)}'])">${cover}</a><div class="trending-song-content"><a href="${escapeAttribute(songPublicUrl(song))}" onclick="event.preventDefault();openSongLink(window.__nileSongRegistry['${escapeAttribute(song.id)}'])"><strong>${escapeHtml(song.title||'Untitled')}</strong></a><a href="#" onclick="event.preventDefault();openSongArtistProfile('${escapeAttribute(song.id)}')"><span>${escapeHtml(song.artist||'Unknown Artist')}</span></a><span> · ${formatNumber(song.plays||0)} plays</span></div><button class="trending-song-play" type="button" data-song-id="${escapeAttribute(song.id)}" onclick="playSong(this.dataset.songId)">▶ Play</button>`;
     void ticker.offsetWidth;
     ticker.classList.add('is-changing');
   });
@@ -5897,7 +5897,7 @@ function renderFeaturedSongs(){
   const cards=visible.map(song=>{
     window.__nileSongRegistry[String(song.id)]=song;
     const cover=song.cover_url?'<img src="'+escapeAttribute(song.cover_url)+'" alt="'+escapeAttribute(song.title||'Song artwork')+'" loading="lazy">':'<span class="featured-song-art-placeholder">♪</span>';
-    return '<article class="featured-song-card"><div class="featured-song-art">'+cover+'<span class="featured-song-badge">★ FEATURED SONG</span></div><h3>'+escapeHtml(song.title||'Untitled')+'</h3><div class="featured-song-artist">'+escapeHtml(song.artist||'Unknown Artist')+'</div><button class="featured-song-play" type="button" data-song-id="'+escapeAttribute(song.id)+'" onclick="playSong(this.dataset.songId)">▶ Listen Now</button></article>';
+    return `<article class="featured-song-card"><a class="featured-song-art" href="${escapeAttribute(songPublicUrl(song))}" aria-label="Open song" onclick="event.preventDefault();openSongLink(window.__nileSongRegistry['${escapeAttribute(song.id)}'])">${cover}<span class="featured-song-badge">★ FEATURED SONG</span></a><h3><a href="${escapeAttribute(songPublicUrl(song))}" onclick="event.preventDefault();openSongLink(window.__nileSongRegistry['${escapeAttribute(song.id)}'])">${escapeHtml(song.title||'Untitled')}</a></h3><a class="featured-song-artist" href="#" onclick="event.preventDefault();openSongArtistProfile('${escapeAttribute(song.id)}')">${escapeHtml(song.artist||'Unknown Artist')}</a><button class="featured-song-play" type="button" data-song-id="${escapeAttribute(song.id)}" onclick="playSong(this.dataset.songId)">▶ Listen Now</button></article>`;
   }).join('');
   targets.forEach(({track})=>{track.innerHTML=cards;});
 }
@@ -6134,8 +6134,9 @@ function renderSongCards(songs, containerId, emptyTitle, emptyText){
   const cards = visibleSongs.map(song => {
     const isPlaying = currentPlayingSong && currentPlayingSong.id === song.id;
     window.__nileSongRegistry[String(song.id)] = song;
-    const cover = song.cover_url ? `<img src="${escapeAttribute(song.cover_url)}" alt="" loading="lazy">` : `<div class="cover-placeholder">♪</div>`;
-    return `<div class="song-card ${isPlaying ? "playing" : ""}"><div class="cover" style="position:relative;">${Number(song.__rank) > 0 ? `<div class="chart-rank-badge">#${song.__rank}</div>` : ""}${cover}<button class="play-circle" onclick="playSong('${escapeAttribute(song.id)}')">${isPlaying && !document.getElementById("audioPlayer")?.paused ? "❚❚" : "▶"}</button></div><div class="song-info"><div class="song-title" style="cursor:pointer;" onclick="openSongLink(window.__nileSongRegistry['${escapeAttribute(song.id)}'])">${escapeHtml(song.title || "Untitled")}</div><div class="artist-name">${escapeHtml(song.artist || "Unknown Artist")}</div><div class="song-meta"><span>${formatNumber(song.plays || 0)} plays</span><span>${formatNumber(song.likes || 0)} likes</span></div></div><button class="download-btn" onclick="downloadSong('${escapeAttribute(song.id)}')">↓ Download</button></div>`;
+    const songId = escapeAttribute(song.id);
+    const cover = song.cover_url ? `<img src="${escapeAttribute(song.cover_url)}" alt="Open ${escapeAttribute(song.title || "song")}" loading="lazy">` : `<div class="cover-placeholder">♪</div>`;
+    return `<div class="song-card ${isPlaying ? "playing" : ""}"><div class="cover" style="position:relative;cursor:pointer;" role="link" tabindex="0" aria-label="Open song: ${escapeAttribute(song.title || "Untitled")}" onclick="openSongLink(window.__nileSongRegistry['${songId}'])" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openSongLink(window.__nileSongRegistry['${songId}']);}">${Number(song.__rank) > 0 ? `<div class="chart-rank-badge">#${song.__rank}</div>` : ""}${cover}</div><button class="play-circle" onclick="event.stopPropagation();playSong('${songId}')">${isPlaying && !document.getElementById("audioPlayer")?.paused ? "❚❚" : "▶"}</button><div class="song-info"><a class="song-title" style="cursor:pointer;" href="${escapeAttribute(songPublicUrl(song))}" onclick="event.preventDefault();openSongLink(window.__nileSongRegistry['${songId}'])">${escapeHtml(song.title || "Untitled")}</a><a class="artist-name" href="#" onclick="event.preventDefault();openSongArtistProfile('${songId}')">${escapeHtml(song.artist || "Unknown Artist")}</a><div class="song-meta"><span>${formatNumber(song.plays || 0)} plays</span><span>${formatNumber(song.likes || 0)} likes</span></div></div><button class="download-btn" onclick="event.stopPropagation();downloadSong('${songId}')">↓ Download</button></div>`;
   }).join("");
   const canExpand = !isCharts && !isAllApprovedSongs && list.length > 5;
   const expanded = expandedSongLists.has(containerId);
@@ -7240,6 +7241,27 @@ function navigateToSongSlug(song){
   }
 }
 
+async function openSongArtistProfile(songId){
+  const song = window.__nileSongRegistry && window.__nileSongRegistry[String(songId)];
+  if(!song) return;
+  try{
+    const artists = await loadPublicTable("artists", { limit: 500 });
+    const artist = (artists || []).find(item =>
+      (song.artist_id && (String(item.id) === String(song.artist_id) || String(item.user_id || "") === String(song.artist_id))) ||
+      (song.artist && normalizeSearchText(item.name || "") === normalizeSearchText(song.artist))
+    );
+    if(artist){
+      const artistId = artist.id || artist.user_id;
+      if(artistId) await openArtistProfile(artistId);
+      return;
+    }
+    alert("This artist profile is not available yet.");
+  }catch(error){
+    console.error("Could not open song artist profile:", error);
+    alert("Could not load this artist profile. Please try again.");
+  }
+}
+
 function openSongLink(song){
   if(!song) return;
   navigateToSongSlug(song);
@@ -7448,12 +7470,13 @@ async function openArtistProfile(artistId, fromPublicRoute=false){
             artistSongs.length
             ? artistSongs.map(song => {
 
+                window.__nileSongRegistry[String(song.id)] = song;
                 const cover =
                   song.cover_url
                   ? `
                     <img
                       src="${escapeAttribute(song.cover_url)}"
-                      alt=""
+                      alt="Open ${escapeAttribute(song.title || "song")}" 
                     >
                   `
                   : `
@@ -7466,14 +7489,14 @@ async function openArtistProfile(artistId, fromPublicRoute=false){
 
                   <div class="artist-profile-song">
 
-                    <div class="artist-profile-song-cover">
+                    <a class="artist-profile-song-cover" href="${escapeAttribute(songPublicUrl(song))}" onclick="event.preventDefault();openSongLink(window.__nileSongRegistry['${escapeAttribute(song.id)}'])">
                       ${cover}
-                    </div>
+                    </a>
 
                     <div class="artist-profile-song-info">
 
                       <strong>
-                        ${escapeHtml(song.title || "Untitled")}
+                        <a href="${escapeAttribute(songPublicUrl(song))}" onclick="event.preventDefault();openSongLink(window.__nileSongRegistry['${escapeAttribute(song.id)}'])">${escapeHtml(song.title || "Untitled")}</a>
                       </strong>
 
                       <small>
@@ -8097,6 +8120,8 @@ async function loadArtists(){
       loadPublicTable("artists", { limit: 500 }),
       loadPublicTable("songs", { select: "artist_id,artist,plays,approved", limit: 500 })
     ]);
+
+    window.__nileArtistRegistry = Object.fromEntries((artists || []).map(artist => [String(artist.id || artist.user_id), artist]));
 
     const approvedSongs = songs.filter(song =>
       Number(song.approved) === 1 ||
