@@ -1948,6 +1948,42 @@ footer{
 }
 
 
+
+/* NILESONIQ SONGS TAB: trending ticker + paid-artist featured songs */
+.songs-feature-section{margin:8px 0 30px;padding:20px;background:linear-gradient(145deg,#111725,#0c1019);border:1px solid #252c3d;border-radius:20px;overflow:hidden}
+.songs-feature-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
+.songs-feature-heading h2,.songs-all-heading h2{font-size:clamp(20px,3vw,27px);line-height:1.2;margin:0 0 5px}
+.songs-feature-heading p,.songs-all-heading p{font-size:13px;color:#a8afc0;margin:0}
+.songs-live-label{flex:none;padding:6px 9px;border-radius:999px;background:rgba(255,75,75,.12);border:1px solid rgba(255,90,90,.3);color:#ff8585;font-size:10px;font-weight:900;letter-spacing:.08em}
+.trending-song-ticker{min-height:82px;display:flex;align-items:center;gap:13px;padding:12px 14px;background:#0a0d14;border:1px solid #293247;border-radius:13px;overflow:hidden}
+.trending-song-ticker.is-changing .trending-song-content{animation:trendingSongEnter .45s ease both}
+.trending-song-rank{width:48px;height:48px;flex:none;display:flex;align-items:center;justify-content:center;border-radius:12px;background:linear-gradient(145deg,#244de5,#172d81);font-size:20px;font-weight:900;color:#fff}
+.trending-song-cover{width:54px;height:54px;flex:none;object-fit:cover;border-radius:9px;background:#202635}
+.trending-song-content{min-width:0;flex:1}
+.trending-song-content strong,.trending-song-content span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.trending-song-content strong{font-size:15px;color:#fff}
+.trending-song-content span{font-size:12px;color:#a8afc0;margin-top:3px}
+.trending-song-play{flex:none;border:0;border-radius:9px;padding:10px 14px;background:#244de5;color:#fff;font-weight:800}
+.featured-songs-window{overflow:hidden;width:100%}
+.featured-songs-track{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;transition:opacity .3s ease}
+.featured-song-card{min-width:0;overflow:hidden;border-radius:16px;border:1px solid #293247;background:linear-gradient(145deg,#182033,#0d111b);padding:12px;display:flex;flex-direction:column;gap:10px}
+.featured-song-art{width:100%;aspect-ratio:1.25/1;position:relative;overflow:hidden;border-radius:11px;background:#222a3a;display:flex;align-items:center;justify-content:center}
+.featured-song-art img{width:100%;height:100%;object-fit:cover}
+.featured-song-art-placeholder{font-size:48px;color:#7e9aff}
+.featured-song-badge{position:absolute;left:8px;top:8px;padding:5px 8px;border-radius:999px;background:rgba(7,10,18,.88);border:1px solid rgba(168,196,255,.35);font-size:9px;letter-spacing:.05em;font-weight:900;color:#b8ccff}
+.featured-song-card h3{font-size:16px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin:0}
+.featured-song-artist{font-size:12px;color:#a8afc0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.featured-song-card .featured-song-play{margin-top:auto;width:100%;border:0;border-radius:9px;padding:10px;background:#244de5;color:#fff;font-weight:800}
+.featured-songs-controls{display:flex;justify-content:center;align-items:center;gap:14px;margin-top:16px}
+.featured-songs-controls button{border:1px solid #343a4a;border-radius:9px;background:#191e2b;color:#fff;padding:9px 15px;font-weight:700}
+.featured-songs-controls button:hover{background:#244de5;border-color:#244de5}
+.featured-songs-page{font-size:12px;color:#a8a8a8;min-width:42px;text-align:center}
+.songs-feature-empty{grid-column:1/-1;padding:20px;text-align:center;color:#a8afc0;background:#0d111b;border:1px solid #293247;border-radius:12px;font-size:13px}
+.songs-all-heading{margin:30px 0 16px}
+@keyframes trendingSongEnter{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@media(max-width:600px){.songs-feature-section{padding:13px;border-radius:15px;margin-bottom:22px}.songs-feature-heading{align-items:flex-start}.songs-live-label{font-size:8px;padding:5px 6px}.trending-song-ticker{gap:8px;padding:9px;min-height:72px}.trending-song-rank{width:35px;height:40px;font-size:16px}.trending-song-cover{width:42px;height:42px}.trending-song-content strong{font-size:12px}.trending-song-content span{font-size:10px}.trending-song-play{padding:9px 10px;font-size:11px}.featured-songs-track{gap:9px}.featured-song-card{padding:8px;border-radius:12px;gap:8px}.featured-song-art{aspect-ratio:1/1}.featured-song-card h3{font-size:12px}.featured-song-artist{font-size:10px}.featured-song-card .featured-song-play{font-size:11px;padding:9px 5px}.featured-songs-controls{gap:8px}.featured-songs-controls button{padding:8px 10px;font-size:12px}}
+@media(prefers-reduced-motion:reduce){.trending-song-ticker.is-changing .trending-song-content{animation:none}.featured-songs-track{transition:none}}
+
 /* NILESONIQ DISCOVER ARTISTS — website-only featured carousel */
 #discoverArtistsSection{padding:30px 0 42px;margin-top:26px;border-top:1px solid #292929}
 #discoverArtistsSection .discover-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;margin-bottom:18px}
@@ -2273,6 +2309,23 @@ Loading artists...
 <section id="songsPage" class="page">
 <div class="container">
 <div class="dashboard-header"><h1>NileSoniq Songs</h1></div>
+
+<section id="songsTrendingSection" class="songs-feature-section" aria-label="Trending songs">
+  <div class="songs-feature-heading"><div><h2>🔥 Trending Songs</h2><p>Top songs ranked by their recorded plays.</p></div><span class="songs-live-label">TRENDING NOW</span></div>
+  <div id="trendingSongTicker" class="trending-song-ticker" aria-live="polite"><div class="songs-feature-empty">Loading trending songs…</div></div>
+</section>
+
+<section id="featuredSongsSection" class="songs-feature-section" aria-label="Featured songs from artists with active paid packages">
+  <div class="songs-feature-heading"><div><h2>⭐ Featured Songs</h2><p>Discover music from artists with an active paid package.</p></div></div>
+  <div class="featured-songs-window"><div id="featuredSongsTrack" class="featured-songs-track"><div class="songs-feature-empty" style="grid-column:1/-1">Loading featured songs…</div></div></div>
+  <div id="featuredSongsControls" class="featured-songs-controls" aria-label="Featured songs controls">
+    <button type="button" onclick="changeFeaturedSongs(-1)" aria-label="Previous featured songs">‹ Previous</button>
+    <span id="featuredSongsPage" class="featured-songs-page" aria-live="polite">1 / 1</span>
+    <button type="button" onclick="changeFeaturedSongs(1)" aria-label="Next featured songs">Next ›</button>
+  </div>
+</section>
+
+<div class="songs-all-heading"><h2>All Approved Songs</h2><p>Browse all available music on NileSoniQ.</p></div>
 <div id="songsPageContainer" class="song-grid"><div class="loading">Loading music...</div></div>
 </div>
 </section>
@@ -5752,6 +5805,86 @@ async function loadPublicTable(table, params = {}) {
 }
 
 
+
+/* NILESONIQ SONGS TAB: actual play-count ticker and active-paid-artist carousel */
+let featuredSongsList = [];
+let featuredSongsPageIndex = 0;
+let featuredSongsTimer = null;
+let trendingSongsTimer = null;
+let trendingSongsIndex = 0;
+const FEATURED_SONGS_PER_PAGE = 2;
+
+function renderTrendingSongTicker(){
+  const ticker=document.getElementById("trendingSongTicker");
+  if(!ticker)return;
+  const list=(Array.isArray(currentSongs)?currentSongs:[]).slice().sort((a,b)=>Number(b.plays||0)-Number(a.plays||0)||new Date(b.created_at||0)-new Date(a.created_at||0));
+  if(!list.length){ticker.innerHTML='<div class="songs-feature-empty">Trending songs will appear here when approved songs are available.</div>';return;}
+  trendingSongsIndex=((trendingSongsIndex%list.length)+list.length)%list.length;
+  const song=list[trendingSongsIndex];
+  window.__nileSongRegistry[String(song.id)]=song;
+  const cover=song.cover_url?'<img class="trending-song-cover" src="'+escapeAttribute(song.cover_url)+'" alt="" loading="lazy">':'<div class="trending-song-cover" style="display:flex;align-items:center;justify-content:center;font-size:23px;color:#8da8ff">♪</div>';
+  ticker.classList.remove('is-changing');
+  ticker.innerHTML='<div class="trending-song-rank">#'+(trendingSongsIndex+1)+'</div>'+cover+'<div class="trending-song-content"><strong>'+escapeHtml(song.title||'Untitled')+'</strong><span>'+escapeHtml(song.artist||'Unknown Artist')+' · '+formatNumber(song.plays||0)+' plays</span></div><button class="trending-song-play" type="button" data-song-id="'+escapeAttribute(song.id)+'" onclick="playSong(this.dataset.songId)">▶ Play</button>';
+  void ticker.offsetWidth;
+  ticker.classList.add('is-changing');
+}
+function startTrendingSongsRotation(){
+  if(trendingSongsTimer)clearInterval(trendingSongsTimer);
+  trendingSongsTimer=null;
+  if(!Array.isArray(currentSongs)||currentSongs.length<2||window.matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+  trendingSongsTimer=setInterval(()=>{if(document.hidden)return;trendingSongsIndex=(trendingSongsIndex+1)%currentSongs.length;renderTrendingSongTicker();},4500);
+}
+function renderFeaturedSongs(){
+  const track=document.getElementById('featuredSongsTrack');
+  const controls=document.getElementById('featuredSongsControls');
+  const pageLabel=document.getElementById('featuredSongsPage');
+  if(!track)return;
+  const totalPages=Math.max(1,Math.ceil(featuredSongsList.length/FEATURED_SONGS_PER_PAGE));
+  featuredSongsPageIndex=((featuredSongsPageIndex%totalPages)+totalPages)%totalPages;
+  const visible=featuredSongsList.slice(featuredSongsPageIndex*FEATURED_SONGS_PER_PAGE,(featuredSongsPageIndex+1)*FEATURED_SONGS_PER_PAGE);
+  if(!visible.length){track.innerHTML='<div class="songs-feature-empty">Featured songs will appear here when artists have an active paid package.</div>';if(controls)controls.style.display='none';return;}
+  if(controls)controls.style.display=featuredSongsList.length>FEATURED_SONGS_PER_PAGE?'flex':'none';
+  if(pageLabel)pageLabel.textContent=(featuredSongsPageIndex+1)+' / '+totalPages;
+  track.innerHTML=visible.map(song=>{
+    window.__nileSongRegistry[String(song.id)]=song;
+    const cover=song.cover_url?'<img src="'+escapeAttribute(song.cover_url)+'" alt="'+escapeAttribute(song.title||'Song artwork')+'" loading="lazy">':'<span class="featured-song-art-placeholder">♪</span>';
+    return '<article class="featured-song-card"><div class="featured-song-art">'+cover+'<span class="featured-song-badge">★ FEATURED SONG</span></div><h3>'+escapeHtml(song.title||'Untitled')+'</h3><div class="featured-song-artist">'+escapeHtml(song.artist||'Unknown Artist')+'</div><button class="featured-song-play" type="button" data-song-id="'+escapeAttribute(song.id)+'" onclick="playSong(this.dataset.songId)">▶ Listen Now</button></article>';
+  }).join('');
+}
+function changeFeaturedSongs(direction){
+  const totalPages=Math.max(1,Math.ceil(featuredSongsList.length/FEATURED_SONGS_PER_PAGE));
+  if(totalPages<=1)return;
+  featuredSongsPageIndex=(featuredSongsPageIndex+Number(direction||0)+totalPages)%totalPages;
+  renderFeaturedSongs();restartFeaturedSongsRotation();
+}
+function restartFeaturedSongsRotation(){
+  if(featuredSongsTimer)clearInterval(featuredSongsTimer);
+  featuredSongsTimer=null;
+  if(featuredSongsList.length<=FEATURED_SONGS_PER_PAGE||window.matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+  featuredSongsTimer=setInterval(()=>{if(document.hidden)return;changeFeaturedSongs(1);},6000);
+}
+async function loadSongsTabFeatures(){
+  renderTrendingSongTicker();startTrendingSongsRotation();
+  const track=document.getElementById('featuredSongsTrack');
+  if(!track)return;
+  try{
+    const artists=await loadPublicTable('artists',{limit:500});
+    const activePaidArtists=artists.filter(artist=>isArtistPremiumActive(artist));
+    const artistIds=new Set(activePaidArtists.flatMap(artist=>[artist.id,artist.user_id].filter(Boolean).map(String)));
+    const artistNames=new Set(activePaidArtists.map(artist=>normalizeSearchText(artist.name||'')).filter(Boolean));
+    featuredSongsList=(Array.isArray(currentSongs)?currentSongs:[]).filter(song=>{
+      const id=String(song.artist_id||'');
+      const name=normalizeSearchText(song.artist||'');
+      return (id&&artistIds.has(id))||(!id&&name&&artistNames.has(name))||(id&&artistNames.has(name));
+    }).sort((a,b)=>Number(b.plays||0)-Number(a.plays||0)||new Date(b.created_at||0)-new Date(a.created_at||0));
+    featuredSongsPageIndex=0;renderFeaturedSongs();restartFeaturedSongsRotation();
+  }catch(error){
+    console.error('Featured songs load error:',error);
+    featuredSongsList=[];renderFeaturedSongs();
+  }
+}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden){startTrendingSongsRotation();if(featuredSongsList.length>FEATURED_SONGS_PER_PAGE)restartFeaturedSongsRotation();}});
+
 /* =========================================================
    SONGS
 ========================================================= */
@@ -5776,6 +5909,8 @@ async function loadSongs(){
       );
 
     renderSongs(currentSongs);
+    loadSongsTabFeatures();
+    renderSongCards(currentSongs, "songsPageContainer", "No approved songs yet", "New music will appear here after approval.");
 
     const searchInput = document.getElementById("searchInput");
     if (searchInput && searchInput.value.trim()) {
