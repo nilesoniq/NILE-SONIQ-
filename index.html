@@ -1649,7 +1649,37 @@ footer{
 .analytics-chart-empty{color:#888;font-size:13px;padding:20px 4px}
 .wallet-box{background:linear-gradient(135deg,#171717,#111);border:1px solid var(--border);border-radius:18px;padding:22px}
 .wallet-balance{font-size:34px;font-weight:900;margin:8px 0 18px}
-.wallet-note{color:#888;font-size:12px;line-height:1.5;margin-top:10px}
+ .wallet-note{color:#888;font-size:12px;line-height:1.5;margin-top:10px}
+/* Keep the four Platform Wallet summary cards on one horizontal line. */
+#adminWalletPanel #platformWalletStats{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:10px;
+  overflow-x:auto;
+  align-items:stretch;
+}
+#adminWalletPanel #platformWalletStats .stat-card{
+  min-width:0;
+  padding:14px 12px;
+  border-radius:14px;
+}
+#adminWalletPanel #platformWalletStats .stat-card span{
+  font-size:12px;
+  line-height:1.3;
+  overflow-wrap:anywhere;
+}
+#adminWalletPanel #platformWalletStats .stat-card strong{
+  display:block;
+  font-size:clamp(14px,2vw,22px);
+  line-height:1.25;
+  overflow-wrap:anywhere;
+}
+@media(max-width:520px){
+  #adminWalletPanel #platformWalletStats{
+    grid-template-columns:repeat(4,minmax(135px,1fr));
+    padding-bottom:6px;
+  }
+}
 @media(max-width:900px){.analytics-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.analytics-two{grid-template-columns:1fr}}
 @media(max-width:520px){
   .analytics-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:12px 0}
@@ -2840,12 +2870,12 @@ class="dashboard-card hidden">
 
 <div class="wallet-box">
   <div style="color:#888;font-size:12px;">Payout account</div>
-  <div id="platformWalletNumber" style="font-size:20px;font-weight:800;margin-top:5px;">Not configured</div>
+  <div id="platformWalletNumber" style="font-size:20px;font-weight:800;margin-top:5px;"></div>
   <div class="wallet-balance" id="platformWalletBalance">UGX 0</div>
   <div style="color:#888;font-size:12px;">Available platform balance after known fees and reserved pending payouts.</div>
 </div>
 
-<div class="stats-grid" style="margin-top:16px;">
+<div id="platformWalletStats" class="stats-grid" style="margin-top:16px;">
   <div class="stat-card"><span>Ledger Income Tracked</span><strong id="platformLedgerIncome">UGX 0</strong></div>
   <div class="stat-card"><span>Completed Payouts Tracked</span><strong id="platformLedgerPayouts">UGX 0</strong></div>
   <div class="stat-card"><span>Verified PesaJet Fees</span><strong id="platformLedgerFees">UGX 0</strong></div>
@@ -8570,7 +8600,7 @@ async function loadPlatformWallet(){
       const number=document.getElementById("platformWalletNumber");
       if(phone) phone.value=data.phone||"";
       if(network) network.value=data.network||"MTN";
-      if(number) number.textContent=data.phone ? `${data.network||"MTN"} — ${data.phone}` : "Not configured";
+      if(number) number.textContent=data.phone ? `${data.network||"MTN"} — ${data.phone}` : "";
     }catch(e){
       console.warn("Wallet settings error",e);
     }
