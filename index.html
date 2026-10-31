@@ -8584,25 +8584,51 @@ async function loadPlatformWallet(){
     return;
   }
 
+  const walletMessage=document.getElementById("platformWalletMessage");
+  if(walletMessage){
+    walletMessage.textContent="";
+    walletMessage.className="message";
+  }
+
+  // The wallet balance and the financial summary are separate requests.
+  // A summary failure must not be reported as a wallet-balance failure.
   try{
-    // Read the real D1 platform_wallet balance through the Cloudflare Worker.
-    // Do not calculate it from deposit totals; completed payouts must be reflected.
     const { data, error } = await sb.rpc("get_platform_completed_total");
     if(error) throw error;
 
     const totalAmount = Number(data ?? 0);
-
     if(!Number.isFinite(totalAmount)){
       throw new Error("Invalid balance returned by get_platform_completed_total.");
     }
 
-    const balanceElement=document.getElementById("platformWalletBalance");
-    if(balanceElement) balanceElement.textContent = "UGX " + formatNumber(Math.floor(totalAmount));
+    balanceElement.textContent = "UGX " + formatNumber(Math.floor(totalAmount));
+    console.log("Platform wallet available balance:", totalAmount);
+  }catch(error){
+    console.error("Platform wallet balance request failed:",error);
+    balanceElement.textContent="Balance unavailable";
+    showMessage(
+      "platformWalletMessage",
+      "Could not load the Platform Wallet balance. Please try again or check the platform wallet backend.",
+      "error"
+    );
 
-    console.log("Platform completed deposits total:", totalAmount);
+    if(!platformWalletRefreshTimer){
+      platformWalletRefreshTimer=setInterval(()=>{
+        const panel=document.getElementById("adminWalletPanel");
+        if(panel && !panel.classList.contains("hidden")){
+          loadPlatformWallet();
+        }
+      },30000);
+    }
+    return;
+  }
 
+  // Load ledger figures separately so an unavailable summary does not erase
+  // or mislabel a balance that has already loaded successfully.
+  try{
     const summaryResult = await sb.rpc("get_platform_financial_summary");
     if(summaryResult.error) throw summaryResult.error;
+
     const summary = summaryResult.data || {};
     const setMoney = (id, value) => {
       const element = document.getElementById(id);
@@ -8612,6 +8638,7 @@ async function loadPlatformWallet(){
     setMoney("platformLedgerPayouts", summary.payout_total);
     setMoney("platformLedgerFees", summary.verified_fees);
     setMoney("platformArtistNet", summary.artist_net);
+
     const warning = document.getElementById("platformLedgerWarning");
     if(warning){
       const unknownFees = Number(summary.fee_unverified_count || 0);
@@ -8620,17 +8647,10 @@ async function loadPlatformWallet(){
         : "Financial ledger tracking begins with transactions processed after this update. Historical transactions have not been imported automatically. Fees are shown only when the provider confirms the actual amount.";
     }
   }catch(error){
-    console.error("Platform completed deposits error:",error);
-    const balanceElement=document.getElementById("platformWalletBalance");
-    if(balanceElement) balanceElement.textContent="Balance unavailable";
-
-    const message=document.getElementById("platformWalletMessage");
-    if(message){
-      showMessage(
-        "platformWalletMessage",
-        "Could not load the Platform Wallet balance. Please try again or check the platform wallet backend.",
-        "error"
-      );
+    console.error("Platform financial summary request failed:",error);
+    const warning = document.getElementById("platformLedgerWarning");
+    if(warning){
+      warning.textContent="The wallet balance loaded successfully, but the financial summary could not be loaded. Please retry the summary later.";
     }
   }
 
@@ -8643,7 +8663,6 @@ async function loadPlatformWallet(){
     },30000);
   }
 }
-
 function savePlatformWallet(){
   const phone=(document.getElementById("platformWalletPhone")?.value||"").trim();
   const network=(document.getElementById("platformWalletNetwork")?.value||"MTN").trim();
