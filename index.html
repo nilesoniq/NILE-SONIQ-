@@ -1950,35 +1950,35 @@ footer{
 
 
 /* NILESONIQ SONGS TAB: trending ticker + paid-artist featured songs */
-.songs-feature-section{margin:8px 0 30px;padding:20px;background:linear-gradient(145deg,#111725,#0c1019);border:1px solid #252c3d;border-radius:20px;overflow:hidden}
+.songs-feature-section{margin:8px 0 30px;padding:20px;background:linear-gradient(145deg,#171717,#0c0c0c);border:1px solid #292929;border-radius:20px;overflow:hidden}
 .songs-feature-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
 .songs-feature-heading h2,.songs-all-heading h2{font-size:clamp(20px,3vw,27px);line-height:1.2;margin:0 0 5px}
-.songs-feature-heading p,.songs-all-heading p{font-size:13px;color:#a8afc0;margin:0}
+.songs-feature-heading p,.songs-all-heading p{font-size:13px;color:#a8a8a8;margin:0}
 .songs-live-label{flex:none;padding:6px 9px;border-radius:999px;background:rgba(255,75,75,.12);border:1px solid rgba(255,90,90,.3);color:#ff8585;font-size:10px;font-weight:900;letter-spacing:.08em}
-.trending-song-ticker{min-height:82px;display:flex;align-items:center;gap:13px;padding:12px 14px;background:#0a0d14;border:1px solid #293247;border-radius:13px;overflow:hidden}
+.trending-song-ticker{min-height:82px;display:flex;align-items:center;gap:13px;padding:12px 14px;background:#111;border:1px solid #292929;border-radius:13px;overflow:hidden}
 .trending-song-ticker.is-changing .trending-song-content{animation:trendingSongEnter .45s ease both}
-.trending-song-rank{width:48px;height:48px;flex:none;display:flex;align-items:center;justify-content:center;border-radius:12px;background:linear-gradient(145deg,#244de5,#172d81);font-size:20px;font-weight:900;color:#fff}
-.trending-song-cover{width:54px;height:54px;flex:none;object-fit:cover;border-radius:9px;background:#202635}
+.trending-song-rank{width:48px;height:48px;flex:none;display:flex;align-items:center;justify-content:center;border-radius:12px;background:linear-gradient(145deg,#ff8a2b,#ff6a00);font-size:20px;font-weight:900;color:#fff}
+.trending-song-cover{width:54px;height:54px;flex:none;object-fit:cover;border-radius:9px;background:#222}
 .trending-song-content{min-width:0;flex:1}
 .trending-song-content strong,.trending-song-content span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .trending-song-content strong{font-size:15px;color:#fff}
-.trending-song-content span{font-size:12px;color:#a8afc0;margin-top:3px}
-.trending-song-play{flex:none;border:0;border-radius:9px;padding:10px 14px;background:#244de5;color:#fff;font-weight:800}
+.trending-song-content span{font-size:12px;color:#a8a8a8;margin-top:3px}
+.trending-song-play{flex:none;border:0;border-radius:9px;padding:10px 14px;background:var(--orange);color:#fff;font-weight:800}
 .featured-songs-window{overflow:hidden;width:100%}
 .featured-songs-track{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;transition:opacity .3s ease}
-.featured-song-card{min-width:0;overflow:hidden;border-radius:16px;border:1px solid #293247;background:linear-gradient(145deg,#182033,#0d111b);padding:12px;display:flex;flex-direction:column;gap:10px}
-.featured-song-art{width:100%;aspect-ratio:1.25/1;position:relative;overflow:hidden;border-radius:11px;background:#222a3a;display:flex;align-items:center;justify-content:center}
+.featured-song-card{min-width:0;overflow:hidden;border-radius:16px;border:1px solid #292929;background:linear-gradient(145deg,#171717,#0d0d0d);padding:12px;display:flex;flex-direction:column;gap:10px}
+.featured-song-art{width:100%;aspect-ratio:1.25/1;position:relative;overflow:hidden;border-radius:11px;background:#222;display:flex;align-items:center;justify-content:center}
 .featured-song-art img{width:100%;height:100%;object-fit:cover}
-.featured-song-art-placeholder{font-size:48px;color:#7e9aff}
-.featured-song-badge{position:absolute;left:8px;top:8px;padding:5px 8px;border-radius:999px;background:rgba(7,10,18,.88);border:1px solid rgba(168,196,255,.35);font-size:9px;letter-spacing:.05em;font-weight:900;color:#b8ccff}
+.featured-song-art-placeholder{font-size:48px;color:var(--orange)}
+.featured-song-badge{position:absolute;left:8px;top:8px;padding:5px 8px;border-radius:999px;background:rgba(10,10,10,.88);border:1px solid rgba(255,106,0,.35);font-size:9px;letter-spacing:.05em;font-weight:900;color:var(--orange2)}
 .featured-song-card h3{font-size:16px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin:0}
-.featured-song-artist{font-size:12px;color:#a8afc0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.featured-song-card .featured-song-play{margin-top:auto;width:100%;border:0;border-radius:9px;padding:10px;background:#244de5;color:#fff;font-weight:800}
+.featured-song-artist{font-size:12px;color:#a8a8a8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.featured-song-card .featured-song-play{margin-top:auto;width:100%;border:0;border-radius:9px;padding:10px;background:var(--orange);color:#fff;font-weight:800}
 .featured-songs-controls{display:flex;justify-content:center;align-items:center;gap:14px;margin-top:16px}
-.featured-songs-controls button{border:1px solid #343a4a;border-radius:9px;background:#191e2b;color:#fff;padding:9px 15px;font-weight:700}
-.featured-songs-controls button:hover{background:#244de5;border-color:#244de5}
+.featured-songs-controls button{border:1px solid #333;border-radius:9px;background:#202020;color:#fff;padding:9px 15px;font-weight:700}
+.featured-songs-controls button:hover{background:var(--orange);border-color:var(--orange)}
 .featured-songs-page{font-size:12px;color:#a8a8a8;min-width:42px;text-align:center}
-.songs-feature-empty{grid-column:1/-1;padding:20px;text-align:center;color:#a8afc0;background:#0d111b;border:1px solid #293247;border-radius:12px;font-size:13px}
+.songs-feature-empty{grid-column:1/-1;padding:20px;text-align:center;color:#a8a8a8;background:#111;border:1px solid #292929;border-radius:12px;font-size:13px}
 .songs-all-heading{margin:30px 0 16px}
 @keyframes trendingSongEnter{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
 @media(max-width:600px){.songs-feature-section{padding:13px;border-radius:15px;margin-bottom:22px}.songs-feature-heading{align-items:flex-start}.songs-live-label{font-size:8px;padding:5px 6px}.trending-song-ticker{gap:8px;padding:9px;min-height:72px}.trending-song-rank{width:35px;height:40px;font-size:16px}.trending-song-cover{width:42px;height:42px}.trending-song-content strong{font-size:12px}.trending-song-content span{font-size:10px}.trending-song-play{padding:9px 10px;font-size:11px}.featured-songs-track{gap:9px}.featured-song-card{padding:8px;border-radius:12px;gap:8px}.featured-song-art{aspect-ratio:1/1}.featured-song-card h3{font-size:12px}.featured-song-artist{font-size:10px}.featured-song-card .featured-song-play{font-size:11px;padding:9px 5px}.featured-songs-controls{gap:8px}.featured-songs-controls button{padding:8px 10px;font-size:12px}}
@@ -1991,20 +1991,20 @@ footer{
 #discoverArtistsSection .discover-heading p{color:#a8a8a8;font-size:14px;margin-top:4px}
 #discoverArtistsSection .featured-window{overflow:hidden;width:100%}
 #discoverArtistsSection .featured-track{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;transition:opacity .35s ease}
-#discoverArtistsSection .featured-card{min-width:0;min-height:290px;background:linear-gradient(145deg,#171c2b,#10131d 75%);border:1px solid #292f40;border-radius:18px;padding:22px 14px 18px;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;cursor:pointer;transition:transform .2s,border-color .2s,box-shadow .2s;overflow:hidden}
-#discoverArtistsSection .featured-card:hover{transform:translateY(-3px);border-color:#53617c;box-shadow:0 14px 30px rgba(0,0,0,.28)}
-#discoverArtistsSection .featured-photo{width:clamp(92px,13vw,145px);height:clamp(92px,13vw,145px);border-radius:50%;overflow:hidden;background:#252b3b;border:3px solid #343c51;margin:0 auto 15px;flex:none;display:flex;align-items:center;justify-content:center}
+#discoverArtistsSection .featured-card{min-width:0;min-height:290px;background:linear-gradient(145deg,#171717,#101010 75%);border:1px solid #292929;border-radius:18px;padding:22px 14px 18px;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;cursor:pointer;transition:transform .2s,border-color .2s,box-shadow .2s;overflow:hidden}
+#discoverArtistsSection .featured-card:hover{transform:translateY(-3px);border-color:var(--orange);box-shadow:0 14px 30px rgba(0,0,0,.28)}
+#discoverArtistsSection .featured-photo{width:clamp(92px,13vw,145px);height:clamp(92px,13vw,145px);border-radius:50%;overflow:hidden;background:#242424;border:3px solid #333;margin:0 auto 15px;flex:none;display:flex;align-items:center;justify-content:center}
 #discoverArtistsSection .featured-photo img{width:100%;height:100%;object-fit:cover}
 #discoverArtistsSection .featured-initials{font-size:clamp(30px,4vw,46px);font-weight:900;color:#ff8a2b}
 #discoverArtistsSection .featured-card h3{font-size:clamp(16px,2vw,22px);line-height:1.25;margin:0 0 6px;overflow-wrap:anywhere}
-#discoverArtistsSection .featured-location{font-size:13px;color:#a8afc0;margin-bottom:12px}
-#discoverArtistsSection .featured-tag{font-size:10px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:#a8c4ff;margin-bottom:14px}
-#discoverArtistsSection .featured-listen{margin-top:auto;border:0;border-radius:7px;background:#244de5;color:white;font-size:12px;font-weight:800;padding:9px 20px;min-width:88px}
+#discoverArtistsSection .featured-location{font-size:13px;color:#a8a8a8;margin-bottom:12px}
+#discoverArtistsSection .featured-tag{font-size:10px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--orange2);margin-bottom:14px}
+#discoverArtistsSection .featured-listen{margin-top:auto;border:0;border-radius:7px;background:var(--orange);color:white;font-size:12px;font-weight:800;padding:9px 20px;min-width:88px}
 #discoverArtistsSection .featured-controls{display:flex;justify-content:center;align-items:center;gap:14px;margin-top:18px}
-#discoverArtistsSection .featured-controls button{border:1px solid #343a4a;border-radius:9px;background:#191e2b;color:#fff;padding:9px 15px;font-weight:700}
-#discoverArtistsSection .featured-controls button:hover{background:#244de5;border-color:#244de5}
+#discoverArtistsSection .featured-controls button{border:1px solid #333;border-radius:9px;background:#202020;color:#fff;padding:9px 15px;font-weight:700}
+#discoverArtistsSection .featured-controls button:hover{background:var(--orange);border-color:var(--orange)}
 #discoverArtistsSection .featured-page{font-size:12px;color:#a8a8a8;min-width:42px;text-align:center}
-#discoverArtistsSection .featured-empty{padding:22px;text-align:center;color:#a8a8a8;background:#12141c;border:1px solid #292f40;border-radius:14px}
+#discoverArtistsSection .featured-empty{padding:22px;text-align:center;color:#a8a8a8;background:#121212;border:1px solid #292929;border-radius:14px}
 @media(max-width:480px){
  #discoverArtistsSection{padding:24px 0 30px;margin-top:20px}
  #discoverArtistsSection .featured-track{gap:9px}
@@ -5822,7 +5822,7 @@ function renderTrendingSongTicker(){
   trendingSongsIndex=((trendingSongsIndex%list.length)+list.length)%list.length;
   const song=list[trendingSongsIndex];
   window.__nileSongRegistry[String(song.id)]=song;
-  const cover=song.cover_url?'<img class="trending-song-cover" src="'+escapeAttribute(song.cover_url)+'" alt="" loading="lazy">':'<div class="trending-song-cover" style="display:flex;align-items:center;justify-content:center;font-size:23px;color:#8da8ff">♪</div>';
+  const cover=song.cover_url?'<img class="trending-song-cover" src="'+escapeAttribute(song.cover_url)+'" alt="" loading="lazy">':'<div class="trending-song-cover" style="display:flex;align-items:center;justify-content:center;font-size:23px;color:var(--orange)">♪</div>';
   ticker.classList.remove('is-changing');
   ticker.innerHTML='<div class="trending-song-rank">#'+(trendingSongsIndex+1)+'</div>'+cover+'<div class="trending-song-content"><strong>'+escapeHtml(song.title||'Untitled')+'</strong><span>'+escapeHtml(song.artist||'Unknown Artist')+' · '+formatNumber(song.plays||0)+' plays</span></div><button class="trending-song-play" type="button" data-song-id="'+escapeAttribute(song.id)+'" onclick="playSong(this.dataset.songId)">▶ Play</button>';
   void ticker.offsetWidth;
