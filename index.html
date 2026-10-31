@@ -2172,38 +2172,24 @@ class="song-grid">
 
 </section>
 
-<section class="ad-space">
-
-<div>
-<strong>ADVERTISEMENT</strong>
-Space reserved for ads
-</div>
-
-</section>
-
-<section id="newReleases" class="section">
+<section id="trending" class="section">
 
 <div class="section-heading">
 
 <div>
 
-<h2>New Releases</h2>
+<h2>Trending Songs</h2>
 
 <p>
-The latest approved music on NileSoniq.
+Fresh music from NileSoniq artists.
 </p>
 
 </div>
 
 </div>
 
-<div id="newReleasesContainer"
-class="song-grid">
-<div class="song-skeleton" aria-hidden="true"><div class="song-skeleton-cover"></div><div class="song-skeleton-details"><div class="song-skeleton-line"></div><div class="song-skeleton-line short"></div></div></div>
-<div class="song-skeleton" aria-hidden="true"><div class="song-skeleton-cover"></div><div class="song-skeleton-details"><div class="song-skeleton-line"></div><div class="song-skeleton-line short"></div></div></div>
-<div class="song-skeleton" aria-hidden="true"><div class="song-skeleton-cover"></div><div class="song-skeleton-details"><div class="song-skeleton-line"></div><div class="song-skeleton-line short"></div></div></div>
-<div class="song-skeleton" aria-hidden="true"><div class="song-skeleton-cover"></div><div class="song-skeleton-details"><div class="song-skeleton-line"></div><div class="song-skeleton-line short"></div></div></div>
-</div>
+<div id="homeTrendingSongTicker" class="trending-song-ticker" aria-live="polite"><div class="songs-feature-empty">Loading trending songs…</div></div>
+<div id="songsContainer" class="song-grid hidden" aria-hidden="true"></div>
 
 </section>
 
@@ -2233,24 +2219,44 @@ class="song-grid">
 
 </section>
 
-<section id="trending" class="section">
+<section id="homeDiscoverArtistsSection" aria-label="Discover featured artists">
+  <div class="discover-heading"><div><h2>Discover Artists</h2><p>Discover your next favourite artist on NileSoniQ.</p></div></div>
+  <div class="featured-window"><div id="homeFeaturedArtistsTrack" class="featured-track"><div class="featured-empty" style="grid-column:1/-1;">Loading featured artists…</div></div></div>
+  <div id="homeFeaturedArtistsControls" class="featured-controls" aria-label="Homepage featured artist controls">
+    <button type="button" onclick="changeFeaturedArtists(-1)" aria-label="Previous featured artists">‹ Previous</button>
+    <span id="homeFeaturedArtistsPage" class="featured-page" aria-live="polite">1 / 1</span>
+    <button type="button" onclick="changeFeaturedArtists(1)" aria-label="Next featured artists">Next ›</button>
+  </div>
+</section>
+
+<section id="newReleases" class="section">
 
 <div class="section-heading">
 
 <div>
 
-<h2>Trending Songs</h2>
+<h2>New Releases</h2>
 
 <p>
-Fresh music from NileSoniq artists.
+The latest approved music on NileSoniq.
 </p>
 
 </div>
 
 </div>
 
-<div id="homeTrendingSongTicker" class="trending-song-ticker" aria-live="polite"><div class="songs-feature-empty">Loading trending songs…</div></div>
-<div id="songsContainer" class="song-grid hidden" aria-hidden="true"></div>
+<div id="newReleasesContainer"
+class="song-grid">
+<div class="song-skeleton" aria-hidden="true"><div class="song-skeleton-cover"></div><div class="song-skeleton-details"><div class="song-skeleton-line"></div><div class="song-skeleton-line short"></div></div></div>
+<div class="song-skeleton" aria-hidden="true"><div class="song-skeleton-cover"></div><div class="song-skeleton-details"><div class="song-skeleton-line"></div><div class="song-skeleton-line short"></div></div></div>
+<div class="song-skeleton" aria-hidden="true"><div class="song-skeleton-cover"></div><div class="song-skeleton-details"><div class="song-skeleton-line"></div><div class="song-skeleton-line short"></div></div></div>
+<div class="song-skeleton" aria-hidden="true"><div class="song-skeleton-cover"></div><div class="song-skeleton-details"><div class="song-skeleton-line"></div><div class="song-skeleton-line short"></div></div></div>
+</div>
+<div id="newReleasesPagination" class="new-releases-pagination" style="display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;padding:16px 0;">
+  <button type="button" class="btn btn-dark" onclick="changeNewReleasesPage(-1)" disabled>‹ Previous</button>
+  <span id="newReleasesPageLabel" style="color:#aaa;font-size:13px;">1 / 1</span>
+  <button type="button" class="btn btn-dark" onclick="changeNewReleasesPage(1)" disabled>Next ›</button>
+</div>
 
 </section>
 
@@ -2264,15 +2270,26 @@ Fresh music from NileSoniq artists.
   </div>
 </section>
 
-<section id="homeDiscoverArtistsSection" aria-label="Discover featured artists">
-  <div class="discover-heading"><div><h2>Discover Artists</h2><p>Discover your next favourite artist on NileSoniQ.</p></div></div>
-  <div class="featured-window"><div id="homeFeaturedArtistsTrack" class="featured-track"><div class="featured-empty" style="grid-column:1/-1;">Loading featured artists…</div></div></div>
-  <div id="homeFeaturedArtistsControls" class="featured-controls" aria-label="Homepage featured artist controls">
-    <button type="button" onclick="changeFeaturedArtists(-1)" aria-label="Previous featured artists">‹ Previous</button>
-    <span id="homeFeaturedArtistsPage" class="featured-page" aria-live="polite">1 / 1</span>
-    <button type="button" onclick="changeFeaturedArtists(1)" aria-label="Next featured artists">Next ›</button>
-  </div>
+
+
+<section class="ad-space">
+
+<div>
+<strong>ADVERTISEMENT</strong>
+Space reserved for ads
+</div>
+
 </section>
+
+
+
+
+
+
+
+
+
+
 
 </div>
 </section>
@@ -3667,6 +3684,8 @@ let currentArtist = null;
 
 let currentSongs = [];
 let newReleaseSongs = [];
+let newReleasesPageIndex = 0;
+const NEW_RELEASES_PER_PAGE = 8;
 let topChartSongs = [];
 const expandedSongLists = new Set();
 let approvedSongsPageIndex = 0;
@@ -5980,6 +5999,7 @@ async function loadNewReleases(){
       })
       .slice(0, 500);
 
+    newReleasesPageIndex = 0;
     renderNewReleases(newReleaseSongs);
   } catch (error) {
     console.error("New releases load error:", error);
@@ -5998,6 +6018,7 @@ async function loadNewReleases(){
         };
         return stamp(b) - stamp(a);
       });
+      newReleasesPageIndex = 0;
       renderNewReleases(newReleaseSongs);
     } else {
       container.innerHTML = `
@@ -6162,14 +6183,34 @@ function renderSongs(songs){
 
 
 function renderNewReleases(songs){
+  const list = Array.isArray(songs) ? songs : [];
+  const totalPages = Math.max(1, Math.ceil(list.length / NEW_RELEASES_PER_PAGE));
+  newReleasesPageIndex = Math.max(0, Math.min(newReleasesPageIndex, totalPages - 1));
+  const start = newReleasesPageIndex * NEW_RELEASES_PER_PAGE;
+  const pageSongs = list.slice(start, start + NEW_RELEASES_PER_PAGE);
 
-  renderSongCards(
-    songs,
-    "newReleasesContainer",
-    "No new releases yet",
-    "New music will appear here after approval."
-  );
+  // Render only the selected page so Next replaces, rather than appends to, the previous page.
+  renderSongCards(pageSongs, "newReleasesContainer", "No new releases yet", "New music will appear here after approval.");
 
+  const controls = document.getElementById("newReleasesPagination");
+  const label = document.getElementById("newReleasesPageLabel");
+  if (controls) controls.style.display = list.length > NEW_RELEASES_PER_PAGE ? "flex" : "none";
+  if (label) label.textContent = `${newReleasesPageIndex + 1} / ${totalPages}`;
+  const buttons = controls ? controls.querySelectorAll("button") : [];
+  if (buttons.length >= 2) {
+    buttons[0].disabled = newReleasesPageIndex <= 0;
+    buttons[1].disabled = newReleasesPageIndex >= totalPages - 1;
+  }
+}
+
+function changeNewReleasesPage(direction){
+  const totalPages = Math.max(1, Math.ceil((newReleaseSongs || []).length / NEW_RELEASES_PER_PAGE));
+  const nextPage = newReleasesPageIndex + Number(direction || 0);
+  if (nextPage < 0 || nextPage >= totalPages) return;
+  newReleasesPageIndex = nextPage;
+  renderNewReleases(newReleaseSongs);
+  const section = document.getElementById("newReleases");
+  if (section) section.scrollIntoView({behavior:"smooth", block:"start"});
 }
 
 
