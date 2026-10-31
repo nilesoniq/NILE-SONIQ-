@@ -1947,6 +1947,40 @@ footer{
   #artistsPage .artist-card .nilesoniq-premium-badge{font-size:8px;padding:3px 5px}
 }
 
+
+/* NILESONIQ DISCOVER ARTISTS — website-only featured carousel */
+#discoverArtistsSection{padding:30px 0 42px;margin-top:26px;border-top:1px solid #292929}
+#discoverArtistsSection .discover-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;margin-bottom:18px}
+#discoverArtistsSection .discover-heading h2{font-size:clamp(24px,3vw,32px);letter-spacing:-.5px}
+#discoverArtistsSection .discover-heading p{color:#a8a8a8;font-size:14px;margin-top:4px}
+#discoverArtistsSection .featured-window{overflow:hidden;width:100%}
+#discoverArtistsSection .featured-track{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;transition:opacity .35s ease}
+#discoverArtistsSection .featured-card{min-width:0;min-height:290px;background:linear-gradient(145deg,#171c2b,#10131d 75%);border:1px solid #292f40;border-radius:18px;padding:22px 14px 18px;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;cursor:pointer;transition:transform .2s,border-color .2s,box-shadow .2s;overflow:hidden}
+#discoverArtistsSection .featured-card:hover{transform:translateY(-3px);border-color:#53617c;box-shadow:0 14px 30px rgba(0,0,0,.28)}
+#discoverArtistsSection .featured-photo{width:clamp(92px,13vw,145px);height:clamp(92px,13vw,145px);border-radius:50%;overflow:hidden;background:#252b3b;border:3px solid #343c51;margin:0 auto 15px;flex:none;display:flex;align-items:center;justify-content:center}
+#discoverArtistsSection .featured-photo img{width:100%;height:100%;object-fit:cover}
+#discoverArtistsSection .featured-initials{font-size:clamp(30px,4vw,46px);font-weight:900;color:#ff8a2b}
+#discoverArtistsSection .featured-card h3{font-size:clamp(16px,2vw,22px);line-height:1.25;margin:0 0 6px;overflow-wrap:anywhere}
+#discoverArtistsSection .featured-location{font-size:13px;color:#a8afc0;margin-bottom:12px}
+#discoverArtistsSection .featured-tag{font-size:10px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:#a8c4ff;margin-bottom:14px}
+#discoverArtistsSection .featured-listen{margin-top:auto;border:0;border-radius:7px;background:#244de5;color:white;font-size:12px;font-weight:800;padding:9px 20px;min-width:88px}
+#discoverArtistsSection .featured-controls{display:flex;justify-content:center;align-items:center;gap:14px;margin-top:18px}
+#discoverArtistsSection .featured-controls button{border:1px solid #343a4a;border-radius:9px;background:#191e2b;color:#fff;padding:9px 15px;font-weight:700}
+#discoverArtistsSection .featured-controls button:hover{background:#244de5;border-color:#244de5}
+#discoverArtistsSection .featured-page{font-size:12px;color:#a8a8a8;min-width:42px;text-align:center}
+#discoverArtistsSection .featured-empty{padding:22px;text-align:center;color:#a8a8a8;background:#12141c;border:1px solid #292f40;border-radius:14px}
+@media(max-width:480px){
+ #discoverArtistsSection{padding:24px 0 30px;margin-top:20px}
+ #discoverArtistsSection .featured-track{gap:9px}
+ #discoverArtistsSection .featured-card{min-height:235px;padding:15px 7px 12px;border-radius:14px}
+ #discoverArtistsSection .featured-photo{width:clamp(70px,23vw,100px);height:clamp(70px,23vw,100px);margin-bottom:11px}
+ #discoverArtistsSection .featured-card h3{font-size:14px}
+ #discoverArtistsSection .featured-location{font-size:11px;margin-bottom:9px}
+ #discoverArtistsSection .featured-tag{font-size:9px;margin-bottom:10px}
+ #discoverArtistsSection .featured-listen{padding:8px 12px;min-width:74px;font-size:11px}
+}
+@media(prefers-reduced-motion:reduce){#discoverArtistsSection .featured-track,#discoverArtistsSection .featured-card{transition:none}}
+
 </style>
 </head>
 
@@ -2213,6 +2247,25 @@ Loading artists...
 
 </div>
 <div id="artistsSeeMoreControls" style="display:flex;justify-content:center;margin:18px 0 0;"></div>
+
+<section id="discoverArtistsSection" aria-label="Discover featured artists">
+  <div class="discover-heading">
+    <div>
+      <h2>Discover Artists</h2>
+      <p>Discover your next favourite artist on NileSoniQ.</p>
+    </div>
+  </div>
+  <div class="featured-window">
+    <div id="featuredArtistsTrack" class="featured-track">
+      <div class="featured-empty" style="grid-column:1/-1;">Loading featured artists…</div>
+    </div>
+  </div>
+  <div id="featuredArtistsControls" class="featured-controls" aria-label="Featured artist carousel controls">
+    <button type="button" onclick="changeFeaturedArtists(-1)" aria-label="Previous featured artists">‹ Previous</button>
+    <span id="featuredArtistsPage" class="featured-page" aria-live="polite">1 / 1</span>
+    <button type="button" onclick="changeFeaturedArtists(1)" aria-label="Next featured artists">Next ›</button>
+  </div>
+</section>
 </div>
 </section>
 
@@ -7695,6 +7748,83 @@ function safeDownloadName(name){
    ARTISTS
 ========================================================= */
 
+let featuredArtistsList = [];
+let featuredArtistsPageIndex = 0;
+let featuredArtistsTimer = null;
+const FEATURED_ARTISTS_PER_PAGE = 2;
+
+function renderFeaturedArtists(){
+  const track = document.getElementById("featuredArtistsTrack");
+  const pageLabel = document.getElementById("featuredArtistsPage");
+  const controls = document.getElementById("featuredArtistsControls");
+  if(!track) return;
+
+  const totalPages = Math.max(1, Math.ceil(featuredArtistsList.length / FEATURED_ARTISTS_PER_PAGE));
+  featuredArtistsPageIndex = ((featuredArtistsPageIndex % totalPages) + totalPages) % totalPages;
+  const start = featuredArtistsPageIndex * FEATURED_ARTISTS_PER_PAGE;
+  const visible = featuredArtistsList.slice(start, start + FEATURED_ARTISTS_PER_PAGE);
+
+  if(!visible.length){
+    track.innerHTML = '<div class="featured-empty" style="grid-column:1/-1;">Featured artists will appear here when artists have an active paid package.</div>';
+    if(controls) controls.style.display = "none";
+    return;
+  }
+  if(controls) controls.style.display = featuredArtistsList.length > FEATURED_ARTISTS_PER_PAGE ? "flex" : "none";
+  if(pageLabel) pageLabel.textContent = (featuredArtistsPageIndex + 1) + " / " + totalPages;
+
+  track.innerHTML = visible.map(artist => {
+    const name = escapeHtml(artist.name || "NileSoniQ Artist");
+    const artistId = escapeAttribute(artist.id || artist.user_id || "");
+    const avatar = artist.avatar_url
+      ? '<img src="' + escapeAttribute(artist.avatar_url) + '" alt="' + escapeAttribute(artist.name || "Artist") + '" loading="lazy">'
+      : '<span class="featured-initials">' + escapeHtml(getInitials(artist.name || "Artist")) + '</span>';
+    return '<article class="featured-card" role="button" tabindex="0" data-featured-artist-id="' + artistId + '" aria-label="Open artist profile: ' + escapeAttribute(artist.name || "Artist") + '">' +
+      '<div class="featured-photo">' + avatar + '</div>' +
+      '<h3>' + name + (isArtistVerified(artist) ? ' <span class="artist-verified-tick" role="img" aria-label="Verified artist" title="Verified artist">✓</span>' : '') + '</h3>' +
+      '<div class="featured-location">' + escapeHtml(artist.location || "Uganda") + '</div>' +
+      '<div class="featured-tag">★ Featured Artist</div>' +
+      '<button class="featured-listen" type="button" data-featured-artist-id="' + artistId + '">Listen</button>' +
+      '</article>';
+  }).join("");
+  track.querySelectorAll("[data-featured-artist-id]").forEach(element => {
+    const openProfile = event => {
+      event.stopPropagation();
+      openArtistProfile(element.getAttribute("data-featured-artist-id"));
+    };
+    element.addEventListener("click", openProfile);
+    if(element.tagName === "ARTICLE"){
+      element.addEventListener("keydown", event => {
+        if(event.key === "Enter" || event.key === " "){
+          event.preventDefault();
+          openProfile(event);
+        }
+      });
+    }
+  });
+}
+
+function changeFeaturedArtists(direction){
+  const totalPages = Math.max(1, Math.ceil(featuredArtistsList.length / FEATURED_ARTISTS_PER_PAGE));
+  if(totalPages <= 1) return;
+  featuredArtistsPageIndex = (featuredArtistsPageIndex + Number(direction || 0) + totalPages) % totalPages;
+  renderFeaturedArtists();
+  restartFeaturedArtistsRotation();
+}
+
+function restartFeaturedArtistsRotation(){
+  if(featuredArtistsTimer) clearInterval(featuredArtistsTimer);
+  featuredArtistsTimer = null;
+  if(featuredArtistsList.length <= FEATURED_ARTISTS_PER_PAGE || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  featuredArtistsTimer = setInterval(() => {
+    if(document.hidden) return;
+    changeFeaturedArtists(1);
+  }, 6000);
+}
+
+document.addEventListener("visibilitychange", () => {
+  if(!document.hidden && featuredArtistsList.length > FEATURED_ARTISTS_PER_PAGE) restartFeaturedArtistsRotation();
+});
+
 async function loadArtists(){
   const container = document.getElementById("artistsContainer");
   if (!container) return;
@@ -7711,6 +7841,12 @@ async function loadArtists(){
       Number(song.approved) === 1 ||
       String(song.approved).toLowerCase() === "true"
     );
+
+    featuredArtistsList = artists.filter(artist => isArtistPremiumActive(artist))
+      .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
+    featuredArtistsPageIndex = 0;
+    renderFeaturedArtists();
+    restartFeaturedArtistsRotation();
 
     if (!artists.length) {
       container.innerHTML = `<div class="empty">No artists registered yet.</div>`;
@@ -7771,6 +7907,8 @@ async function loadArtists(){
     }
   } catch (error) {
     console.error("Artists load error:", error);
+    featuredArtistsList = [];
+    renderFeaturedArtists();
     container.innerHTML = `
       <div class="empty">
         <h3>Could not load artists</h3>
