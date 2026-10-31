@@ -413,7 +413,7 @@ async function completePaidArtistSignup(env, reference, status, transactionId, a
   const incomingTx = String(transactionId || "");
   if (row.provider_transaction_id && incomingTx && row.provider_transaction_id !== incomingTx) return {matched:true,changed:false,reason:"transaction_id_mismatch"};
   if (isSuccessfulPaymentStatus(status)) {
-    if (!Number.isFinite(Number(amount)) || Number(amount) < Number(row.amount) || String(currency || "").toUpperCase() !== "UGX") {
+    if (Number(amount) !== Number(row.amount) || String(currency || "").toUpperCase() !== "UGX") {
       console.error("Paid signup payment amount/currency mismatch",{reference,expectedAmount:row.amount,receivedAmount:amount,receivedCurrency:currency});
       return {matched:true,changed:false,reason:"amount_currency_mismatch"};
     }
@@ -2225,17 +2225,17 @@ async function rpcRoute(request, env, name) {
         const result = await env.DB.prepare(
           "SELECT COALESCE(SUM(balance), 0) AS total FROM platform_wallet"
         ).first();
-        const reserved = await env.DB.prepare(`
-          SELECT COALESCE(SUM(amount), 0) AS total
-          FROM platform_payouts
+        const reservedRows = await env.DB.prepare(`
+          SELECT amount FROM platform_payouts
           WHERE lower(status) IN ('pending', 'processing')
-        `).first();
+        `).all();
+        const reservedTotal = (reservedRows.results || []).reduce((sum, row) => {
+          const fee = getPesaJetDisbursementFee(row.amount);
+          return sum + Number(row.amount || 0) + Number(fee || 0);
+        }, 0);
 
         return json({
-          data: Math.max(
-            0,
-            Number(result?.total || 0) - Number(reserved?.total || 0)
-          ),
+          data: Math.max(0, Number(result?.total || 0) - reservedTotal),
           error: null
         });
       }
@@ -2276,6 +2276,13 @@ async function rpcRoute(request, env, name) {
 
         payouts = Number(
           (await env.DB.prepare(q).first())?.total || 0
+        );
+        const completedPayoutRows = await env.DB.prepare(`
+          SELECT amount FROM platform_payouts
+          WHERE lower(status) IN ('completed','success','successful','paid')
+        `).all();
+        payouts += (completedPayoutRows.results || []).reduce(
+          (sum, row) => sum + Number(getPesaJetDisbursementFee(row.amount) || 0), 0
         );
       }
 
@@ -2756,6 +2763,27 @@ function isSuccessfulPaymentStatus(status) {
   );
 }
 
+// PesaJet disbursement fee schedule confirmed by the NileSoniQ owner.
+// These fees are paid by the platform from its remaining wallet balance.
+function getPesaJetDisbursementFee(amount) {
+  const value = Number(amount);
+  if (!Number.isFinite(value) || value < 500) return null;
+  if (value <= 2500) return 330;
+  if (value <= 5000) return 440;
+  if (value <= 15000) return 700;
+  if (value <= 30000) return 880;
+  if (value <= 45000) return 1210;
+  if (value <= 60000) return 1500;
+  if (value <= 125000) return 1925;
+  if (value <= 250000) return 3575;
+  if (value <= 500000) return 7000;
+  if (value <= 1000000) return 12500;
+  if (value <= 2000000) return 15000;
+  if (value <= 4000000) return 18000;
+  if (value <= 7000000) return 20000;
+  return null;
+}
+
 async function applyPlatformPaymentStatus(
   env,
   type,
@@ -2769,8 +2797,14 @@ async function applyPlatformPaymentStatus(
     ? null
     : Number(confirmedFee);
   const feeKnown = feeNumber !== null && Number.isFinite(feeNumber) && feeNumber >= 0;
-  const feeValue = feeKnown ? feeNumber : 0;
-  const ledgerStatus = feeKnown ? "posted" : "fee_unverified";
+  const scheduledPayoutFee = type === "disbursement"
+    ? getPesaJetDisbursementFee(
+        (await env.DB.prepare("SELECT amount FROM platform_payouts WHERE reference = ?").bind(reference).first())?.amount
+      )
+    : null;
+  const effectivePayoutFee = feeKnown ? feeNumber : scheduledPayoutFee;
+  const feeValue = feeKnown ? feeNumber : (effectivePayoutFee ?? 0);
+  const ledgerStatus = feeKnown || (type === "disbursement" && scheduledPayoutFee !== null) ? "posted" : "fee_unverified";
 
   if (type === "collection") {
     await env.DB.batch([
@@ -2783,13 +2817,13 @@ async function applyPlatformPaymentStatus(
       env.DB.prepare(`
         UPDATE platform_wallet
         SET balance = MAX(0, balance + (
-          SELECT amount - ? FROM platform_deposits WHERE reference = ?
+          SELECT amount FROM platform_deposits WHERE reference = ?
         )),
         updated_at = datetime('now')
         WHERE id = (SELECT id FROM platform_wallet ORDER BY created_at LIMIT 1)
           AND changes() > 0
           AND ? IN ('COMPLETED', 'SUCCESS', 'SUCCESSFUL', 'PAID')
-      `).bind(feeValue, reference, normalized),
+      `).bind(reference, normalized),
       env.DB.prepare(`
         INSERT OR IGNORE INTO platform_financial_ledger
           (event_key, event_type, source_type, source_id, reference,
@@ -2816,8 +2850,8 @@ async function applyPlatformPaymentStatus(
         feeValue,
         ledgerStatus,
         feeKnown
-          ? "Successful collection. Actual PesaJet fee supplied by the confirmed provider event."
-          : "Successful collection. Actual PesaJet collection fee was not supplied by the confirmed transaction event; zero here does not mean fee-free.",
+          ? "Successful collection. PesaJet collection fee is charged to the mobile-money balance, not deducted from the platform wallet."
+          : "Successful collection. PesaJet collection fee is charged to the mobile-money balance; provider fee detail was not supplied in this event.",
         reference,
         normalized
       )
@@ -2848,7 +2882,7 @@ async function applyPlatformPaymentStatus(
       WHERE id = (SELECT id FROM platform_wallet ORDER BY created_at LIMIT 1)
         AND changes() > 0
         AND ? IN ('COMPLETED', 'SUCCESS', 'SUCCESSFUL', 'PAID')
-    `).bind(reference, feeKnown ? feeValue : 0, normalized),
+    `).bind(reference, feeValue, normalized),
     env.DB.prepare(`
       INSERT OR IGNORE INTO platform_financial_ledger
         (event_key, event_type, source_type, source_id, reference,
@@ -2876,7 +2910,9 @@ async function applyPlatformPaymentStatus(
       ledgerStatus,
       feeKnown
         ? "Completed payout amount recorded with the actual PesaJet fee supplied by the confirmed provider event."
-        : "Completed payout amount recorded. Actual PesaJet payout fee was not supplied by the confirmed transaction event; zero here does not mean fee-free.",
+        : scheduledPayoutFee !== null
+          ? "Completed payout amount recorded with the PesaJet disbursement fee from the confirmed fee schedule."
+          : "Completed payout amount recorded. PesaJet disbursement fee is not confirmed and no schedule tier is available; reconcile manually.",
       reference,
       normalized
     )
@@ -3247,15 +3283,20 @@ async function applyPremiumPaymentStatus(
     const expectedAmount = Number(payment.amount);
     const expectedCurrency = String(payment.currency || "").trim().toUpperCase();
 
-    // PesaJet/mobile-money charges can change. A provider-signed successful
-    // payment for this exact reference is valid when the received amount is
-    // at least the package price. Never activate on an underpayment.
+    // PesaJet receipts may report the customer total (package price + fee),
+    // while the pending subscription stores the package price alone. Accept
+    // either the exact package amount or package amount + the fee explicitly
+    // supplied by this signed provider event. Do not infer a fee or accept an
+    // unexplained amount difference.
     const feeValue = confirmedFee === null || confirmedFee === undefined || confirmedFee === ""
       ? null
       : Number(confirmedFee);
     const feeKnown = feeValue !== null && Number.isFinite(feeValue) && feeValue >= 0;
+    const amountMatchesPackage = Number.isFinite(amount) && amount === expectedAmount;
+    const amountMatchesPackagePlusFee = feeKnown && feeValue > 0 && Number.isFinite(amount) && amount === expectedAmount + feeValue;
     if (
-      !Number.isFinite(amount) || amount < expectedAmount || !currency ||
+      !Number.isFinite(amount) || !currency ||
+      (!amountMatchesPackage && !amountMatchesPackagePlusFee) ||
       currency !== expectedCurrency ||
       ![5000,10000,20000,30000].includes(expectedAmount) || expectedCurrency !== "UGX"
     ) {
@@ -3319,12 +3360,12 @@ async function applyPremiumPaymentStatus(
           `premium-subscription:${payment.id}`,
           payment.id,
           ref,
-          expectedAmount,
-          feeKnown ? feeValue : Math.max(0, amount - expectedAmount),
+          amount,
+          feeKnown ? feeValue : 0,
           feeKnown ? "posted" : "fee_unverified",
           feeKnown
-            ? "Artist package confirmed. Platform income is the package price; actual PesaJet fee supplied by the confirmed provider event."
-            : "Artist package confirmed. Platform income is the package price; extra amount is provisionally treated as provider charges until the actual fee is verified."
+            ? "Premium subscription confirmed. Actual PesaJet fee supplied by the confirmed provider event."
+            : "Premium subscription confirmed. Actual PesaJet collection fee was not supplied by the confirmed transaction event; zero here does not mean fee-free."
         ),
         env.DB.prepare(`
           UPDATE platform_wallet
@@ -3332,7 +3373,7 @@ async function applyPremiumPaymentStatus(
               updated_at = datetime('now')
           WHERE id = (SELECT id FROM platform_wallet ORDER BY created_at LIMIT 1)
             AND changes() > 0
-        `).bind(expectedAmount, 0)
+        `).bind(amount, feeKnown ? feeValue : 0)
       ]);
     }
     // The artist entitlement mirrors the verified subscription expiry. Re-sync
@@ -3614,8 +3655,13 @@ async function paymentRoute(request, env, type) {
         new Date().toISOString()
       ).run();
     } else {
-      // Reserve the amount in the same atomic INSERT that checks the available
-      // platform wallet balance, so concurrent requests cannot spend the same funds.
+      // Reserve the transfer amount plus the platform-paid PesaJet disbursement fee.
+      // PesaJet still sends the exact requested amount to the destination number.
+      const expectedDisbursementFee = getPesaJetDisbursementFee(amount);
+      if (expectedDisbursementFee === null) {
+        return error("PesaJet disbursement fee is not configured for this amount. Maximum supported amount is UGX 7,000,000.", 422);
+      }
+      const requiredWalletBalance = amount + expectedDisbursementFee;
       const reservation = await env.DB.prepare(`
         INSERT INTO platform_payouts
           (id, amount, currency, phone_number, provider, reference, description, status, created_by, created_at)
@@ -3623,7 +3669,21 @@ async function paymentRoute(request, env, type) {
         WHERE COALESCE(
           (SELECT SUM(balance) FROM platform_wallet), 0
         ) - COALESCE(
-          (SELECT SUM(amount) FROM platform_payouts
+          (SELECT SUM(amount + CASE
+             WHEN amount <= 2500 THEN 330
+             WHEN amount <= 5000 THEN 440
+             WHEN amount <= 15000 THEN 700
+             WHEN amount <= 30000 THEN 880
+             WHEN amount <= 45000 THEN 1210
+             WHEN amount <= 60000 THEN 1500
+             WHEN amount <= 125000 THEN 1925
+             WHEN amount <= 250000 THEN 3575
+             WHEN amount <= 500000 THEN 7000
+             WHEN amount <= 1000000 THEN 12500
+             WHEN amount <= 2000000 THEN 15000
+             WHEN amount <= 4000000 THEN 18000
+             WHEN amount <= 7000000 THEN 20000
+             ELSE 0 END) FROM platform_payouts
            WHERE lower(status) IN ('pending', 'processing')), 0
         ) >= ?
       `).bind(
@@ -3634,11 +3694,11 @@ async function paymentRoute(request, env, type) {
         reference,
         description,
         user.id,
-        amount
+        requiredWalletBalance
       ).run();
 
       if (Number(reservation?.meta?.changes || 0) === 0) {
-        return error("Insufficient available platform wallet balance", 409);
+        return error(`Insufficient available platform wallet balance. Required including PesaJet fee: UGX ${requiredWalletBalance.toLocaleString("en-US")}.`, 409);
       }
     }
 
