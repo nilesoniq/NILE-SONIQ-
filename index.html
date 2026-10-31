@@ -3088,13 +3088,6 @@ DMCA
 </a>
 
 <button
-id="adminLoginLink"
-class="footer-admin-login"
-onclick="openAuthModal('admin')">
-Admin Login
-</button>
-
-<button
 id="adminFooterLink"
 class="footer-admin hidden"
 onclick="showPage('admin')">
@@ -4444,12 +4437,9 @@ async function showAdminTab(tab){
    AUTH MODAL
 ========================================================= */
 
-function openAuthModal(context="artist"){
+function openAuthModal(){
 
-  currentAuthContext =
-    context === "admin"
-    ? "admin"
-    : "artist";
+  currentAuthContext = "artist";
 
   document
     .getElementById("authModal")
@@ -4524,10 +4514,7 @@ function setAuthMode(mode){
 
     signupNameField.classList.add("hidden");
 
-    title.textContent =
-      currentAuthContext === "admin"
-      ? "Admin Login"
-      : "Artist Login";
+    title.textContent = "Login";
 
     submit.textContent = "Login";
     document.getElementById("signupPackageField").style.display="none";
@@ -4584,23 +4571,16 @@ async function submitAuth(){
       const {error} = await authApi.signInWithPassword({email,password});
       if(error) throw error;
 
-      if(currentAuthContext === "admin" && !currentAdmin){
-        // Some Worker deployments return the signed-in user before including
-        // the admin record. Re-check through the authenticated D1 adapter.
-        await isCurrentUserAdmin();
-      }
+      // Determine the account role from the authenticated Worker session,
+      // not from a public-facing login choice.
+      const isAdmin = await isCurrentUserAdmin();
+      const destination = isAdmin ? "admin" : "dashboard";
 
-      if(currentAuthContext === "admin" && !currentAdmin){
-        await authApi.signOut();
-        showMessage("authMessage","This account is not an active NileSoniq administrator.","error");
-        return;
-      }
-
-      showMessage("authMessage", currentAuthContext === "admin" ? "Admin login successful." : "Login successful.","success");
+      showMessage("authMessage", "Login successful.", "success");
       setTimeout(async()=>{
         closeAuthModal();
         await updateUI();
-        if(currentAuthContext === "admin") await showPage("admin");
+        await showPage(destination);
       },700);
       return;
     }
