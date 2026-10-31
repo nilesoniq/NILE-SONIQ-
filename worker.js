@@ -413,7 +413,7 @@ async function completePaidArtistSignup(env, reference, status, transactionId, a
   const incomingTx = String(transactionId || "");
   if (row.provider_transaction_id && incomingTx && row.provider_transaction_id !== incomingTx) return {matched:true,changed:false,reason:"transaction_id_mismatch"};
   if (isSuccessfulPaymentStatus(status)) {
-    if (Number(amount) !== Number(row.amount) || String(currency || "").toUpperCase() !== "UGX") {
+    if (!Number.isFinite(Number(amount)) || Number(amount) < Number(row.amount) || String(currency || "").toUpperCase() !== "UGX") {
       console.error("Paid signup payment amount/currency mismatch",{reference,expectedAmount:row.amount,receivedAmount:amount,receivedCurrency:currency});
       return {matched:true,changed:false,reason:"amount_currency_mismatch"};
     }
@@ -3247,20 +3247,15 @@ async function applyPremiumPaymentStatus(
     const expectedAmount = Number(payment.amount);
     const expectedCurrency = String(payment.currency || "").trim().toUpperCase();
 
-    // PesaJet receipts may report the customer total (package price + fee),
-    // while the pending subscription stores the package price alone. Accept
-    // either the exact package amount or package amount + the fee explicitly
-    // supplied by this signed provider event. Do not infer a fee or accept an
-    // unexplained amount difference.
+    // PesaJet/mobile-money charges can change. A provider-signed successful
+    // payment for this exact reference is valid when the received amount is
+    // at least the package price. Never activate on an underpayment.
     const feeValue = confirmedFee === null || confirmedFee === undefined || confirmedFee === ""
       ? null
       : Number(confirmedFee);
     const feeKnown = feeValue !== null && Number.isFinite(feeValue) && feeValue >= 0;
-    const amountMatchesPackage = Number.isFinite(amount) && amount === expectedAmount;
-    const amountMatchesPackagePlusFee = feeKnown && feeValue > 0 && Number.isFinite(amount) && amount === expectedAmount + feeValue;
     if (
-      !Number.isFinite(amount) || !currency ||
-      (!amountMatchesPackage && !amountMatchesPackagePlusFee) ||
+      !Number.isFinite(amount) || amount < expectedAmount || !currency ||
       currency !== expectedCurrency ||
       ![5000,10000,20000,30000].includes(expectedAmount) || expectedCurrency !== "UGX"
     ) {
@@ -3324,12 +3319,12 @@ async function applyPremiumPaymentStatus(
           `premium-subscription:${payment.id}`,
           payment.id,
           ref,
-          amount,
-          feeKnown ? feeValue : 0,
+          expectedAmount,
+          feeKnown ? feeValue : Math.max(0, amount - expectedAmount),
           feeKnown ? "posted" : "fee_unverified",
           feeKnown
-            ? "Premium subscription confirmed. Actual PesaJet fee supplied by the confirmed provider event."
-            : "Premium subscription confirmed. Actual PesaJet collection fee was not supplied by the confirmed transaction event; zero here does not mean fee-free."
+            ? "Artist package confirmed. Platform income is the package price; actual PesaJet fee supplied by the confirmed provider event."
+            : "Artist package confirmed. Platform income is the package price; extra amount is provisionally treated as provider charges until the actual fee is verified."
         ),
         env.DB.prepare(`
           UPDATE platform_wallet
@@ -3337,7 +3332,7 @@ async function applyPremiumPaymentStatus(
               updated_at = datetime('now')
           WHERE id = (SELECT id FROM platform_wallet ORDER BY created_at LIMIT 1)
             AND changes() > 0
-        `).bind(amount, feeKnown ? feeValue : 0)
+        `).bind(expectedAmount, 0)
       ]);
     }
     // The artist entitlement mirrors the verified subscription expiry. Re-sync
