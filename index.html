@@ -2017,6 +2017,71 @@ footer{
 }
 @media(prefers-reduced-motion:reduce){:is(#discoverArtistsSection,#homeDiscoverArtistsSection) .featured-track,:is(#discoverArtistsSection,#homeDiscoverArtistsSection) .featured-card{transition:none}}
 
+
+/* PUBLIC SONG PAGE — focused, responsive layout */
+#publicSongLanding.public-song-landing{
+  margin:22px 0 34px;
+  padding:clamp(14px,3vw,28px);
+  background:radial-gradient(circle at 12% 0%,rgba(255,106,0,.12),transparent 36%),linear-gradient(145deg,#191919,#101010);
+  border:1px solid #303030;
+  border-radius:22px;
+  scroll-margin-top:88px;
+}
+.public-song-topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:22px}
+.public-song-topbar>span{font-size:11px;font-weight:900;letter-spacing:.1em;color:var(--orange2)}
+.public-song-topbar .btn{font-size:12px;padding:8px 12px}
+.public-song-main{display:grid;grid-template-columns:minmax(190px,300px) minmax(0,1fr);gap:clamp(18px,4vw,34px);align-items:center}
+.public-song-artwork{width:100%;max-width:300px;margin:auto;aspect-ratio:1/1;border-radius:18px;overflow:hidden;background:#242424;border:1px solid #393939;box-shadow:0 18px 45px rgba(0,0,0,.35)}
+.public-song-cover-image{width:100%;height:100%;object-fit:cover}
+.public-song-cover-placeholder{width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:var(--orange);font-size:90px;background:linear-gradient(145deg,#292929,#151515)}
+.public-song-details{min-width:0}
+.public-song-eyebrow{font-size:10px;font-weight:900;letter-spacing:.14em;color:var(--orange2);margin-bottom:7px}
+.public-song-details h1{font-size:clamp(27px,4.4vw,42px);line-height:1.08;letter-spacing:-.7px;margin:0 0 14px;overflow-wrap:anywhere}
+.public-song-artist{display:flex;align-items:center;gap:10px;color:#ddd;font-size:15px;font-weight:700;margin-bottom:20px}
+.public-song-artist-photo,.public-song-artist-initial{width:38px;height:38px;flex:0 0 38px;border-radius:50%;object-fit:cover}
+.public-song-artist-initial{display:inline-flex;align-items:center;justify-content:center;background:#292929;color:var(--orange);font-weight:900}
+.public-song-actions{display:flex;gap:9px;flex-wrap:wrap}
+.public-song-actions .btn{padding:10px 13px;font-size:12px}
+.public-song-profile-actions{margin-top:12px}
+.public-song-profile-actions:empty{display:none}
+.public-song-profile-actions .btn{display:inline-block;padding:9px 12px;font-size:12px}
+.public-song-description{color:#aaa;font-size:13px;line-height:1.65;margin-top:16px;max-width:620px}
+.public-song-url{color:#686868;font-size:10px;overflow-wrap:anywhere;margin-top:14px}
+.public-song-more{border-top:1px solid #333;margin-top:28px;padding-top:22px}
+.public-song-more-heading{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;margin-bottom:14px}
+.public-song-more-heading h2{font-size:clamp(18px,3vw,23px);line-height:1.2}
+.public-song-more-heading p{color:#999;font-size:12px;margin-top:4px}
+.public-song-more-heading>span{font-size:11px;color:#888;white-space:nowrap}
+.public-song-related-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.public-song-related-card{display:flex;align-items:center;gap:10px;min-width:0;padding:9px;background:#111;border:1px solid #303030;border-radius:13px}
+.public-song-related-art,.public-song-related-art img,.public-song-related-placeholder{width:54px;height:54px;flex:0 0 54px;border-radius:9px;overflow:hidden}
+.public-song-related-art img{display:block;object-fit:cover}
+.public-song-related-placeholder{display:flex;align-items:center;justify-content:center;background:#252525;color:var(--orange);font-size:23px}
+.public-song-related-info{flex:1;min-width:0}
+.public-song-related-info>a{display:block;font-size:13px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.public-song-related-info small{display:block;color:#888;font-size:10px;margin-top:4px}
+.public-song-related-play{padding:8px 9px!important;font-size:10px!important;flex:0 0 auto}
+.public-song-no-related{color:#999;font-size:13px;padding:12px 0}
+@media(max-width:650px){
+  #publicSongLanding.public-song-landing{margin:12px 0 24px;padding:13px;border-radius:17px}
+  .public-song-topbar{margin-bottom:16px;align-items:center}
+  .public-song-topbar>span{font-size:9px}
+  .public-song-topbar .btn{font-size:10px;padding:7px 9px}
+  .public-song-main{grid-template-columns:minmax(0,1fr);gap:17px}
+  .public-song-artwork{width:min(72vw,260px);max-width:260px}
+  .public-song-details{text-align:center}
+  .public-song-details h1{font-size:clamp(25px,7vw,34px);margin-bottom:10px}
+  .public-song-artist{justify-content:center;margin-bottom:15px;font-size:14px}
+  .public-song-actions{justify-content:center;gap:7px}
+  .public-song-actions .btn{padding:9px 10px;font-size:11px}
+  .public-song-profile-actions{margin-top:10px}
+  .public-song-description{text-align:left}
+  .public-song-url{text-align:left;font-size:9px}
+  .public-song-more{margin-top:21px;padding-top:18px}
+  .public-song-related-list{grid-template-columns:minmax(0,1fr)}
+  .public-song-related-card{padding:8px}
+}
+
 </style>
 </head>
 
@@ -7089,8 +7154,6 @@ async function showPublicSongPage(song){
   if(!song) return;
   await showPage("home", false);
 
-  // This is a normal page section, not a full-screen modal. The homepage
-  // remains underneath it so visitors can continue discovering NileSoniQ.
   const homePage = document.getElementById("homePage");
   const container = homePage?.querySelector(".container");
   if(!container) return;
@@ -7099,7 +7162,6 @@ async function showPublicSongPage(song){
   if(!landing){
     landing = document.createElement("section");
     landing.id = "publicSongLanding";
-    landing.style.cssText = "margin:24px 0 34px;padding:18px;background:linear-gradient(145deg,#191919,#101010);border:1px solid #333;border-radius:18px;";
     container.insertBefore(landing, container.firstElementChild);
   }
 
@@ -7109,7 +7171,6 @@ async function showPublicSongPage(song){
     currentSongs = [song, ...currentSongs];
   }
 
-  const safeArtistName = String(song.artist || "Unknown Artist");
   let allSongs = [];
   let artists = [];
   try{
@@ -7121,10 +7182,25 @@ async function showPublicSongPage(song){
     console.warn("Could not load related public song information:", error);
   }
 
+  // Prefer the linked artist record over the free-text song.artist value.
+  // This prevents a song title or stale text value from being shown as the artist.
+  const rawArtistName = String(song.artist_name || song.artist || "").trim();
   const artistRecord = (artists || []).find(item =>
-    (song.artist_id && (String(item.id) === String(song.artist_id) || String(item.user_id || "") === String(song.artist_id))) ||
-    normalizeSearchText(item.name || "") === normalizeSearchText(safeArtistName)
+    song.artist_id && (
+      String(item.id || "") === String(song.artist_id) ||
+      String(item.user_id || "") === String(song.artist_id)
+    )
+  ) || (artists || []).find(item =>
+    rawArtistName &&
+    normalizeSearchText(item.name || "") === normalizeSearchText(rawArtistName)
   ) || null;
+
+  const safeArtistName = String(artistRecord?.name || rawArtistName || "Unknown Artist").trim();
+  const artistIdValues = new Set(
+    [song.artist_id, artistRecord?.id, artistRecord?.user_id]
+      .filter(value => value !== null && value !== undefined && String(value).trim() !== "")
+      .map(String)
+  );
 
   const isApproved = item => item && (
     item.approved === true || item.approved === 1 ||
@@ -7132,13 +7208,15 @@ async function showPublicSongPage(song){
     String(item.approved || "").toLowerCase() === "1" ||
     String(item.approved || "").toLowerCase() === "approved"
   );
+
   const relatedSongs = (allSongs || []).filter(item => {
     if(!isApproved(item) || String(item.id) === String(song.id)) return false;
-    if(song.artist_id && String(item.artist_id || "") === String(song.artist_id)) return true;
-    if(artistRecord?.id && String(item.artist_id || "") === String(artistRecord.id)) return true;
-    if(artistRecord?.user_id && String(item.artist_id || "") === String(artistRecord.user_id)) return true;
-    return normalizeSearchText(item.artist || "") === normalizeSearchText(safeArtistName);
-  }).slice(0, 12);
+    const itemArtistId = String(item.artist_id || "");
+    if(artistIdValues.size && artistIdValues.has(itemArtistId)) return true;
+    // Use the text-name fallback only when no stable artist ID is available.
+    return artistIdValues.size === 0 &&
+      normalizeSearchText(item.artist_name || item.artist || "") === normalizeSearchText(safeArtistName);
+  }).slice(0, 6);
 
   window.artistProfileSongs = relatedSongs;
   relatedSongs.forEach(item => {
@@ -7146,60 +7224,65 @@ async function showPublicSongPage(song){
   });
 
   const cover = song.cover_url
-    ? `<img src="${escapeAttribute(song.cover_url)}" alt="${escapeAttribute(song.title || "Song artwork")}" style="width:min(100%,230px);aspect-ratio:1/1;object-fit:cover;border-radius:15px;border:1px solid #333;margin:auto;" loading="eager">`
-    : `<div style="width:min(100%,230px);aspect-ratio:1/1;border-radius:15px;display:flex;align-items:center;justify-content:center;background:#242424;color:var(--orange);font-size:70px;margin:auto;">♪</div>`;
+    ? `<img class="public-song-cover-image" src="${escapeAttribute(song.cover_url)}" alt="${escapeAttribute((song.title || "Song artwork"))}" loading="eager">`
+    : `<div class="public-song-cover-placeholder">♪</div>`;
 
   const url = songPublicUrl(song);
   const title = String(song.title || "Untitled");
   const description = String(song.description || song.about || song.song_description || "").trim();
   const artistPhoto = artistRecord?.avatar_url
-    ? `<img src="${escapeAttribute(artistRecord.avatar_url)}" alt="" style="width:34px;height:34px;border-radius:50%;object-fit:cover;">`
-    : `<span style="width:34px;height:34px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:#292929;color:var(--orange);font-weight:800;">${escapeHtml(getInitials(safeArtistName))}</span>`;
+    ? `<img src="${escapeAttribute(artistRecord.avatar_url)}" alt="" class="public-song-artist-photo">`
+    : `<span class="public-song-artist-initial">${escapeHtml(getInitials(safeArtistName))}</span>`;
 
   const relatedHtml = relatedSongs.length
     ? relatedSongs.map(item => {
         const image = item.cover_url
-          ? `<img src="${escapeAttribute(item.cover_url)}" alt="" loading="lazy" style="width:64px;height:64px;object-fit:cover;border-radius:9px;">`
-          : `<span style="width:64px;height:64px;display:flex;align-items:center;justify-content:center;background:#252525;color:var(--orange);border-radius:9px;font-size:25px;">♪</span>`;
-        return `<article style="display:flex;align-items:center;gap:11px;padding:10px;background:#111;border:1px solid #303030;border-radius:12px;min-width:0;">
-          <a href="${escapeAttribute(songPublicUrl(item))}" onclick="event.preventDefault();openSongLink(window.__nileSongRegistry['${escapeAttribute(item.id)}']);return false;">${image}</a>
-          <div style="flex:1;min-width:0;">
-            <a href="${escapeAttribute(songPublicUrl(item))}" onclick="event.preventDefault();openSongLink(window.__nileSongRegistry['${escapeAttribute(item.id)}']);return false;" style="display:block;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(item.title || "Untitled")}</a>
-            <small style="color:#999;">${formatNumber(item.plays || 0)} plays</small>
+          ? `<img src="${escapeAttribute(item.cover_url)}" alt="" loading="lazy">`
+          : `<span class="public-song-related-placeholder">♪</span>`;
+        return `<article class="public-song-related-card">
+          <a class="public-song-related-art" href="${escapeAttribute(songPublicUrl(item))}" onclick="event.preventDefault();openSongLink(window.__nileSongRegistry['${escapeAttribute(item.id)}']);return false;">${image}</a>
+          <div class="public-song-related-info">
+            <a href="${escapeAttribute(songPublicUrl(item))}" onclick="event.preventDefault();openSongLink(window.__nileSongRegistry['${escapeAttribute(item.id)}']);return false;">${escapeHtml(item.title || "Untitled")}</a>
+            <small>${formatNumber(item.plays || 0)} plays</small>
           </div>
-          <button type="button" class="btn btn-orange" style="padding:8px 10px;flex:none;" onclick="playArtistProfileSong('${escapeAttribute(item.id)}')">▶ Play</button>
+          <button type="button" class="btn btn-orange public-song-related-play" onclick="playArtistProfileSong('${escapeAttribute(item.id)}')">▶ Play</button>
         </article>`;
       }).join("")
-    : `<p style="color:#999;font-size:13px;padding:12px 0;">No other approved songs from this artist are available yet.</p>`;
+    : `<p class="public-song-no-related">No other approved songs from this artist are available yet.</p>`;
 
   const artistProfileLink = artistRecord
-    ? `<a class="btn btn-dark" style="display:inline-block;" href="${escapeAttribute(artistPublicUrl(artistRecord))}" onclick="event.preventDefault();history.pushState({nilesoniqPublic:true},'','${escapeAttribute(artistPublicUrl(artistRecord))}');closePublicSongPage(false);openArtistProfile('${escapeAttribute(artistRecord.id)}',true);return false;">View artist profile</a>`
+    ? `<a class="btn btn-dark" href="${escapeAttribute(artistPublicUrl(artistRecord))}" onclick="event.preventDefault();history.pushState({nilesoniqPublic:true},'','${escapeAttribute(artistPublicUrl(artistRecord))}');closePublicSongPage(false);openArtistProfile('${escapeAttribute(artistRecord.id)}',true);return false;">View artist profile</a>`
     : "";
 
+  landing.className = "public-song-landing";
   landing.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:15px;">
-      <span style="font-size:11px;font-weight:900;letter-spacing:.08em;color:var(--orange2);">NOW LISTENING ON NILESONIQ</span>
-      <button type="button" class="btn btn-dark" style="padding:7px 11px;" onclick="closePublicSongPage()">Back to Home</button>
+    <div class="public-song-topbar">
+      <span>NOW PLAYING ON NILESONIQ</span>
+      <button type="button" class="btn btn-dark" onclick="closePublicSongPage()">← Back to Home</button>
     </div>
-    <div style="display:grid;grid-template-columns:minmax(0,230px) minmax(0,1fr);gap:20px;align-items:center;">
-      <div>${cover}</div>
-      <div style="min-width:0;">
-        <h1 style="font-size:clamp(23px,4vw,34px);line-height:1.15;margin:0 0 8px;overflow-wrap:anywhere;">${escapeHtml(title)}</h1>
-        <div style="display:flex;align-items:center;gap:9px;color:#bbb;margin-bottom:16px;">${artistPhoto}<span>${escapeHtml(safeArtistName)}</span></div>
-        <div style="display:flex;gap:9px;flex-wrap:wrap;">
+    <div class="public-song-main">
+      <div class="public-song-artwork">${cover}</div>
+      <div class="public-song-details">
+        <div class="public-song-eyebrow">SONG</div>
+        <h1>${escapeHtml(title)}</h1>
+        <div class="public-song-artist">${artistPhoto}<span>${escapeHtml(safeArtistName)}</span></div>
+        <div class="public-song-actions">
           <button type="button" class="btn btn-orange" onclick="playPublicSongFromPage('${escapeAttribute(song.id)}')">▶ Play Song</button>
           <button type="button" class="btn btn-dark" onclick="downloadSong('${escapeAttribute(song.id)}')">↓ Download</button>
           <button type="button" class="btn btn-dark" onclick="copyPublicSongUrl('${escapeAttribute(url)}')">🔗 Copy Link</button>
           <button type="button" class="btn btn-dark" onclick="reportPublicSong('${escapeAttribute(song.id)}')">⚑ Report</button>
         </div>
-        ${artistProfileLink ? `<div style="margin-top:12px;">${artistProfileLink}</div>` : ""}
-        ${description ? `<p style="color:#aaa;font-size:13px;margin-top:15px;line-height:1.6;">${escapeHtml(description)}</p>` : ""}
-        <p style="color:#777;font-size:11px;margin-top:12px;overflow-wrap:anywhere;">${escapeHtml(window.location.origin + url)}</p>
+        <div class="public-song-profile-actions">${artistProfileLink}</div>
+        ${description ? `<p class="public-song-description">${escapeHtml(description)}</p>` : ""}
+        <p class="public-song-url">${escapeHtml(window.location.origin + url)}</p>
       </div>
     </div>
-    <section style="margin-top:25px;padding-top:20px;border-top:1px solid #333;">
-      <div style="margin-bottom:13px;"><h2 style="font-size:21px;">More songs by ${escapeHtml(safeArtistName)}</h2><p style="color:#999;font-size:12px;">Keep listening to this artist.</p></div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:9px;">${relatedHtml}</div>
+    <section class="public-song-more">
+      <div class="public-song-more-heading">
+        <div><h2>More music from ${escapeHtml(safeArtistName)}</h2><p>Keep listening to this artist.</p></div>
+        <span>${relatedSongs.length} ${relatedSongs.length === 1 ? "song" : "songs"}</span>
+      </div>
+      <div class="public-song-related-list">${relatedHtml}</div>
     </section>
   `;
 
@@ -7216,11 +7299,8 @@ async function showPublicSongPage(song){
   const ogImage = document.querySelector('meta[property="og:image"]');
   if(ogImage && song.cover_url) ogImage.content = new URL(song.cover_url, window.location.origin).href;
 
-  // Put the song-focused view first; the existing Discover Artists and
-  // Featured Songs homepage sections remain available further down.
   landing.scrollIntoView({behavior:"auto", block:"start"});
 }
-
 
 function reportPublicSong(songId){
   const song = findSongById(songId);
