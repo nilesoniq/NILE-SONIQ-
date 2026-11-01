@@ -2361,6 +2361,58 @@ async function rpcRoute(request, env, name) {
       });
     }
 
+    if (name === "record_song_download") {
+      const id = String(body.song_id || "").trim();
+
+      if (!id) {
+        return error("song_id is required", 422);
+      }
+
+      // Count only approved songs and use the edge-provided IP address.
+      // A repeat request for the same song from the same IP within 24 hours
+      // is ignored, and the counter changes only when a log row is inserted.
+      const ip = request.headers.get("CF-Connecting-IP");
+      if (!ip) {
+        return error("Unable to verify this download request. Please try again.", 400);
+      }
+
+      const results = await env.DB.batch([
+        env.DB.prepare(`
+          INSERT INTO song_download_log (song_id, ip_address, downloaded_at)
+          SELECT ?, ?, datetime('now')
+          WHERE EXISTS (
+            SELECT 1 FROM songs WHERE id = ? AND approved = 1
+          )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM song_download_log
+            WHERE song_id = ?
+              AND ip_address = ?
+              AND datetime(downloaded_at) >= datetime('now', '-24 hours')
+          )
+        `).bind(id, ip, id, id, ip),
+        env.DB.prepare(`
+          UPDATE songs
+          SET downloads = COALESCE(downloads, 0) + 1
+          WHERE id = ? AND approved = 1 AND changes() > 0
+        `).bind(id)
+      ]);
+
+      const recorded = Number(results?.[0]?.meta?.changes || 0) > 0;
+      const song = await env.DB.prepare(
+        "SELECT COALESCE(downloads, 0) AS downloads FROM songs WHERE id = ? AND approved = 1 LIMIT 1"
+      ).bind(id).first();
+
+      if (!song) {
+        return error("Approved song not found", 404);
+      }
+
+      return json({
+        data: { recorded, downloads: Number(song.downloads || 0) },
+        error: null
+      });
+    }
+
     if (name === "record_song_play") {
       const id = String(body.song_id || "").trim();
 
