@@ -7018,7 +7018,9 @@ function artistPublicUrl(artist){
 }
 
 function songPublicSlug(song){
-  return cleanSlug(song?.title || "song");
+  const title = cleanSlug(song?.title || "song").substring(0, 44).replace(/-+$/g, "");
+  const artist = cleanSlug(song?.artist || "artist").substring(0, 25).replace(/-+$/g, "");
+  return `${title}-${artist}`.replace(/-+$/g, "");
 }
 
 function songPublicUrl(song){
@@ -7061,7 +7063,10 @@ async function openSongBySlug(slug){
       .order("created_at",{ascending:false});
     if(error) throw error;
 
-    const song = (data || []).find(item => songPublicSlug(item) === wanted);
+    // Accept both the current title-artist URL and older title-only links.
+    const song = (data || []).find(item =>
+      songPublicSlug(item) === wanted || cleanSlug(item?.title || "song") === wanted
+    );
     if(!song){
       await showPage("home");
       alert("Song not found.");
