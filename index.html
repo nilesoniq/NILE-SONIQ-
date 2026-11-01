@@ -325,6 +325,19 @@ nav button.active{
   font-size:13px;
   margin-bottom:4px;
 }
+.ad-space{position:relative;overflow:hidden;min-height:120px;}
+.ad-space .ad-rotator{width:100%;height:100%;min-height:120px;position:relative;}
+.ad-space .ad-slide{display:none;width:100%;height:100%;min-height:120px;align-items:center;justify-content:center;}
+.ad-space .ad-slide.active{display:flex;}
+.ad-space .ad-slide img{width:100%;height:120px;object-fit:contain;display:block;}
+.ad-space .ad-slide a{display:block;width:100%;height:100%;}
+.ad-size-note{background:#171717;border:1px solid #333;border-radius:10px;padding:12px;color:#ddd;font-size:12px;line-height:1.55;margin:12px 0;}
+.ad-preview{width:100%;min-height:120px;background:#090909;border:1px dashed #444;border-radius:10px;display:flex;align-items:center;justify-content:center;overflow:hidden;margin:10px 0;}
+.ad-preview img{width:100%;height:120px;object-fit:contain;}
+.ad-row{display:flex;gap:12px;align-items:center;border:1px solid #333;background:#111;border-radius:10px;padding:10px;margin:8px 0;}
+.ad-row img{width:110px;height:42px;object-fit:contain;background:#080808;border-radius:5px;}
+.ad-row .ad-row-info{flex:1;min-width:0;font-size:12px;}
+@media(max-width:600px){.ad-row{align-items:flex-start;flex-wrap:wrap}.ad-row img{width:100%;height:75px}.ad-row .ad-row-info{flex-basis:100%}}
 
 /* SONG LIST */
 
@@ -2243,14 +2256,7 @@ class="song-grid">
 
 </section>
 
-<section class="ad-space">
-
-<div>
-<strong>ADVERTISEMENT</strong>
-Space reserved for ads
-</div>
-
-</section>
+<section class="ad-space" id="homeAdSpace1" data-ad-space="1"><div><strong>ADVERTISEMENT</strong>Space reserved for ads</div></section>
 
 <section id="trending" class="section">
 
@@ -2352,14 +2358,7 @@ class="song-grid">
 
 
 
-<section class="ad-space">
-
-<div>
-<strong>ADVERTISEMENT</strong>
-Space reserved for ads
-</div>
-
-</section>
+<section class="ad-space" id="homeAdSpace2" data-ad-space="2"><div><strong>ADVERTISEMENT</strong>Space reserved for ads</div></section>
 
 
 
@@ -3013,6 +3012,10 @@ onclick="showAdminTab('copyright')">
 Copyright Removal
 </button>
 
+<button id="adminTabAds" class="hidden" onclick="showAdminTab('ads')">
+Banner Ads
+</button>
+
 </div>
 
 <div id="adminAnalyticsPanel"
@@ -3299,6 +3302,30 @@ class="table-wrap">
 
 </div>
 
+</div>
+
+<div id="adminAdsPanel" class="dashboard-card hidden">
+  <h2>Homepage Banner Advertising</h2>
+  <p style="color:#aaa;font-size:12px;line-height:1.5;">Manage the two existing homepage advertising spaces. Only the Super Admin can see and control this panel.</p>
+  <div class="ad-size-note"><strong style="color:#ff8a2b;">Artwork size to request from clients</strong><br>Recommended: <b>1200 × 120 pixels</b> (very wide banner, 10:1 ratio), JPG, PNG or WebP. Keep important text and logos near the centre. The website displays banners at 120px high and scales them to fit the available width. For a split campaign, send one wide design and use “Split into two banners”; the dashboard will create left and right halves for the two spaces. Please ask clients to send a high-quality original, preferably under 5 MB.</div>
+  <div id="adminAdsMessage" class="message" role="status"></div>
+  <input type="hidden" id="adEditId">
+  <div class="form-grid">
+    <div class="field"><label for="adTitle">Advertiser / banner name</label><input id="adTitle" maxlength="120" placeholder="Client or campaign name"></div>
+    <div class="field"><label for="adSpaceSelect">Display in space</label><select id="adSpaceSelect"><option value="1">Banner Space 1</option><option value="2">Banner Space 2</option></select></div>
+    <div class="field"><label for="adLink">Website link (optional)</label><input id="adLink" type="url" placeholder="https://client-website.com"></div>
+    <div class="field"><label for="adImageFile">Banner image</label><input id="adImageFile" type="file" accept="image/jpeg,image/png,image/webp"></div>
+    <div class="field"><label for="adFit">Image fitting</label><select id="adFit"><option value="contain">Fit entire banner (no cropping)</option><option value="cover">Fill space (may crop edges)</option></select></div>
+    <div class="field"><label for="adSplit"><input id="adSplit" type="checkbox" style="width:auto;margin-right:7px;">Split image into left and right halves (creates two banners)</label></div>
+  </div>
+  <div id="adImagePreview" class="ad-preview">Banner preview will appear here</div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 18px;">
+    <button class="btn btn-orange" onclick="saveHomepageAd()">Save Banner</button>
+    <button class="btn btn-dark" onclick="clearAdEditor()">Clear Form</button>
+    <button class="btn btn-dark" onclick="loadHomepageAds()">Refresh Banners</button>
+  </div>
+  <h3 style="margin:18px 0 8px;">Banner Space 1</h3><div id="adminAdList1">Loading…</div>
+  <h3 style="margin:18px 0 8px;">Banner Space 2</h3><div id="adminAdList2">Loading…</div>
 </div>
 
 <div id="adminCopyrightPanel" class="dashboard-card hidden">
@@ -4626,6 +4653,7 @@ function updateAdminTabs(){
   const analyticsTab = document.getElementById("adminTabAnalytics");
   const adminTab = document.getElementById("adminTabAdmins");
   const copyrightTab = document.getElementById("adminTabCopyright");
+  const adsTab = document.getElementById("adminTabAds");
   const newsTab = document.getElementById("adminTabNews");
   const walletTab = document.getElementById("adminTabWallet");
   const platformWithdrawPanel = document.getElementById("platformWithdrawPanel");
@@ -4634,6 +4662,7 @@ function updateAdminTabs(){
   if(analyticsTab) analyticsTab.classList.toggle("hidden", !superAdmin);
   if(adminTab) adminTab.classList.toggle("hidden", !superAdmin);
   if(copyrightTab) copyrightTab.classList.toggle("hidden", !superAdmin);
+  if(adsTab) adsTab.classList.toggle("hidden", !superAdmin);
   if(walletTab) walletTab.classList.toggle("hidden", !superAdmin);
   if(platformWithdrawPanel) platformWithdrawPanel.classList.toggle("hidden", !superAdmin);
 
@@ -4649,6 +4678,7 @@ async function showAdminTab(tab){
   const managementPanel = document.getElementById("adminManagementPanel");
   const newsPanel = document.getElementById("adminNewsPanel");
   const copyrightPanel = document.getElementById("adminCopyrightPanel");
+  const adsPanel = document.getElementById("adminAdsPanel");
 
   const analyticsTab = document.getElementById("adminTabAnalytics");
   const songTab = document.getElementById("adminTabSongs");
@@ -4657,10 +4687,11 @@ async function showAdminTab(tab){
   const adminTab = document.getElementById("adminTabAdmins");
   const newsTab = document.getElementById("adminTabNews");
   const copyrightTab = document.getElementById("adminTabCopyright");
+  const adsTab = document.getElementById("adminTabAds");
 
-  [analyticsPanel,songsPanel,withdrawalsPanel,walletPanel,managementPanel,copyrightPanel].forEach(el=>{if(el)el.classList.add("hidden")});
-  [analyticsTab,songTab,newsTab,withdrawalTab,walletTab,adminTab,copyrightTab].forEach(el=>{if(el)el.classList.remove("active")});
-  [analyticsPanel,songsPanel,newsPanel,withdrawalsPanel,walletPanel,managementPanel,copyrightPanel].forEach(el=>{if(el)el.classList.add("hidden")});
+  [analyticsPanel,songsPanel,withdrawalsPanel,walletPanel,managementPanel,copyrightPanel,adsPanel].forEach(el=>{if(el)el.classList.add("hidden")});
+  [analyticsTab,songTab,newsTab,withdrawalTab,walletTab,adminTab,copyrightTab,adsTab].forEach(el=>{if(el)el.classList.remove("active")});
+  [analyticsPanel,songsPanel,newsPanel,withdrawalsPanel,walletPanel,managementPanel,copyrightPanel,adsPanel].forEach(el=>{if(el)el.classList.add("hidden")});
 
   if(tab === "analytics"){
     if(!isCurrentUserSuperAdmin()){
@@ -4723,6 +4754,13 @@ async function showAdminTab(tab){
   }
 
 
+  if(tab === "ads") {
+    if(!isCurrentUserSuperAdmin()){ alert("Only the Super Admin can manage banner advertisements."); return; }
+    if(adsPanel) adsPanel.classList.remove("hidden");
+    if(adsTab) adsTab.classList.add("active");
+    await loadHomepageAds();
+  }
+
   if(tab === "copyright"){
     if(!isCurrentUserSuperAdmin()){
       alert("Only the Super Admin can access Copyright Removal.");
@@ -4760,6 +4798,143 @@ async function showAdminTab(tab){
 
 }
 
+
+/* =========================================================
+   SUPER ADMIN HOMEPAGE BANNER ADS
+========================================================= */
+let homepageAdsCache=[];
+function showAdMessage(message,type="info"){
+  const el=document.getElementById("adminAdsMessage"); if(!el)return;
+  el.textContent=message; el.style.color=type==="error"?"#ff7777":type==="success"?"#65d995":"#ddd";
+}
+function clearAdEditor(){
+  ["adEditId","adTitle","adLink"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
+  const file=document.getElementById("adImageFile");if(file)file.value="";
+  const split=document.getElementById("adSplit");if(split)split.checked=false;
+  const fit=document.getElementById("adFit");if(fit)fit.value="contain";
+  const preview=document.getElementById("adImagePreview");if(preview)preview.textContent="Banner preview will appear here";
+  showAdMessage("");
+}
+document.addEventListener("change",e=>{
+  if(e.target?.id!=="adImageFile")return;
+  const file=e.target.files?.[0], preview=document.getElementById("adImagePreview");
+  if(!file||!preview)return;
+  if(!["image/jpeg","image/png","image/webp"].includes(file.type)){showAdMessage("Choose a JPG, PNG or WebP image.","error");e.target.value="";return;}
+  if(file.size>5*1024*1024){showAdMessage("The banner image must be 5 MB or smaller.","error");e.target.value="";return;}
+  const img=document.createElement("img");img.src=URL.createObjectURL(file);img.alt="Banner preview";preview.replaceChildren(img);
+});
+async function loadHomepageAds(){
+  if(!isCurrentUserSuperAdmin())return;
+  try{
+    const res=await fetch("/api/admin/ads",{credentials:"include",cache:"no-store"});
+    const data=await res.json().catch(()=>({}));if(!res.ok)throw new Error(data.error||"Could not load banners");
+    homepageAdsCache=Array.isArray(data.data)?data.data:[];
+    for(const space of [1,2]){
+      const target=document.getElementById("adminAdList"+space);if(!target)continue;
+      const rows=homepageAdsCache.filter(a=>Number(a.space_id)===space);
+      target.replaceChildren();
+      if(!rows.length){target.textContent="No banners saved in this space yet.";continue;}
+      rows.forEach(ad=>{
+        const row=document.createElement("div");row.className="ad-row";
+        const img=document.createElement("img");img.src=ad.image_url;img.alt=ad.title||"Banner";row.appendChild(img);
+        const info=document.createElement("div");info.className="ad-row-info";
+        const title=document.createElement("strong");title.textContent=ad.title||"Untitled banner";info.appendChild(title);
+        const meta=document.createElement("div");meta.textContent=(Number(ad.active)?"Active":"Inactive")+" · "+(ad.fit_mode||"contain");info.appendChild(meta);row.appendChild(info);
+        const edit=document.createElement("button");edit.className="btn btn-dark";edit.textContent="Edit";edit.onclick=()=>editHomepageAd(ad.id);row.appendChild(edit);
+        const toggle=document.createElement("button");toggle.className="btn btn-dark";toggle.textContent=Number(ad.active)?"Deactivate":"Activate";toggle.onclick=()=>toggleHomepageAd(ad);row.appendChild(toggle);
+        const del=document.createElement("button");del.className="btn btn-danger";del.textContent="Delete";del.onclick=()=>deleteHomepageAd(ad.id);row.appendChild(del);
+        target.appendChild(row);
+      });
+    }
+  }catch(e){showAdMessage(e.message,"error");}
+}
+function editHomepageAd(id){
+  const ad=homepageAdsCache.find(x=>String(x.id)===String(id));if(!ad)return;
+  document.getElementById("adEditId").value=ad.id;document.getElementById("adTitle").value=ad.title||"";
+  document.getElementById("adSpaceSelect").value=String(ad.space_id);document.getElementById("adLink").value=ad.target_url||"";
+  document.getElementById("adFit").value=ad.fit_mode||"contain";document.getElementById("adImageFile").value="";
+  const preview=document.getElementById("adImagePreview"),img=document.createElement("img");img.src=ad.image_url;img.alt=ad.title||"Banner preview";preview.replaceChildren(img);
+  document.getElementById("adSplit").checked=false;showAdMessage("Editing existing banner. Choose a new image only if you want to replace it.");
+}
+async function uploadAdImage(file){
+  const path=`${currentUser.id}/${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g,"_")}`;
+  const result=await sb.storage.from("ads").upload(path,file,{contentType:file.type});if(result.error)throw result.error;
+  return sb.storage.from("ads").getPublicUrl(result.data.path).data.publicUrl;
+}
+async function saveAdRecord(payload){
+  const res=await fetch("/api/admin/ads",{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+  const data=await res.json().catch(()=>({}));if(!res.ok)throw new Error(data.error||"Could not save banner");return data;
+}
+async function makeAdHalves(file){
+  const bitmap=await createImageBitmap(file),half=Math.floor(bitmap.width/2);if(half<1)throw new Error("Image is too narrow to split.");
+  const blobs=[];
+  for(let i=0;i<2;i++){
+    const canvas=document.createElement("canvas");canvas.width=half;canvas.height=bitmap.height;
+    canvas.getContext("2d").drawImage(bitmap,i*half,0,half,bitmap.height,0,0,half,bitmap.height);
+    const blob=await new Promise(resolve=>canvas.toBlob(resolve,file.type==="image/jpeg"?"image/jpeg":"image/png",.92));if(!blob)throw new Error("Could not split the image.");
+    blobs.push(new File([blob],`banner-half-${i+1}.${file.type==="image/jpeg"?"jpg":"png"}`,{type:file.type==="image/jpeg"?"image/jpeg":"image/png"}));
+  }
+  bitmap.close();return blobs;
+}
+async function saveHomepageAd(){
+  if(!isCurrentUserSuperAdmin()){showAdMessage("Super Admin access required.","error");return;}
+  const editId=document.getElementById("adEditId").value;
+  const title=document.getElementById("adTitle").value.trim();
+  const space=Number(document.getElementById("adSpaceSelect").value);
+  const link=document.getElementById("adLink").value.trim();
+  const fit=document.getElementById("adFit").value;
+  const file=document.getElementById("adImageFile").files?.[0];
+  const split=document.getElementById("adSplit").checked;
+  if(!title){showAdMessage("Enter the advertiser or campaign name.","error");return;}
+  if(!editId&&!file){showAdMessage("Choose a banner image first.","error");return;}
+  if(link&&!/^https:\/\//i.test(link)){showAdMessage("Enter a complete HTTPS website link.","error");return;}
+  try{
+    showAdMessage("Uploading banner image…");
+    if(editId){
+      const existing=homepageAdsCache.find(x=>String(x.id)===String(editId));let imageUrl=existing?.image_url;
+      if(file)imageUrl=await uploadAdImage(file);
+      await saveAdRecord({id:editId,title,space_id:space,target_url:link,image_url:imageUrl,fit_mode:fit});
+    }else if(split){
+      const halves=await makeAdHalves(file);
+      for(let i=0;i<2;i++){
+        const imageUrl=await uploadAdImage(halves[i]);
+        await saveAdRecord({title:`${title} — ${i===0?"Left":"Right"}`,space_id:space,target_url:link,image_url:imageUrl,fit_mode:fit,sort_order:Date.now()+i});
+      }
+    }else{
+      const imageUrl=await uploadAdImage(file);
+      await saveAdRecord({title,space_id:space,target_url:link,image_url:imageUrl,fit_mode:fit,sort_order:Date.now()});
+    }
+    clearAdEditor();await loadHomepageAds();showAdMessage("Banner saved successfully.","success");
+  }catch(e){showAdMessage(e.message||"Could not save banner.","error");}
+}
+async function toggleHomepageAd(ad){
+  try{await saveAdRecord({...ad,active:Number(ad.active)?0:1});await loadHomepageAds();showAdMessage("Banner status updated.","success");}
+  catch(e){showAdMessage(e.message,"error");}
+}
+async function deleteHomepageAd(id){
+  if(!confirm("Delete this banner from NileSoniQ?"))return;
+  try{const res=await fetch("/api/admin/ads?id="+encodeURIComponent(id),{method:"DELETE",credentials:"include"});const data=await res.json().catch(()=>({}));if(!res.ok)throw new Error(data.error||"Delete failed");await loadHomepageAds();showAdMessage("Banner deleted.","success");}
+  catch(e){showAdMessage(e.message,"error");}
+}
+async function renderHomepageAds(){
+  try{
+    const res=await fetch("/api/ads",{cache:"no-store"});const data=await res.json();const ads=Array.isArray(data.data)?data.data:[];
+    for(const space of [1,2]){
+      const root=document.querySelector(`[data-ad-space="${space}"]`);if(!root)continue;
+      const list=ads.filter(a=>Number(a.space_id)===space&&Number(a.active));root.replaceChildren();
+      if(!list.length){const fallback=document.createElement("div");fallback.innerHTML="<strong>ADVERTISEMENT</strong>Space reserved for ads";root.appendChild(fallback);continue;}
+      const rotator=document.createElement("div");rotator.className="ad-rotator";root.appendChild(rotator);
+      list.forEach((ad,index)=>{
+        const slide=document.createElement("div");slide.className="ad-slide"+(index===0?" active":"");
+        const img=document.createElement("img");img.src=ad.image_url;img.alt=ad.title||"Advertisement";img.style.objectFit=ad.fit_mode||"contain";
+        if(ad.target_url){const a=document.createElement("a");a.href=ad.target_url;a.target="_blank";a.rel="noopener noreferrer";a.appendChild(img);slide.appendChild(a);}else slide.appendChild(img);
+        rotator.appendChild(slide);
+      });
+      if(list.length>1){let current=0;setInterval(()=>{const slides=rotator.querySelectorAll(".ad-slide");if(!slides.length)return;slides[current].classList.remove("active");current=(current+1)%slides.length;slides[current].classList.add("active");},5000);}
+    }
+  }catch(e){console.warn("Homepage ads could not be loaded:",e);}
+}
+document.addEventListener("DOMContentLoaded",renderHomepageAds);
 
 /* =========================================================
    AUTH MODAL
