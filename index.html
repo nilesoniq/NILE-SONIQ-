@@ -8091,7 +8091,7 @@ async function downloadSongObject(song){
     document.body.appendChild(link);
     link.click();
     link.remove();
-    recordSongDownload(song.id);
+    await recordSongDownload(song.id);
 
     setTimeout(() => URL.revokeObjectURL(blobUrl),5000);
 
@@ -8110,7 +8110,7 @@ async function downloadSongObject(song){
       document.body.appendChild(link);
       link.click();
       link.remove();
-      recordSongDownload(song.id);
+      await recordSongDownload(song.id);
     }catch(fallbackError){
       console.error(fallbackError);
       alert("Download could not start. Please try again.");
@@ -8120,12 +8120,28 @@ async function downloadSongObject(song){
 
 
 async function recordSongDownload(songId){
+  if(!songId) throw new Error("Missing song ID; download count was not recorded.");
+
   try{
-    if(!songId || !sb || typeof sb.rpc !== "function") return;
-    const {error} = await sb.rpc("record_song_download", {song_id:String(songId)});
-    if(error) console.warn("Download count could not be recorded:", error);
+    const response = await fetch("/api/rpc/record_song_download", {
+      method:"POST",
+      credentials:"include",
+      headers:{
+        "Content-Type":"application/json",
+        "Accept":"application/json"
+      },
+      body:JSON.stringify({song_id:String(songId)})
+    });
+
+    const result = await response.json().catch(()=>({}));
+    if(!response.ok || result.error){
+      throw new Error(result.error || result.message || `Download count request failed (HTTP ${response.status}).`);
+    }
+
+    return result.data || null;
   }catch(error){
     console.warn("Download count could not be recorded:", error);
+    return null;
   }
 }
 
