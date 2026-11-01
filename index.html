@@ -5005,7 +5005,7 @@ async function renderHomepageAds(){
     }
   }catch(e){console.warn("Homepage ads could not be loaded:",e);}
 }
-if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",renderHomepageAds,{once:true});else renderHomepageAds();
+/* Public banners are initialized by the isolated loader at the end of this file. */
 
 /* =========================================================
    AUTH MODAL
@@ -11546,6 +11546,52 @@ async function startPremiumSubscription(){
   },true);
 })();
 
+</script>
+
+<script>
+/* Isolated public homepage banner loader. */
+(function(){
+  const timerBySpace={};
+  async function loadPublicBanners(){
+    try{
+      const response=await fetch('/api/ads?homepage_refresh='+Date.now(),{cache:'no-store'});
+      if(!response.ok) throw new Error('Banner feed returned HTTP '+response.status);
+      const payload=await response.json();
+      const ads=Array.isArray(payload.data)?payload.data:[];
+      [1,2].forEach(function(space){
+        const root=document.querySelector('[data-ad-space="'+space+'"]');
+        if(!root) return;
+        if(timerBySpace[space]){clearInterval(timerBySpace[space]);delete timerBySpace[space];}
+        const banners=ads.filter(function(ad){return Number(ad.space_id)===space && Number(ad.active)===1;})
+          .sort(function(a,b){return Number(a.sort_order||0)-Number(b.sort_order||0);}).slice(0,3);
+        root.replaceChildren();
+        if(!banners.length){
+          const fallback=document.createElement('div');
+          fallback.innerHTML='<strong>ADVERTISEMENT</strong>Space reserved for ads';
+          root.appendChild(fallback);
+          return;
+        }
+        const frame=document.createElement('div');frame.className='ad-rotator';root.appendChild(frame);
+        let current=0;
+        banners.forEach(function(ad,index){
+          const slide=document.createElement('div');slide.className='ad-slide'+(index===0?' is-active':'');
+          const img=document.createElement('img');img.src=ad.image_url;img.alt=ad.title||'Advertisement';
+          img.style.objectFit=ad.fit_mode==='cover'?'cover':'contain';
+          img.onerror=function(){slide.classList.add('ad-image-error');slide.textContent='Advertisement image unavailable';};
+          if(ad.target_url){const link=document.createElement('a');link.href=ad.target_url;link.target='_blank';link.rel='noopener noreferrer';link.appendChild(img);slide.appendChild(link);}
+          else slide.appendChild(img);
+          frame.appendChild(slide);
+        });
+        if(banners.length>1){timerBySpace[space]=window.setInterval(function(){
+          const slides=frame.querySelectorAll('.ad-slide');if(!slides.length)return;
+          slides[current].classList.remove('is-active');current=(current+1)%slides.length;slides[current].classList.add('is-active');
+        },5000);}
+      });
+    }catch(error){console.error('Homepage banner loader failed:',error);}
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',loadPublicBanners,{once:true});
+  else loadPublicBanners();
+})();
 </script>
 
 </body>
