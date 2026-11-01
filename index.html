@@ -3761,7 +3761,8 @@ async () => {
   await loadNews();
 
   const path=window.location.pathname.replace(/\/+$/,"") || "/";
-  if(["/about","/privacy","/terms","/contact","/dmca"].includes(path.toLowerCase())) await openPolicyRoute(path);
+  if(isShortPublicRoute()) await handleShortPublicRoute();
+  else if(["/about","/privacy","/terms","/contact","/dmca"].includes(path.toLowerCase())) await openPolicyRoute(path);
   else if(path === "/artists" || path === "/songs" || path === "/news") await showPage(path.slice(1),false);
   else if(/^\/news\/[^/]+$/i.test(path)) await loadNewsArticleBySlug(path.split("/")[2]);
   else if(path === "/" || !isShortPublicRoute()) await showPage("home",false);
@@ -4357,6 +4358,9 @@ async function showPage(page, updateUrl=true){
   if(updateUrl && ["home","artists","songs","news","about"].includes(page)){
     const target = page === "home" ? "/" : "/" + page;
     if(window.location.pathname !== target) window.history.pushState({page}, "", target);
+  }
+  if(updateUrl && page === "home" && document.getElementById("publicSongLanding")){
+    closePublicSongPage(false);
   }
 
 
@@ -7082,100 +7086,139 @@ async function openSongBySlug(slug){
 }
 
 async function showPublicSongPage(song){
-  let modal = document.getElementById("songPublicModal");
-  if(!modal){
-    modal = document.createElement("div");
-    modal.id = "songPublicModal";
-    modal.style.cssText = "position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(0,0,0,.82);backdrop-filter:blur(8px);overflow-y:auto;";
-    document.body.appendChild(modal);
+  if(!song) return;
+  await showPage("home", false);
+
+  // This is a normal page section, not a full-screen modal. The homepage
+  // remains underneath it so visitors can continue discovering NileSoniQ.
+  const homePage = document.getElementById("homePage");
+  const container = homePage?.querySelector(".container");
+  if(!container) return;
+
+  let landing = document.getElementById("publicSongLanding");
+  if(!landing){
+    landing = document.createElement("section");
+    landing.id = "publicSongLanding";
+    landing.style.cssText = "margin:24px 0 34px;padding:18px;background:linear-gradient(145deg,#191919,#101010);border:1px solid #333;border-radius:18px;";
+    container.insertBefore(landing, container.firstElementChild);
   }
 
-  let artistRecord = null;
-  if(song && song.artist_id){
-    try{
-      const {data} = await sb.from("artists").select("*").eq("id",song.artist_id).maybeSingle();
-      if(data) artistRecord = data;
-    }catch(e){ console.warn("Could not load song artist profile:",e); }
+  window.__nileSongRegistry = window.__nileSongRegistry || {};
+  window.__nileSongRegistry[String(song.id)] = song;
+  if(!currentSongs.some(item => String(item.id) === String(song.id))){
+    currentSongs = [song, ...currentSongs];
   }
+
+  const safeArtistName = String(song.artist || "Unknown Artist");
+  let allSongs = [];
+  let artists = [];
+  try{
+    [allSongs, artists] = await Promise.all([
+      loadPublicTable("songs", {limit:1000, order:"created_at.desc"}),
+      loadPublicTable("artists", {limit:500, order:"created_at.desc"})
+    ]);
+  }catch(error){
+    console.warn("Could not load related public song information:", error);
+  }
+
+  const artistRecord = (artists || []).find(item =>
+    (song.artist_id && (String(item.id) === String(song.artist_id) || String(item.user_id || "") === String(song.artist_id))) ||
+    normalizeSearchText(item.name || "") === normalizeSearchText(safeArtistName)
+  ) || null;
+
+  const isApproved = item => item && (
+    item.approved === true || item.approved === 1 ||
+    String(item.approved || "").toLowerCase() === "true" ||
+    String(item.approved || "").toLowerCase() === "1" ||
+    String(item.approved || "").toLowerCase() === "approved"
+  );
+  const relatedSongs = (allSongs || []).filter(item => {
+    if(!isApproved(item) || String(item.id) === String(song.id)) return false;
+    if(song.artist_id && String(item.artist_id || "") === String(song.artist_id)) return true;
+    if(artistRecord?.id && String(item.artist_id || "") === String(artistRecord.id)) return true;
+    if(artistRecord?.user_id && String(item.artist_id || "") === String(artistRecord.user_id)) return true;
+    return normalizeSearchText(item.artist || "") === normalizeSearchText(safeArtistName);
+  }).slice(0, 12);
+
+  window.artistProfileSongs = relatedSongs;
+  relatedSongs.forEach(item => {
+    window.__nileSongRegistry[String(item.id)] = item;
+  });
 
   const cover = song.cover_url
-    ? `<img src="${escapeAttribute(song.cover_url)}" alt="${escapeAttribute(song.title || "Song")}" style="width:170px;height:170px;object-fit:cover;border-radius:16px;display:block;margin:0 auto 20px;">`
-    : `<div style="width:170px;height:170px;border-radius:16px;display:flex;align-items:center;justify-content:center;background:#191919;color:var(--orange);font-size:55px;margin:0 auto 20px;">♪</div>`;
+    ? `<img src="${escapeAttribute(song.cover_url)}" alt="${escapeAttribute(song.title || "Song artwork")}" style="width:min(100%,230px);aspect-ratio:1/1;object-fit:cover;border-radius:15px;border:1px solid #333;margin:auto;" loading="eager">`
+    : `<div style="width:min(100%,230px);aspect-ratio:1/1;border-radius:15px;display:flex;align-items:center;justify-content:center;background:#242424;color:var(--orange);font-size:70px;margin:auto;">♪</div>`;
 
   const url = songPublicUrl(song);
+  const title = String(song.title || "Untitled");
   const description = String(song.description || song.about || song.song_description || "").trim();
-  const genre = String(song.genre || song.category || "").trim();
-  const releaseDate = song.release_date || song.released_at || song.releaseDate || "";
-  const producer = String(song.producer || song.produced_by || "").trim();
-  const featured = String(song.featured_artists || song.features || song.featuring || "").trim();
-  const label = String(song.label || song.record_label || "").trim();
-  const location = String(song.location || song.origin || "").trim();
-  const externalLinks = [
-    ["Official website", artistRecord && (artistRecord.website || artistRecord.website_url)],
-    ["Facebook", artistRecord && artistRecord.facebook_url],
-    ["Instagram", artistRecord && artistRecord.instagram_url],
-    ["TikTok", artistRecord && artistRecord.tiktok_url],
-    ["YouTube", artistRecord && artistRecord.youtube_url]
-  ].filter(x => x[1] && /^https?:\/\//i.test(String(x[1])));
+  const artistPhoto = artistRecord?.avatar_url
+    ? `<img src="${escapeAttribute(artistRecord.avatar_url)}" alt="" style="width:34px;height:34px;border-radius:50%;object-fit:cover;">`
+    : `<span style="width:34px;height:34px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:#292929;color:var(--orange);font-weight:800;">${escapeHtml(getInitials(safeArtistName))}</span>`;
 
-  const meta = [
-    genre && ["Genre", genre],
-    releaseDate && ["Release date", new Date(releaseDate).toLocaleDateString(undefined,{year:"numeric",month:"long",day:"numeric"})],
-    producer && ["Producer", producer],
-    featured && ["Featured artists", featured],
-    label && ["Record label", label],
-    location && ["Location", location]
-  ].filter(Boolean);
+  const relatedHtml = relatedSongs.length
+    ? relatedSongs.map(item => {
+        const image = item.cover_url
+          ? `<img src="${escapeAttribute(item.cover_url)}" alt="" loading="lazy" style="width:64px;height:64px;object-fit:cover;border-radius:9px;">`
+          : `<span style="width:64px;height:64px;display:flex;align-items:center;justify-content:center;background:#252525;color:var(--orange);border-radius:9px;font-size:25px;">♪</span>`;
+        return `<article style="display:flex;align-items:center;gap:11px;padding:10px;background:#111;border:1px solid #303030;border-radius:12px;min-width:0;">
+          <a href="${escapeAttribute(songPublicUrl(item))}" onclick="event.preventDefault();openSongLink(window.__nileSongRegistry['${escapeAttribute(item.id)}']);return false;">${image}</a>
+          <div style="flex:1;min-width:0;">
+            <a href="${escapeAttribute(songPublicUrl(item))}" onclick="event.preventDefault();openSongLink(window.__nileSongRegistry['${escapeAttribute(item.id)}']);return false;" style="display:block;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(item.title || "Untitled")}</a>
+            <small style="color:#999;">${formatNumber(item.plays || 0)} plays</small>
+          </div>
+          <button type="button" class="btn btn-orange" style="padding:8px 10px;flex:none;" onclick="playArtistProfileSong('${escapeAttribute(item.id)}')">▶ Play</button>
+        </article>`;
+      }).join("")
+    : `<p style="color:#999;font-size:13px;padding:12px 0;">No other approved songs from this artist are available yet.</p>`;
 
-  const aboutHtml = description ? `
-    <div class="public-content-section" style="text-align:left;">
-      <h3>About this song</h3>
-      <p class="public-content-text">${escapeHtml(description)}</p>
-    </div>` : "";
+  const artistProfileLink = artistRecord
+    ? `<a class="btn btn-dark" style="display:inline-block;" href="${escapeAttribute(artistPublicUrl(artistRecord))}" onclick="event.preventDefault();history.pushState({nilesoniqPublic:true},'','${escapeAttribute(artistPublicUrl(artistRecord))}');closePublicSongPage(false);openArtistProfile('${escapeAttribute(artistRecord.id)}',true);return false;">View artist profile</a>`
+    : "";
 
-  const detailsHtml = meta.length ? `
-    <div class="public-content-section" style="text-align:left;">
-      <h3>Song information</h3>
-      <div class="public-meta-grid">
-        ${meta.map(item => `<div class="public-meta-item"><span>${escapeHtml(item[0])}</span><strong>${escapeHtml(item[1])}</strong></div>`).join("")}
+  landing.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:15px;">
+      <span style="font-size:11px;font-weight:900;letter-spacing:.08em;color:var(--orange2);">NOW LISTENING ON NILESONIQ</span>
+      <button type="button" class="btn btn-dark" style="padding:7px 11px;" onclick="closePublicSongPage()">Back to Home</button>
+    </div>
+    <div style="display:grid;grid-template-columns:minmax(0,230px) minmax(0,1fr);gap:20px;align-items:center;">
+      <div>${cover}</div>
+      <div style="min-width:0;">
+        <h1 style="font-size:clamp(23px,4vw,34px);line-height:1.15;margin:0 0 8px;overflow-wrap:anywhere;">${escapeHtml(title)}</h1>
+        <div style="display:flex;align-items:center;gap:9px;color:#bbb;margin-bottom:16px;">${artistPhoto}<span>${escapeHtml(safeArtistName)}</span></div>
+        <div style="display:flex;gap:9px;flex-wrap:wrap;">
+          <button type="button" class="btn btn-orange" onclick="playPublicSongFromPage('${escapeAttribute(song.id)}')">▶ Play Song</button>
+          <button type="button" class="btn btn-dark" onclick="downloadSong('${escapeAttribute(song.id)}')">↓ Download</button>
+          <button type="button" class="btn btn-dark" onclick="copyPublicSongUrl('${escapeAttribute(url)}')">🔗 Copy Link</button>
+          <button type="button" class="btn btn-dark" onclick="reportPublicSong('${escapeAttribute(song.id)}')">⚑ Report</button>
+        </div>
+        ${artistProfileLink ? `<div style="margin-top:12px;">${artistProfileLink}</div>` : ""}
+        ${description ? `<p style="color:#aaa;font-size:13px;margin-top:15px;line-height:1.6;">${escapeHtml(description)}</p>` : ""}
+        <p style="color:#777;font-size:11px;margin-top:12px;overflow-wrap:anywhere;">${escapeHtml(window.location.origin + url)}</p>
       </div>
-    </div>` : "";
+    </div>
+    <section style="margin-top:25px;padding-top:20px;border-top:1px solid #333;">
+      <div style="margin-bottom:13px;"><h2 style="font-size:21px;">More songs by ${escapeHtml(safeArtistName)}</h2><p style="color:#999;font-size:12px;">Keep listening to this artist.</p></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:9px;">${relatedHtml}</div>
+    </section>
+  `;
 
-  const artistHtml = artistRecord ? `
-    <div class="public-content-section" style="text-align:left;">
-      <h3>About the artist</h3>
-      ${artistRecord.bio ? `<p class="public-content-text">${escapeHtml(artistRecord.bio)}</p>` : `<p class="public-content-text">Discover more music and information about ${escapeHtml(artistRecord.name || song.artist || "this artist")} on NileSoniq.</p>`}
-      ${artistRecord.location ? `<p style="margin-top:8px;color:#888;font-size:12px;">📍 ${escapeHtml(artistRecord.location)}</p>` : ""}
-      <div class="public-link-row">
-        <a class="public-link" href="${escapeAttribute(artistPublicUrl(artistRecord))}" onclick="history.pushState({},'', '${escapeAttribute(artistPublicUrl(artistRecord))}');closePublicSongPage();openArtistProfile('${escapeAttribute(artistRecord.id)}',true);return false;">View artist profile</a>
-        ${externalLinks.map(x => `<a class="public-link" href="${escapeAttribute(x[1])}" target="_blank" rel="noopener noreferrer">${escapeHtml(x[0])}</a>`).join("")}
-      </div>
-    </div>` : "";
-
-  document.title = `${song.title || "Song"} by ${song.artist || "Unknown Artist"} | NileSoniq`;
+  document.title = `${title} — ${safeArtistName} | NileSoniq`;
   let canonical = document.querySelector('link[rel="canonical"]');
   if(!canonical){ canonical=document.createElement("link"); canonical.rel="canonical"; document.head.appendChild(canonical); }
   canonical.href = window.location.origin + url;
-  const descMeta=document.querySelector('meta[name="description"]');
-  if(descMeta){ descMeta.content = description ? description.slice(0,155) : `Listen to ${song.title || "this song"} by ${song.artist || "this artist"} on NileSoniq, Uganda's music platform.`; }
+  const descMeta = document.querySelector('meta[name="description"]');
+  if(descMeta) descMeta.content = `Listen to ${title} by ${safeArtistName} on NileSoniq.`.slice(0,155);
+  const ogTitle = document.querySelector('meta[property="og:title"]');
+  if(ogTitle) ogTitle.content = `${title} — ${safeArtistName}`;
+  const ogDescription = document.querySelector('meta[property="og:description"]');
+  if(ogDescription) ogDescription.content = `Listen to ${title} by ${safeArtistName} on NileSoniq.`;
+  const ogImage = document.querySelector('meta[property="og:image"]');
+  if(ogImage && song.cover_url) ogImage.content = new URL(song.cover_url, window.location.origin).href;
 
-  modal.innerHTML = `
-    <div style="position:relative;width:min(620px,100%);margin:20px 0;background:#111;border:1px solid var(--border);border-radius:22px;padding:28px;text-align:center;box-shadow:0 25px 80px rgba(0,0,0,.5);">
-      <button onclick="closePublicSongPage()" aria-label="Close" style="position:absolute;right:12px;top:10px;width:38px;height:38px;border:0;border-radius:50%;background:#292929;color:#fff;font-size:24px;cursor:pointer;">×</button>
-      ${cover}
-      <h1 style="font-size:28px;margin:0 0 7px;">${escapeHtml(song.title || "Untitled")}</h1>
-      <p style="margin:0 0 18px;color:#aaa;">${escapeHtml(song.artist || "Unknown Artist")}</p>
-      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
-        <button class="btn btn-orange" onclick="playPublicSongFromPage('${escapeAttribute(song.id)}')">▶ Play Song</button>
-        <button class="btn btn-dark" onclick="downloadSong('${escapeAttribute(song.id)}')">↓ Download</button>
-        <button class="btn btn-dark" onclick="copyPublicSongUrl('${escapeAttribute(url)}')">🔗 Copy Link</button>
-        <button class="btn btn-dark" onclick="reportPublicSong('${escapeAttribute(song.id)}')">⚑ Report Song / Copyright</button>
-      </div>
-      ${aboutHtml}
-      ${detailsHtml}
-      ${artistHtml}
-      <div style="margin-top:20px;padding:10px;border-radius:10px;background:#191919;color:#999;font-size:12px;word-break:break-all;text-align:left;">Public song URL: ${escapeHtml(window.location.origin + url)}</div>
-    </div>`;
+  // Put the song-focused view first; the existing Discover Artists and
+  // Featured Songs homepage sections remain available further down.
+  landing.scrollIntoView({behavior:"auto", block:"start"});
 }
 
 
@@ -7199,10 +7242,16 @@ async function playPublicSongFromPage(songId){
   }
 }
 
-function closePublicSongPage(){
+function closePublicSongPage(updateUrl=true){
+  const landing = document.getElementById("publicSongLanding");
+  if(landing) landing.remove();
   const modal = document.getElementById("songPublicModal");
   if(modal) modal.remove();
   document.body.style.overflow = "";
+  if(updateUrl && /^\/song\//i.test(window.location.pathname)){
+    window.history.pushState({page:"home"},"","/");
+    document.title = "NileSoniq — Ugandan Music Platform";
+  }
 }
 
 async function copyPublicSongUrl(url){
@@ -10745,8 +10794,13 @@ window.addEventListener("popstate", async () => {
   if(typeof closePublicSongPage === "function") closePublicSongPage();
   document.body.style.overflow="";
   const path=window.location.pathname.replace(/\/+$/,"") || "/";
-  if(path === "/artists" || path === "/songs" || path === "/news" || path === "/about") await showPage(path.slice(1),false);
-  else await showPage("home",false);
+  if(path === "/artists" || path === "/songs" || path === "/news" || path === "/about"){
+    closePublicSongPage(false);
+    await showPage(path.slice(1),false);
+  }else{
+    closePublicSongPage(false);
+    await showPage("home",false);
+  }
 });
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -10756,11 +10810,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   updateArtistWithdrawalMinimumDisplay();
   await handleAuthEmailLink();
 
-  // Direct song/artist/news links must be opened on the first page load,
-  // not only after browser back/forward navigation.
-  if(isShortPublicRoute()){
-    await handleShortPublicRoute();
-  }
+  // Public routes are opened by the main startup handler after song and
+  // artist data have finished loading, avoiding an early-load race.
 });
 
 
