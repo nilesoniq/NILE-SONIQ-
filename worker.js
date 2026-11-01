@@ -1730,6 +1730,25 @@ async function adminRoute(request, env, path) {
   const superAdmin = admin.role === "super_admin";
   const url = new URL(request.url);
 
+  if (path === "/api/admin/ads") {
+    if (!superAdmin) return error("Super Admin access required", 403);
+    try {
+      await env.DB.prepare(`CREATE TABLE IF NOT EXISTS homepage_ads (id TEXT PRIMARY KEY, title TEXT NOT NULL, space_id INTEGER NOT NULL CHECK(space_id IN (1,2)), target_url TEXT, image_url TEXT NOT NULL, fit_mode TEXT NOT NULL DEFAULT 'contain', active INTEGER NOT NULL DEFAULT 1, sort_order INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')))`).run();
+      if (request.method === "GET") { const rows=await env.DB.prepare("SELECT * FROM homepage_ads ORDER BY space_id, sort_order, datetime(created_at)").all(); return json({data:rows.results||[],error:null}); }
+      if (request.method === "POST") {
+        const body=await readBody(request); const id=String(body.id||crypto.randomUUID());
+        const title=String(body.title||"").trim().slice(0,120), space=Number(body.space_id), image=String(body.image_url||"").trim();
+        const target=String(body.target_url||"").trim(); const fit=body.fit_mode==="cover"?"cover":"contain"; const active=body.active===0||body.active===false?0:1; const sort=Number.isFinite(Number(body.sort_order))?Number(body.sort_order):Date.now();
+        if(!title||![1,2].includes(space)||!image||image.length>2000) return error("Banner name, valid space and image are required",422);
+        if(target && !/^https:\/\//i.test(target)) return error("Banner link must use HTTPS",422);
+        await env.DB.prepare(`INSERT INTO homepage_ads (id,title,space_id,target_url,image_url,fit_mode,active,sort_order,updated_at) VALUES (?,?,?,?,?,?,?,?,datetime('now')) ON CONFLICT(id) DO UPDATE SET title=excluded.title,space_id=excluded.space_id,target_url=excluded.target_url,image_url=excluded.image_url,fit_mode=excluded.fit_mode,active=excluded.active,sort_order=excluded.sort_order,updated_at=datetime('now')`).bind(id,title,space,target||null,image,fit,active,sort).run();
+        return json({success:true,id});
+      }
+      if (request.method === "DELETE") { const id=String(url.searchParams.get("id")||""); if(!id)return error("Banner ID required",422); await env.DB.prepare("DELETE FROM homepage_ads WHERE id=?").bind(id).run(); return json({success:true}); }
+      return error("Method not allowed",405);
+    } catch(e) { console.error("Admin banner operation failed:",e.message); return error("Could not manage homepage banners",500); }
+  }
+
   const artistPayoutMatch = path.match(/^\/api\/admin\/withdrawals\/([^/]+)\/pay$/);
   if (request.method === "POST" && artistPayoutMatch) {
     return artistWithdrawalPayoutRoute(env, path);
@@ -2664,6 +2683,15 @@ async function uploadPreflightRoute(request, env) {
   }
 }
 
+async function publicAdsRoute(request, env) {
+  if(request.method!=="GET") return error("Method not allowed",405);
+  try {
+    await env.DB.prepare(`CREATE TABLE IF NOT EXISTS homepage_ads (id TEXT PRIMARY KEY, title TEXT NOT NULL, space_id INTEGER NOT NULL CHECK(space_id IN (1,2)), target_url TEXT, image_url TEXT NOT NULL, fit_mode TEXT NOT NULL DEFAULT 'contain', active INTEGER NOT NULL DEFAULT 1, sort_order INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')))`).run();
+    const rows=await env.DB.prepare("SELECT id,title,space_id,target_url,image_url,fit_mode,active,sort_order FROM homepage_ads WHERE active=1 ORDER BY space_id,sort_order,datetime(created_at)").all();
+    return json({data:rows.results||[],error:null},200,{"Cache-Control":"public, max-age=60"});
+  } catch(e) { console.error("Public banners load failed:",e.message); return json({data:[],error:null}); }
+}
+
 async function storageRoute(request, env, path) {
   const parts = path.split("/");
   const bucket = parts[3];
@@ -2688,7 +2716,7 @@ async function storageRoute(request, env, path) {
     return error("Storage path missing or invalid", 400);
   }
 
-  if (!["audio", "covers", "avatars", "news"].includes(bucket)) {
+  if (!["audio", "covers", "avatars", "news", "ads"].includes(bucket)) {
     return error("Bucket not allowed", 403);
   }
 
@@ -2797,6 +2825,9 @@ async function storageRoute(request, env, path) {
 
     if (bucket === "news" && !admin) {
       return error("Admin access required", 403);
+    }
+    if (bucket === "ads" && !(await isSuperAdmin(env, user))) {
+      return error("Super Admin access required", 403);
     }
 
     if (
@@ -4441,11 +4472,14 @@ export default {
         path === "/api/admin/withdrawals" ||
         path.startsWith("/api/admin/withdrawals/") ||
         path === "/api/admin/analytics" ||
+        path === "/api/admin/ads" ||
         path === "/api/admin/copyright-removals" ||
         path === "/api/admin/copyright-removal-artists" ||
         path === "/api/admin/copyright-removal-songs"
       ) {
         response = await adminRoute(request, env, path);
+      } else if (path === "/api/ads") {
+        response = await publicAdsRoute(request, env);
       } else if (path.startsWith("/api/rpc/")) {
         response = await rpcRoute(
           request,
