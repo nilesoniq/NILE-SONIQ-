@@ -1736,11 +1736,42 @@ async function adminRoute(request, env, path) {
       await env.DB.prepare(`CREATE TABLE IF NOT EXISTS homepage_ads (id TEXT PRIMARY KEY, title TEXT NOT NULL, space_id INTEGER NOT NULL CHECK(space_id IN (1,2)), target_url TEXT, image_url TEXT NOT NULL, fit_mode TEXT NOT NULL DEFAULT 'contain', active INTEGER NOT NULL DEFAULT 1, sort_order INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')))`).run();
       if (request.method === "GET") { const rows=await env.DB.prepare("SELECT * FROM homepage_ads ORDER BY space_id, sort_order, datetime(created_at)").all(); return json({data:rows.results||[],error:null}); }
       if (request.method === "POST") {
-        const body=await readBody(request); const id=String(body.id||crypto.randomUUID());
+        const body=await readBody(request);
+        if (body.action === "create_many") {
+          const items=Array.isArray(body.items)?body.items:[];
+          if(!items.length||items.length>3) return error("Choose between 1 and 3 banners to save together",422);
+          const space=Number(items[0]?.space_id);
+          if(![1,2].includes(space)||items.some(x=>Number(x.space_id)!==space)) return error("All banners in one save must use the same banner space",422);
+          const current=await env.DB.prepare("SELECT COUNT(*) AS total FROM homepage_ads WHERE space_id=?").bind(space).first();
+          if(Number(current?.total||0)+items.length>3) return error(`Banner Space ${space} can hold only 3 banners`,422);
+          const existing=await env.DB.prepare("SELECT COALESCE(MAX(sort_order),0) AS last_order FROM homepage_ads WHERE space_id=?").bind(space).first();
+          const statements=[];
+          for(let i=0;i<items.length;i++){
+            const x=items[i],id=String(x.id||crypto.randomUUID()),title=String(x.title||"").trim().slice(0,120),image=String(x.image_url||"").trim(),target=String(x.target_url||"").trim(),fit=x.fit_mode==="cover"?"cover":"contain";
+            if(!title||!image||image.length>2000) return error("Every banner needs a name and image",422);
+            if(target&&!/^https:\/\//i.test(target)) return error("Banner link must use HTTPS",422);
+            statements.push(env.DB.prepare("INSERT INTO homepage_ads (id,title,space_id,target_url,image_url,fit_mode,active,sort_order,updated_at) VALUES (?,?,?,?,?,?,1,?,datetime('now'))").bind(id,title,space,target||null,image,fit,Number(existing?.last_order||0)+i+1));
+          }
+          await env.DB.batch(statements);
+          return json({success:true,created:items.length});
+        }
+        if (body.action === "reorder") {
+          const space=Number(body.space_id),items=Array.isArray(body.items)?body.items:[];
+          if(![1,2].includes(space)||!items.length||items.length>3) return error("Invalid banner order",422);
+          const current=await env.DB.prepare("SELECT id FROM homepage_ads WHERE space_id=? ORDER BY sort_order,datetime(created_at)").bind(space).all();
+          const expected=(current.results||[]).map(x=>String(x.id)).sort(),received=items.map(x=>String(x.id||"")).sort();
+          if(expected.length!==received.length||expected.some((id,i)=>id!==received[i])||new Set(received).size!==received.length) return error("Banner list changed. Refresh the list and try again.",409);
+          const statements=items.map((x,i)=>env.DB.prepare("UPDATE homepage_ads SET sort_order=?,updated_at=datetime('now') WHERE id=? AND space_id=?").bind(i+1,String(x.id),space));
+          await env.DB.batch(statements);
+          return json({success:true,updated:items.length});
+        }
+        const id=String(body.id||crypto.randomUUID());
         const title=String(body.title||"").trim().slice(0,120), space=Number(body.space_id), image=String(body.image_url||"").trim();
         const target=String(body.target_url||"").trim(); const fit=body.fit_mode==="cover"?"cover":"contain"; const active=body.active===0||body.active===false?0:1; const sort=Number.isFinite(Number(body.sort_order))?Number(body.sort_order):Date.now();
         if(!title||![1,2].includes(space)||!image||image.length>2000) return error("Banner name, valid space and image are required",422);
         if(target && !/^https:\/\//i.test(target)) return error("Banner link must use HTTPS",422);
+        if(!body.id){const count=await env.DB.prepare("SELECT COUNT(*) AS total FROM homepage_ads WHERE space_id=?").bind(space).first();if(Number(count?.total||0)>=3)return error(`Banner Space ${space} can hold only 3 banners`,422);}
+        else {const old=await env.DB.prepare("SELECT space_id FROM homepage_ads WHERE id=?").bind(id).first();if(old&&Number(old.space_id)!==space){const count=await env.DB.prepare("SELECT COUNT(*) AS total FROM homepage_ads WHERE space_id=?").bind(space).first();if(Number(count?.total||0)>=3)return error(`Banner Space ${space} already has 3 banners`,422);}}
         await env.DB.prepare(`INSERT INTO homepage_ads (id,title,space_id,target_url,image_url,fit_mode,active,sort_order,updated_at) VALUES (?,?,?,?,?,?,?,?,datetime('now')) ON CONFLICT(id) DO UPDATE SET title=excluded.title,space_id=excluded.space_id,target_url=excluded.target_url,image_url=excluded.image_url,fit_mode=excluded.fit_mode,active=excluded.active,sort_order=excluded.sort_order,updated_at=datetime('now')`).bind(id,title,space,target||null,image,fit,active,sort).run();
         return json({success:true,id});
       }
@@ -2689,7 +2720,7 @@ async function publicAdsRoute(request, env) {
     await env.DB.prepare(`CREATE TABLE IF NOT EXISTS homepage_ads (id TEXT PRIMARY KEY, title TEXT NOT NULL, space_id INTEGER NOT NULL CHECK(space_id IN (1,2)), target_url TEXT, image_url TEXT NOT NULL, fit_mode TEXT NOT NULL DEFAULT 'contain', active INTEGER NOT NULL DEFAULT 1, sort_order INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')))`).run();
     const rows=await env.DB.prepare("SELECT id,title,space_id,target_url,image_url,fit_mode,active,sort_order FROM homepage_ads WHERE active=1 ORDER BY space_id,sort_order,datetime(created_at)").all();
     return json({data:rows.results||[],error:null},200,{"Cache-Control":"no-store, no-cache, must-revalidate"});
-  } catch(e) { console.error("Public banners load failed:",e.message); return json({data:[],error:null}); }
+  } catch(e) { console.error("Public banners load failed:",e.message); return json({data:[],error:"Could not load homepage banners"},500,{"Cache-Control":"no-store"}); }
 }
 
 async function storageRoute(request, env, path) {
