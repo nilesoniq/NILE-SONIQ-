@@ -10755,6 +10755,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   updateArtistPackageDetails();
   updateArtistWithdrawalMinimumDisplay();
   await handleAuthEmailLink();
+
+  // Direct song/artist/news links must be opened on the first page load,
+  // not only after browser back/forward navigation.
+  if(isShortPublicRoute()){
+    await handleShortPublicRoute();
+  }
 });
 
 
