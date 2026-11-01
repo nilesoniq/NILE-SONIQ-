@@ -2383,8 +2383,8 @@ async function rpcRoute(request, env, name) {
       // second statement runs only when the first statement inserted a row.
       const results = await env.DB.batch([
         env.DB.prepare(`
-          INSERT INTO song_play_log (song_id, ip_address, played_at)
-          SELECT ?, ?, datetime('now')
+          INSERT INTO song_play_log (song_id, ip_address, played_at, user_id)
+          SELECT ?, ?, datetime('now'), ?
           WHERE EXISTS (
             SELECT 1 FROM songs WHERE id = ? AND approved = 1
           )
@@ -2395,7 +2395,7 @@ async function rpcRoute(request, env, name) {
               AND ip_address = ?
               AND datetime(played_at) >= datetime('now', '-24 hours')
           )
-        `).bind(id, ip, id, id, ip),
+        `).bind(id, ip, user?.id || null, id, id, ip),
         env.DB.prepare(`
           UPDATE songs
           SET plays = COALESCE(plays, 0) + 1
@@ -2433,7 +2433,20 @@ async function rpcRoute(request, env, name) {
             const packageCode = String(activePackage?.package_name || 'free')
               .trim().toLowerCase().replace(/[ -]+/g, '_');
             const earningRates = { free: 0.5, premium: 1, hustler: 1, hit_maker: 2, star: 3 };
-            const gross = earningRates[packageCode] ?? EARNINGS_PER_PLAY;
+            let gross = earningRates[packageCode] ?? EARNINGS_PER_PLAY;
+            if (user?.id) {
+              const listenerSub = await env.DB.prepare(`
+                SELECT las.id FROM listener_artist_subscriptions las
+                JOIN artists a ON a.id = las.artist_id
+                WHERE las.listener_user_id = ?
+                  AND (a.id = ? OR a.user_id = ?)
+                  AND lower(las.status) = 'active'
+                  AND las.expires_at IS NOT NULL
+                  AND datetime(las.expires_at) > datetime('now')
+                ORDER BY datetime(las.expires_at) DESC LIMIT 1
+              `).bind(user.id, artistId, artistId).first();
+              if (listenerSub) gross *= 2;
+            }
             // Keep mill-UGX precision so Free net earnings remain 0.375 rather
             // than rounding each play down to 0.37 before the balance is summed.
             const commission = Math.round(gross * ARTIST_COMMISSION_RATE * 1000) / 1000;
@@ -3517,6 +3530,8 @@ async function paymentWebhookRoute(request, env) {
   }
 
   try {
+    const featureResult = await applyFeaturePaymentStatus(env, reference, status, transactionId, webhookPayment.amount, webhookPayment.currency, webhookPayment.fee);
+    if (featureResult.matched) return json({received:true, featurePayment:true, applied:Boolean(featureResult.changed)});
     const paidSignupResult = reference.startsWith("NILESONIQ-SIGNUP-")
       ? await completePaidArtistSignup(env, reference, status, transactionId, webhookPayment.amount, webhookPayment.currency,
           payload?.message || payload?.description || payload?.reason || payload?.failureMessage || payload?.failure_message || "")
@@ -3607,6 +3622,134 @@ async function paymentWebhookRoute(request, env) {
     console.error("PesaJet webhook processing failed:", e.message);
     return error("Could not process the payment webhook", 500);
   }
+}
+
+async function settleExpiredBoostCampaigns(env) {
+  const campaigns=await env.DB.prepare(`SELECT * FROM nilesoniq_feature_payments WHERE payment_type='boost' AND lower(status)='active' AND expires_at IS NOT NULL AND datetime(expires_at)<=datetime('now')`).all();
+  for(const campaign of campaigns.results||[]) {
+    const songs=await env.DB.prepare(`SELECT bs.*,COALESCE(s.plays,0) current_plays,COALESCE(s.downloads,0) current_downloads FROM song_boost_campaign_songs bs JOIN songs s ON s.id=bs.song_id WHERE bs.campaign_id=?`).bind(campaign.id).all();
+    for(const row of songs.results||[]) {
+      const deliveredPlays=Math.max(0,Number(row.current_plays)-Number(row.baseline_plays));
+      const deliveredDownloads=Math.max(0,Number(row.current_downloads)-Number(row.baseline_downloads));
+      const playCredit=Math.max(0,Number(row.allocated_play_guarantee)-deliveredPlays);
+      const downloadCredit=Math.max(0,Number(row.allocated_download_guarantee)-deliveredDownloads);
+      if(playCredit>0) await env.DB.batch([
+        env.DB.prepare(`INSERT OR IGNORE INTO song_promo_credit_ledger (event_key,campaign_id,song_id,credit_type,amount) VALUES (?, ?, ?, 'plays', ?)` ).bind(`boost-expiry:${campaign.id}:${row.song_id}:plays`,campaign.id,row.song_id,playCredit),
+        env.DB.prepare(`UPDATE songs SET plays=COALESCE(plays,0)+? WHERE id=? AND changes()>0`).bind(playCredit,row.song_id)
+      ]);
+      if(downloadCredit>0) await env.DB.batch([
+        env.DB.prepare(`INSERT OR IGNORE INTO song_promo_credit_ledger (event_key,campaign_id,song_id,credit_type,amount) VALUES (?, ?, ?, 'downloads', ?)` ).bind(`boost-expiry:${campaign.id}:${row.song_id}:downloads`,campaign.id,row.song_id,downloadCredit),
+        env.DB.prepare(`UPDATE songs SET downloads=COALESCE(downloads,0)+? WHERE id=? AND changes()>0`).bind(downloadCredit,row.song_id)
+      ]);
+    }
+    await env.DB.prepare(`UPDATE nilesoniq_feature_payments SET status='completed' WHERE id=? AND lower(status)='active'`).bind(campaign.id).run();
+  }
+}
+
+async function featurePaymentRoute(request, env) {
+  const url = new URL(request.url);
+  if (request.method === "GET" && url.searchParams.get("public") === "boosted") {
+    await settleExpiredBoostCampaigns(env);
+    const rows = await env.DB.prepare(`SELECT DISTINCT bs.song_id FROM song_boost_campaign_songs bs JOIN nilesoniq_feature_payments p ON p.id=bs.campaign_id WHERE lower(p.status)='active' AND datetime(p.expires_at)>datetime('now')`).all();
+    return json({data:(rows.results||[]).map(x=>String(x.song_id))});
+  }
+  const user = await currentUser(request, env);
+  if (!user) return error("Authentication required", 401);
+  const body = await readBody(request);
+  if (request.method === "GET") {
+    await settleExpiredBoostCampaigns(env);
+    const rows = await env.DB.prepare(`
+      SELECT id, reference, payment_type, artist_id, amount, status, package_code,
+             play_guarantee, download_guarantee, created_at, paid_at, expires_at, failure_message
+      FROM nilesoniq_feature_payments WHERE payer_user_id = ?
+      ORDER BY created_at DESC LIMIT 50
+    `).bind(user.id).all();
+    return json({data: rows.results || []});
+  }
+  if (request.method !== "POST") return error("Method not allowed",405);
+  const type = String(body.payment_type || "");
+  const phone = normalizeUgandanPhone(body.phone_number || body.phoneNumber);
+  const provider = String(body.provider || "").trim().toLowerCase();
+  if (!/^\+256\d{9}$/.test(phone)) return error("Enter a valid Ugandan mobile-money number",422);
+  if (!["mtn","airtel"].includes(provider)) return error("Provider must be MTN or Airtel",422);
+  const artist = await env.DB.prepare("SELECT id,user_id FROM artists WHERE id = ? LIMIT 1").bind(String(body.artist_id||"")).first();
+  if (!artist) return error("Artist not found",404);
+  let amount=0, packageCode="", days=0, plays=0, downloads=0, songIds=[];
+  if (type === "boost") {
+    if (String(artist.user_id) !== String(user.id)) return error("You can only boost your own songs",403);
+    const packages = {
+      starter: {amount:5000,days:30,plays:1000,downloads:1000},
+      growth: {amount:10000,days:60,plays:3000,downloads:2000},
+      premium: {amount:15000,days:120,plays:5000,downloads:3000}
+    };
+    packageCode = String(body.package_code||"").toLowerCase();
+    const pkg=packages[packageCode]; if(!pkg) return error("Choose a valid Boost package",422);
+    songIds=[...new Set((Array.isArray(body.song_ids)?body.song_ids:[]).map(x=>String(x).trim()).filter(Boolean))];
+    if(!songIds.length || songIds.length>20) return error("Select between 1 and 20 songs",422);
+    const placeholders=songIds.map(()=>"?").join(",");
+    const owned=await env.DB.prepare(`SELECT id FROM songs WHERE id IN (${placeholders}) AND approved=1 AND artist_id IN (?,?)`).bind(...songIds,artist.id,artist.user_id).all();
+    if((owned.results||[]).length!==songIds.length) return error("Every selected song must be an approved song belonging to your artist account",403);
+    ({amount,days,plays,downloads}=pkg);
+  } else if (type === "listener_subscription") {
+    if (String(artist.user_id) === String(user.id)) return error("You cannot subscribe to your own artist account",422);
+    amount=5000; days=30; packageCode="listener_30d";
+    const active=await env.DB.prepare(`SELECT id FROM listener_artist_subscriptions WHERE listener_user_id=? AND artist_id=? AND lower(status)='active' AND datetime(expires_at)>datetime('now') LIMIT 1`).bind(user.id,artist.id).first();
+    if(active) return error("Your artist subscription is already active",409);
+  } else return error("Invalid payment type",422);
+  const apiKey=env.PESAJET_API_KEY||env.PESAJET_TOKEN;
+  const baseUrl=String(env.PESAJET_API_BASE_URL||"https://payments.pesajet.com/api/v1").replace(/\/+$/,"");
+  if(!apiKey) return error("Payment service is not configured",503);
+  const id=crypto.randomUUID();
+  const reference=provider==="airtel"?`NSF${Date.now().toString(36).toUpperCase()}${crypto.randomUUID().replace(/-/g,"").slice(0,8).toUpperCase()}`:`NILESONIQ-${type==='boost'?'BOOST':'LISTENER'}-${crypto.randomUUID()}`;
+  await env.DB.prepare(`INSERT INTO nilesoniq_feature_payments (id,reference,payment_type,payer_user_id,artist_id,amount,currency,provider,phone_number,status,package_code,duration_days,play_guarantee,download_guarantee,song_ids_json) VALUES (?,?, ?,?,?,?,'UGX',?,?,'pending',?,?,?,?,?)`).bind(id,reference,type,user.id,artist.id,amount,provider,phone,packageCode,days,plays,downloads,JSON.stringify(songIds)).run();
+  if(type==='listener_subscription') await env.DB.prepare(`INSERT INTO listener_artist_subscriptions (id,payment_id,listener_user_id,artist_id,status) VALUES (?,?,?,?,'pending')`).bind(crypto.randomUUID(),id,user.id,artist.id).run();
+  let response,result;
+  try { response=await fetch(`${baseUrl}/payments`,{method:'POST',headers:{'Content-Type':'application/json','X-API-Key':apiKey},body:JSON.stringify({type:'COLLECTION',amount,currency:'UGX',phoneNumber:phone,provider,reference,description:type==='boost'?`NileSoniQ ${packageCode} Boost`:'NileSoniQ Listener Artist Subscription - 30 days',idempotencyKey:`nilesoniq-${reference}`})}); result=await response.json().catch(()=>({})); }
+  catch(e){ console.error('Feature payment request uncertain:',e.message); return error('Payment request outcome is uncertain; it remains pending.',502); }
+  if(!response.ok || result?.success===false || result?.error){
+    const msg=String(result?.message||result?.error?.message||'PesaJet rejected the payment request');
+    await env.DB.prepare("UPDATE nilesoniq_feature_payments SET status='failed',failure_message=? WHERE id=? AND status='pending'").bind(msg,id).run();
+    if(type==='listener_subscription') await env.DB.prepare("UPDATE listener_artist_subscriptions SET status='failed' WHERE payment_id=? AND status='pending'").bind(id).run();
+    return error(msg,response.status>=400&&response.status<500?response.status:502);
+  }
+  return json({success:true,status:'PENDING',reference,message:`Approve the UGX ${amount.toLocaleString('en-US')} mobile-money prompt. The feature activates only after PesaJet confirms payment.`});
+}
+
+async function applyFeaturePaymentStatus(env, reference, status, transactionId, amount, currency, fee) {
+  const payment=await env.DB.prepare("SELECT * FROM nilesoniq_feature_payments WHERE reference=? LIMIT 1").bind(reference).first();
+  if(!payment) return {matched:false};
+  if(isSuccessfulPaymentStatus(status)) {
+    if(Number(amount)!==Number(payment.amount) || String(currency||'').toUpperCase()!=='UGX') return {matched:true,changed:false,reason:'amount_or_currency_mismatch'};
+    const now=new Date().toISOString();
+    const expires=new Date(Date.now()+Number(payment.duration_days||0)*86400000).toISOString();
+    const upd=await env.DB.prepare(`UPDATE nilesoniq_feature_payments SET status='active',provider_transaction_id=?,paid_at=?,expires_at=? WHERE reference=? AND lower(status)='pending'`).bind(transactionId||'',now,expires,reference).run();
+    const changed=Number(upd?.meta?.changes||0)>0;
+    if(changed && payment.payment_type==='boost') {
+      const ids=JSON.parse(payment.song_ids_json||'[]');
+      const placeholders=ids.map(()=>'?').join(',');
+      const rows=await env.DB.prepare(`SELECT id,COALESCE(plays,0) plays,COALESCE(downloads,0) downloads FROM songs WHERE id IN (${placeholders})`).bind(...ids).all();
+      const n=ids.length, pbase=Math.floor(Number(payment.play_guarantee)/n), prem=Number(payment.play_guarantee)%n, dbase=Math.floor(Number(payment.download_guarantee)/n), drem=Number(payment.download_guarantee)%n;
+      for(let i=0;i<ids.length;i++){const row=(rows.results||[]).find(x=>String(x.id)===String(ids[i])); if(!row)continue; await env.DB.prepare(`INSERT OR IGNORE INTO song_boost_campaign_songs (campaign_id,song_id,baseline_plays,baseline_downloads,allocated_play_guarantee,allocated_download_guarantee) VALUES (?,?,?,?,?,?)`).bind(payment.id,ids[i],row.plays,row.downloads,pbase+(i<prem?1:0),dbase+(i<drem?1:0)).run();}
+    } else if(changed && payment.payment_type==='listener_subscription') {
+      await env.DB.prepare(`UPDATE listener_artist_subscriptions SET status='active',started_at=?,expires_at=? WHERE payment_id=?`).bind(now,expires,payment.id).run();
+    }
+    if(changed) {
+      const feeKnown=fee!==null&&fee!==undefined&&Number.isFinite(Number(fee));
+      const feeAmount=feeKnown?Number(fee):0;
+      const sourceType=payment.payment_type==='listener_subscription'?'listener_subscription':'song_boost';
+      const note=payment.payment_type==='listener_subscription'?'Verified listener subscription fee retained by NileSoniQ; no artist share.':'Verified Song Boost campaign payment.';
+      await env.DB.batch([
+        env.DB.prepare(`INSERT OR IGNORE INTO platform_financial_ledger (event_key,event_type,source_type,source_id,reference,amount_signed,currency,pesajet_fee_amount,tax_liability_amount,status,note,occurred_at) VALUES (?,'income',?,?,?,?,'UGX',?,0,?,?,?)`).bind(`${sourceType}:${payment.id}`,sourceType,payment.id,reference,payment.amount,feeAmount,feeKnown?'posted':'fee_unverified',note,now),
+        env.DB.prepare(`UPDATE platform_wallet SET balance=MAX(0,balance+?-?),updated_at=datetime('now') WHERE id=(SELECT id FROM platform_wallet ORDER BY created_at LIMIT 1)`).bind(payment.amount,feeAmount)
+      ]);
+    }
+    return {matched:true,changed,reason:changed?'verified_success':'already_processed'};
+  }
+  if(['FAILED','FAILURE','ERROR','EXPIRED','REJECTED','DECLINED','CANCELLED','CANCELED','TIMED_OUT','TIMEOUT'].includes(String(status).toUpperCase())) {
+    await env.DB.prepare("UPDATE nilesoniq_feature_payments SET status='failed',provider_transaction_id=?,failure_message=? WHERE reference=? AND lower(status)='pending'").bind(transactionId||'',String(status),reference).run();
+    await env.DB.prepare("UPDATE listener_artist_subscriptions SET status='failed' WHERE payment_id=? AND status='pending'").bind(payment.id).run();
+  }
+  return {matched:true,changed:false,reason:'non_success_status'};
 }
 
 async function paymentRoute(request, env, type) {
@@ -4186,6 +4329,9 @@ async function songSharePreview(request, env, url) {
 }
 
 export default {
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(settleExpiredBoostCampaigns(env));
+  },
   async fetch(request, env) {
     const url = new URL(request.url);
     const path = url.pathname;
@@ -4254,6 +4400,8 @@ export default {
           env,
           "disbursement"
         );
+      } else if (path === "/api/payments/feature-payment") {
+        response = await featurePaymentRoute(request, env);
       } else if (path === "/api/payments/premium-subscription") {
         response = await premiumSubscriptionRoute(request, env);
       } else if (path.startsWith("/api/storage/public/")) {
