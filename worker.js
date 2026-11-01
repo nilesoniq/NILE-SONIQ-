@@ -2688,7 +2688,7 @@ async function publicAdsRoute(request, env) {
   try {
     await env.DB.prepare(`CREATE TABLE IF NOT EXISTS homepage_ads (id TEXT PRIMARY KEY, title TEXT NOT NULL, space_id INTEGER NOT NULL CHECK(space_id IN (1,2)), target_url TEXT, image_url TEXT NOT NULL, fit_mode TEXT NOT NULL DEFAULT 'contain', active INTEGER NOT NULL DEFAULT 1, sort_order INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')))`).run();
     const rows=await env.DB.prepare("SELECT id,title,space_id,target_url,image_url,fit_mode,active,sort_order FROM homepage_ads WHERE active=1 ORDER BY space_id,sort_order,datetime(created_at)").all();
-    return json({data:rows.results||[],error:null},200,{"Cache-Control":"public, max-age=60"});
+    return json({data:rows.results||[],error:null},200,{"Cache-Control":"no-store, no-cache, must-revalidate"});
   } catch(e) { console.error("Public banners load failed:",e.message); return json({data:[],error:null}); }
 }
 
