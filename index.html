@@ -326,15 +326,14 @@ nav button.active{
   margin-bottom:4px;
 }
 .ad-space{position:relative;overflow:hidden;min-height:120px;}
-.ad-space .ad-rotator{width:100%;height:100%;min-height:120px;position:relative;}
-.ad-space .ad-slide{display:none;width:100%;height:100%;min-height:120px;align-items:center;justify-content:center;}
-.ad-space .ad-slide.active{display:flex;}
+.ad-space .ad-rotator{width:100%;min-height:120px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;align-items:stretch;}
+.ad-space .ad-slide{display:flex;min-width:0;min-height:120px;align-items:center;justify-content:center;overflow:hidden;background:#080808;border-radius:8px;}
 .ad-space .ad-slide img{width:100%;height:120px;object-fit:contain;display:block;}
 .ad-space .ad-slide a{display:block;width:100%;height:100%;}
 .ad-size-note{background:#171717;border:1px solid #333;border-radius:10px;padding:12px;color:#ddd;font-size:12px;line-height:1.55;margin:12px 0;}
 .ad-preview{width:100%;min-height:120px;background:#090909;border:1px dashed #444;border-radius:10px;display:flex;align-items:center;justify-content:center;overflow:hidden;margin:10px 0;}
 .ad-preview img{width:100%;height:120px;object-fit:contain;}
-.ad-row{display:flex;gap:12px;align-items:center;border:1px solid #333;background:#111;border-radius:10px;padding:10px;margin:8px 0;}
+.ad-row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;border:1px solid #333;background:#111;border-radius:10px;padding:10px;margin:8px 0;}
 .ad-row img{width:110px;height:42px;object-fit:contain;background:#080808;border-radius:5px;}
 .ad-row .ad-row-info{flex:1;min-width:0;font-size:12px;}
 .ad-queued-files{display:grid;gap:7px;margin:8px 0;color:#aaa;font-size:12px;}
@@ -3310,13 +3309,14 @@ class="table-wrap">
 
 <div id="adminAdsPanel" class="dashboard-card hidden">
   <h2>Homepage Banner Advertising</h2>
-  <p style="color:#aaa;font-size:12px;line-height:1.5;">Manage the two existing homepage advertising spaces. Only the Super Admin can see and control this panel.</p>
+  <p style="color:#aaa;font-size:12px;line-height:1.5;">Manage the two homepage advertising spaces. Each space can show up to three banners side by side. Only the Super Admin can see and control this panel.</p>
   <div class="ad-size-note"><strong style="color:#ff8a2b;">Artwork size to request from clients</strong><br>Recommended: <b>1200 × 120 pixels</b> (very wide banner, 10:1 ratio), JPG, PNG or WebP. Keep important text and logos near the centre. The website displays banners at 120px high and scales them to fit the available width. For a split campaign, send one wide design and use “Split into two banners”; the dashboard will create left and right halves for the two spaces. Please ask clients to send a high-quality original, preferably under 5 MB.</div>
   <div id="adminAdsMessage" class="message" role="status"></div>
   <input type="hidden" id="adEditId">
   <div class="form-grid">
     <div class="field"><label for="adTitle">Advertiser / banner name</label><input id="adTitle" maxlength="120" placeholder="Client or campaign name"></div>
     <div class="field"><label for="adSpaceSelect">Display in space</label><select id="adSpaceSelect"><option value="1">Banner Space 1</option><option value="2">Banner Space 2</option></select></div>
+    <div class="field"><label for="adPositionSelect">Position in that space</label><select id="adPositionSelect"><option value="1">Position 1 — Left</option><option value="2">Position 2 — Centre</option><option value="3">Position 3 — Right</option></select></div>
     <div class="field"><label for="adLink">Website link (optional)</label><input id="adLink" type="url" placeholder="https://client-website.com"></div>
     <div class="field"><label for="adImageFile">Banner image(s)</label><input id="adImageFile" type="file" accept="image/jpeg,image/png,image/webp" multiple><small>Select several pictures together, or tap Add More Pictures repeatedly to build one batch before saving.</small></div>
     <div class="field"><label for="adFit">Image fitting</label><select id="adFit"><option value="contain">Fit entire banner (no cropping)</option><option value="cover">Fill space (may crop edges)</option></select></div>
@@ -4861,7 +4861,7 @@ async function loadHomepageAds(){
         const img=document.createElement("img");img.src=ad.image_url;img.alt=ad.title||"Banner";row.appendChild(img);
         const info=document.createElement("div");info.className="ad-row-info";
         const title=document.createElement("strong");title.textContent=ad.title||"Untitled banner";info.appendChild(title);
-        const meta=document.createElement("div");meta.textContent=(Number(ad.active)?"Active":"Inactive")+" · "+(ad.fit_mode||"contain")+` · Position ${index+1}`;info.appendChild(meta);row.appendChild(info);
+        const meta=document.createElement("div");meta.textContent=(Number(ad.active)?"Active":"Inactive")+" · "+(ad.fit_mode||"contain")+` · Position ${index+1} of 3`;info.appendChild(meta);row.appendChild(info);
         const up=document.createElement("button");up.className="btn btn-dark";up.textContent="← Move left";up.disabled=index===0;up.onclick=()=>moveHomepageAd(ad.id,-1);row.appendChild(up);
         const down=document.createElement("button");down.className="btn btn-dark";down.textContent="Move right →";down.disabled=index===rows.length-1;down.onclick=()=>moveHomepageAd(ad.id,1);row.appendChild(down);
         const edit=document.createElement("button");edit.className="btn btn-dark";edit.textContent="Edit";edit.onclick=()=>editHomepageAd(ad.id);row.appendChild(edit);
@@ -4875,7 +4875,7 @@ async function loadHomepageAds(){
 function editHomepageAd(id){
   const ad=homepageAdsCache.find(x=>String(x.id)===String(id));if(!ad)return;
   clearAdEditor();document.getElementById("adEditId").value=ad.id;document.getElementById("adTitle").value=ad.title||"";
-  document.getElementById("adSpaceSelect").value=String(ad.space_id);document.getElementById("adLink").value=ad.target_url||"";
+  document.getElementById("adSpaceSelect").value=String(ad.space_id);document.getElementById("adPositionSelect").value=String(Math.max(1,Math.min(3,Number(ad.sort_order)||1)));document.getElementById("adLink").value=ad.target_url||"";
   document.getElementById("adFit").value=ad.fit_mode||"contain";document.getElementById("adImageFile").value="";
   const preview=document.getElementById("adImagePreview"),img=document.createElement("img");img.src=ad.image_url;img.alt=ad.title||"Banner preview";preview.replaceChildren(img);
   document.getElementById("adSplit").checked=false;showAdMessage("Editing existing banner. Select one or more replacement images only if you want to replace it.");
@@ -4883,11 +4883,11 @@ function editHomepageAd(id){
 async function uploadAdImage(file){
   const safeName=file.name.replace(/[^a-zA-Z0-9._-]/g,"_");
   const path=`ads/${currentUser.id}/${crypto.randomUUID()}-${safeName}`;
-  const uploadUrl="/api/storage/upload?bucket=covers&path="+encodeURIComponent(path);
+  const uploadUrl="/api/storage/upload?bucket=ads&path="+encodeURIComponent(path);
   const res=await fetch(uploadUrl,{method:"POST",credentials:"include",headers:{"Content-Type":file.type},body:file});
   const data=await res.json().catch(()=>({}));
   if(!res.ok)throw new Error(data.error||`Image upload failed (HTTP ${res.status})`);
-  return "/api/storage/public/covers/"+path.split("/").map(encodeURIComponent).join("/");
+  return "/api/storage/public/ads/"+path.split("/").map(encodeURIComponent).join("/");
 }
 async function saveAdRecord(payload){
   const res=await fetch("/api/admin/ads",{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
@@ -4910,6 +4910,7 @@ async function saveHomepageAd(){
   const editId=document.getElementById("adEditId").value;
   const title=document.getElementById("adTitle").value.trim();
   const space=Number(document.getElementById("adSpaceSelect").value);
+  const requestedPosition=Math.max(1,Math.min(3,Number(document.getElementById("adPositionSelect").value)||1));
   const link=document.getElementById("adLink").value.trim();
   const fit=document.getElementById("adFit").value;
   const split=document.getElementById("adSplit").checked;
@@ -4923,30 +4924,42 @@ async function saveHomepageAd(){
     if(editId){
       const existing=homepageAdsCache.find(x=>String(x.id)===String(editId));let imageUrl=existing?.image_url;
       if(files.length)imageUrl=await uploadAdImage(files[0]);
-      await saveAdRecord({id:editId,title,space_id:space,target_url:link,image_url:imageUrl,fit_mode:fit,sort_order:Number(existing?.sort_order)||Date.now()});
+      await placeAdAtPosition(editId,space,requestedPosition,{title,target_url:link,image_url:imageUrl,fit_mode:fit,active:Number(existing?.active??1)});
     }else{
+      const existingInSpace=homepageAdsCache.filter(a=>Number(a.space_id)===space);
+      const newBannerCount=files.length*(split?2:1);
+      if(existingInSpace.length+newBannerCount>3){throw new Error(`Banner Space ${space} can hold only 3 banners. This selection adds ${newBannerCount}; move or delete an existing banner first.`);}
       let batch=[];
       for(const file of files){
         const pieces=split?await makeAdHalves(file):[file];
         for(const piece of pieces)batch.push({file:piece,title:pieces.length>1?`${title} — ${piece.name.includes("half-1")?"Left":"Right"}`:(files.length>1?`${title} — ${file.name}`:title)});
       }
-      const base=Date.now();
+      const base=Date.now();const createdIds=[];
       for(let i=0;i<batch.length;i++){
         showAdMessage(`Uploading and saving banner ${i+1} of ${batch.length}…`);
         const imageUrl=await uploadAdImage(batch[i].file);
-        await saveAdRecord({title:batch[i].title,space_id:space,target_url:link,image_url:imageUrl,fit_mode:fit,sort_order:base+i*1000});
+        const saved=await saveAdRecord({title:batch[i].title,space_id:space,target_url:link,image_url:imageUrl,fit_mode:fit,sort_order:base+i});
+        if(saved?.id)createdIds.push(saved.id);
       }
+      await loadHomepageAds();
+      for(let i=0;i<createdIds.length;i++) await placeAdAtPosition(createdIds[i],space,requestedPosition+i);
     }
     clearAdEditor();await loadHomepageAds();showAdMessage(editId?"Banner updated successfully.":`${files.length} selected picture(s) saved successfully. You can move them left or right in the list.`,"success");
   }catch(e){showAdMessage(e.message||"Could not save banner.","error");}
   finally{const saveButton=document.querySelector('#adminAdsPanel button[onclick="saveHomepageAd()"]');if(saveButton){saveButton.disabled=false;saveButton.textContent="Save Banner(s) Together";}}
 }
+async function placeAdAtPosition(id,space,position,overrides={}){
+  const group=homepageAdsCache.filter(a=>Number(a.space_id)===Number(space)&&String(a.id)!==String(id)).sort((a,b)=>Number(a.sort_order)-Number(b.sort_order));
+  const current=homepageAdsCache.find(a=>String(a.id)===String(id));
+  const moving={...(current||{}),...overrides,id,space_id:Number(space)};
+  group.splice(Math.max(0,Math.min(group.length,position-1)),0,moving);
+  for(let i=0;i<group.length;i++) await saveAdRecord({...group[i],space_id:Number(space),sort_order:i+1});
+}
 async function moveHomepageAd(id,direction){
   const ad=homepageAdsCache.find(x=>String(x.id)===String(id));if(!ad)return;
   const group=homepageAdsCache.filter(x=>Number(x.space_id)===Number(ad.space_id)).sort((a,b)=>Number(a.sort_order)-Number(b.sort_order));
-  const index=group.findIndex(x=>String(x.id)===String(id)),other=group[index+direction];if(index<0||!other)return;
-  const aOrder=Number(ad.sort_order)||((index+1)*1000),bOrder=Number(other.sort_order)||((index+direction+1)*1000);
-  try{await saveAdRecord({...ad,sort_order:bOrder});await saveAdRecord({...other,sort_order:aOrder});await loadHomepageAds();showAdMessage("Banner order updated. The homepage will show the new left-to-right sequence.","success");}
+  const index=group.findIndex(x=>String(x.id)===String(id)),next=index+direction;if(index<0||next<0||next>=group.length)return;
+  try{const ordered=group.slice();[ordered[index],ordered[next]]=[ordered[next],ordered[index]];for(let i=0;i<ordered.length;i++)await saveAdRecord({...ordered[i],sort_order:i+1});await loadHomepageAds();showAdMessage("Banner moved to its new position.","success");}
   catch(e){showAdMessage(e.message||"Could not move banner.","error");}
 }
 async function toggleHomepageAd(ad){
@@ -4960,19 +4973,19 @@ async function deleteHomepageAd(id){
 }
 async function renderHomepageAds(){
   try{
-    const res=await fetch("/api/ads",{cache:"no-store"});const data=await res.json();const ads=Array.isArray(data.data)?data.data:[];
+    const res=await fetch("/api/ads?refresh="+Date.now(),{cache:"no-store"});if(!res.ok)throw new Error("Could not load ads");
+    const data=await res.json();const ads=Array.isArray(data.data)?data.data:[];
     for(const space of [1,2]){
       const root=document.querySelector(`[data-ad-space="${space}"]`);if(!root)continue;
-      const list=ads.filter(a=>Number(a.space_id)===space&&Number(a.active));root.replaceChildren();
+      const list=ads.filter(a=>Number(a.space_id)===space&&Number(a.active)).sort((a,b)=>Number(a.sort_order)-Number(b.sort_order)).slice(0,3);root.replaceChildren();
       if(!list.length){const fallback=document.createElement("div");fallback.innerHTML="<strong>ADVERTISEMENT</strong>Space reserved for ads";root.appendChild(fallback);continue;}
-      const rotator=document.createElement("div");rotator.className="ad-rotator";root.appendChild(rotator);
-      list.forEach((ad,index)=>{
-        const slide=document.createElement("div");slide.className="ad-slide"+(index===0?" active":"");
+      const grid=document.createElement("div");grid.className="ad-rotator";root.appendChild(grid);
+      list.forEach(ad=>{
+        const slide=document.createElement("div");slide.className="ad-slide";
         const img=document.createElement("img");img.src=ad.image_url;img.alt=ad.title||"Advertisement";img.style.objectFit=ad.fit_mode||"contain";
         if(ad.target_url){const a=document.createElement("a");a.href=ad.target_url;a.target="_blank";a.rel="noopener noreferrer";a.appendChild(img);slide.appendChild(a);}else slide.appendChild(img);
-        rotator.appendChild(slide);
+        grid.appendChild(slide);
       });
-      if(list.length>1){let current=0;setInterval(()=>{const slides=rotator.querySelectorAll(".ad-slide");if(!slides.length)return;slides[current].classList.remove("active");current=(current+1)%slides.length;slides[current].classList.add("active");},5000);}
     }
   }catch(e){console.warn("Homepage ads could not be loaded:",e);}
 }
