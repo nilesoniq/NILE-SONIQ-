@@ -1195,6 +1195,7 @@ async function dbRoute(request, env, path) {
           }
 
           const allowed = new Set([
+            "id",
             "title",
             "artist",
             "artist_id",
@@ -1229,10 +1230,30 @@ async function dbRoute(request, env, path) {
               row.terms_accepted.toLowerCase() === "true"
             );
 
+          // A stable client-generated UUID makes a retried song submission
+          // idempotent: if the first request reached D1 but its response was lost,
+          // the retry returns the same song instead of creating a duplicate.
+          const requestedSongId = String(row.id || "").trim();
+          if (requestedSongId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestedSongId)) {
+            return error("Invalid song upload reference.", 422);
+          }
+          if (requestedSongId) {
+            const existingSong = await env.DB.prepare(
+              "SELECT * FROM songs WHERE id = ? LIMIT 1"
+            ).bind(requestedSongId).first();
+            if (existingSong) {
+              if (String(existingSong.artist_id) !== String(user.id)) {
+                return error("This song upload reference is already in use.", 409);
+              }
+              output.push(existingSong);
+              continue;
+            }
+          }
+
           // Ignore client-supplied approval, play and like counts.
           const safeRow = {
             ...row,
-            id: crypto.randomUUID(),
+            id: requestedSongId || crypto.randomUUID(),
             artist_id: user.id,
             terms_accepted: accepted ? 1 : 0,
             terms_accepted_at: accepted
@@ -1262,13 +1283,12 @@ async function dbRoute(request, env, path) {
           const packageCode = String(entitlement?.packageCode || 'free').toLowerCase();
           const uploadLimit = ARTIST_PACKAGE_UPLOAD_LIMITS[packageCode] ?? ARTIST_PACKAGE_UPLOAD_LIMITS.free;
 
-          // Only approved songs count toward the monthly package limit.
+          // Only admin-approved songs count toward the monthly package limit.
           // Pending and rejected submissions do not consume an allowance.
-          // The insert and count remain one SQL statement to handle simultaneous
-          // uploads safely. In the rollout month, pre-cutoff songs are
-          // grandfathered; later months count from the calendar-month start.
+          // Keep the count and insert in one SQL statement to handle simultaneous
+          // uploads safely. Preserve the existing rollout cutoff behavior.
           const insertResult = await env.DB.prepare(`
-            INSERT INTO songs (${insertKeys.join(",")})
+            INSERT OR IGNORE INTO songs (${insertKeys.join(",")})
             SELECT ${insertKeys.map(() => "?").join(",")}
             WHERE (
               SELECT COUNT(*) FROM songs
@@ -1290,6 +1310,15 @@ async function dbRoute(request, env, path) {
           ).run();
 
           if (Number(insertResult?.meta?.changes || 0) === 0) {
+            // A simultaneous retry with the same stable ID may have inserted
+            // the row first. Return that row instead of treating it as a limit.
+            const retrySong = await env.DB.prepare(
+              "SELECT * FROM songs WHERE id = ? LIMIT 1"
+            ).bind(safeRow.id).first();
+            if (retrySong && String(retrySong.artist_id) === String(user.id)) {
+              output.push(retrySong);
+              continue;
+            }
             const limitLabel = uploadLimit >= Number.MAX_SAFE_INTEGER ? 'unlimited' : String(uploadLimit);
             return error(
               `Monthly song upload limit reached for your ${packageCode} package (${limitLabel} songs per month). Upgrade or try again next month.`,
