@@ -4111,10 +4111,22 @@ async function songSharePreview(request, env, url) {
   const assetResponse = await env.ASSETS.fetch(new Request(new URL("/", url.origin), { method: "GET", headers: request.headers }));
   const html = await assetResponse.text();
   const title = song ? `${song.title || "Song"} — ${song.artist || "NileSoniq"}` : "NileSoniq — Ugandan Music Platform";
-  const description = song ? (song.description || `Listen to ${song.title || "this song"} by ${song.artist || "an artist"} on NileSoniq.`) : "Discover and stream music from Ugandan artists on NileSoniq.";
-  const image = song && song.cover_url && /^https:\/\//i.test(song.cover_url)
-    ? song.cover_url
-    : "https://nilesoniq.com/favicon.png";
+  const description = song
+    ? `Listen to ${song.title || "this song"} by ${song.artist || "this artist"} on NileSoniq.`
+    : "Discover and stream music from Ugandan artists on NileSoniq.";
+  // Artwork URLs may be stored as absolute URLs or site-relative R2/API paths.
+  // Resolve relative paths to absolute HTTPS URLs so WhatsApp can fetch them.
+  let image = "https://nilesoniq.com/favicon.png";
+  if (song && song.cover_url) {
+    try {
+      const candidate = new URL(String(song.cover_url).trim(), "https://nilesoniq.com");
+      if (candidate.protocol === "https:") {
+        image = candidate.href;
+      }
+    } catch (e) {
+      console.warn("Song artwork URL could not be resolved for share preview:", e.message);
+    }
+  }
   const canonical = `https://nilesoniq.com${url.pathname}`;
   const tags = [
     `<title>${htmlEscape(title)}</title>`,
@@ -4126,6 +4138,10 @@ async function songSharePreview(request, env, url) {
     `<meta property="og:description" content="${htmlEscape(description)}">`,
     `<meta property="og:url" content="${htmlEscape(canonical)}">`,
     `<meta property="og:image" content="${htmlEscape(image)}">`,
+    `<meta property="og:image:secure_url" content="${htmlEscape(image)}">`,
+    `<meta property="og:image:width" content="500">`,
+    `<meta property="og:image:height" content="500">`,
+    `<meta property="og:image:alt" content="${htmlEscape(title)} artwork">`,
     `<meta name="twitter:card" content="summary_large_image">`,
     `<meta name="twitter:title" content="${htmlEscape(title)}">`,
     `<meta name="twitter:description" content="${htmlEscape(description)}">`,
