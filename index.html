@@ -2341,7 +2341,7 @@ class="song-grid">
 </section>
 
 <section id="homeFeaturedSongsSection" class="songs-feature-section" aria-label="Featured songs">
-  <div class="songs-feature-heading"><div><h2>⭐ Featured Songs</h2><p>Discover music from artists with an active paid package or an active Song Boost.</p></div></div>
+  <div class="songs-feature-heading"><div><h2>⭐ Featured Songs</h2><p>Discover music from artists with an active paid package.</p></div></div>
   <div class="featured-songs-window"><div id="homeFeaturedSongsTrack" class="featured-songs-track"><div class="songs-feature-empty" style="grid-column:1/-1">Loading featured songs…</div></div></div>
   <div id="homeFeaturedSongsControls" class="featured-songs-controls" aria-label="Homepage featured songs controls">
     <button type="button" onclick="changeFeaturedSongs(-1)" aria-label="Previous featured songs">‹ Previous</button>
@@ -2592,6 +2592,19 @@ Save Profile
 <div class="stat-card"><span>Your Songs</span><strong id="totalSongs">0</strong></div>
 </div>
 
+<div class="dashboard-card" id="artistBoostCard" style="margin:18px 0;border:1px solid rgba(255,165,0,.35);">
+<h2>🚀 Song Boost</h2>
+<p>Choose your approved songs and a Boost package. Your songs will be sent for Boost only after payment is confirmed.</p>
+<div id="boostSongChoices" style="margin:14px 0;display:grid;gap:8px;"><p style="color:#999;">Loading your approved songs…</p></div>
+<div class="form-grid">
+<div class="field"><label for="boostPackage">Boost package</label><select id="boostPackage"><option value="starter">Starter — UGX 5,000 · 1,000 plays + 1,000 downloads · 30 days</option><option value="growth">Growth — UGX 10,000 · 3,000 plays + 2,000 downloads · 60 days</option><option value="premium">Premium — UGX 15,000 · 5,000 plays + 3,000 downloads · 120 days</option></select></div>
+<div class="field"><label for="boostPhone">MTN / Airtel number</label><input id="boostPhone" type="tel" placeholder="07XXXXXXXX or +2567XXXXXXXX"></div>
+<div class="field"><label for="boostNetwork">Mobile Money network</label><select id="boostNetwork"><option value="mtn">MTN Mobile Money</option><option value="airtel">Airtel Money</option></select></div>
+</div>
+<div id="boostPaymentMessage" role="status" style="margin:10px 0;color:#bbb;"></div>
+<button class="btn btn-orange" type="button" onclick="submitArtistBoost()">Continue to Boost Payment</button>
+</div>
+
 <div class="dashboard-card" id="premiumSubscriptionCard" style="display:none;margin:18px 0;border:1px solid rgba(255,165,0,.45);" hidden>
 <h2>🌟 Artist Packages</h2>
 <p>Select the package you want. Paid packages last 30 days and activate only after the payment provider confirms the exact payment.</p>
@@ -2614,15 +2627,6 @@ Save Profile
 <button class="btn btn-orange" type="button" id="premiumSubscribeButton" onclick="startPremiumSubscription()">Pay UGX 5,000 with MoMo</button>
 <p style="font-size:12px;color:#888;margin-top:10px;">This starts a one-time 30-day payment request. Automatic monthly recurring collection is not enabled by this button.</p>
 </div>
-
-<div class="dashboard-card" id="artistGrowthFeatures" style="margin:18px 0;border:1px solid rgba(255,165,0,.35);">
-<h2>Artist Growth</h2><div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0"><button class="btn btn-orange" type="button" onclick="showGrowthTab('boost')">Song Boost</button><button class="btn btn-dark" type="button" onclick="showGrowthTab('listener')">Listener Subscriptions</button></div>
-<section id="growthBoostPanel"><h3>Boost your songs</h3><p>Guaranteed plays and downloads are shared across the songs you select.</p>
-<div class="field"><label for="boostPackage">Boost package</label><select id="boostPackage"><option value="starter">Starter Boost — UGX 5,000 · 1,000 plays · 1,000 downloads · 1 month</option><option value="growth">Growth Boost — UGX 10,000 · 3,000 plays · 2,000 downloads · 2 months</option><option value="premium">Premium Boost — UGX 15,000 · 5,000 plays · 3,000 downloads · 4 months</option></select></div>
-<div class="field" style="margin-top:12px"><label for="boostSongs">Choose approved songs (select multiple)</label><select id="boostSongs" multiple size="5" style="min-height:120px"></select><small style="color:#999">The package guarantee is shared across your selection.</small></div>
-<div class="form-grid" style="margin-top:12px"><div class="field"><label for="boostPhone">Mobile Money number</label><input id="boostPhone" type="tel" placeholder="07XXXXXXXX or +2567XXXXXXXX"></div><div class="field"><label for="boostNetwork">Network</label><select id="boostNetwork"><option value="mtn">MTN</option><option value="airtel">Airtel</option></select></div></div>
-<button class="btn btn-orange" type="button" onclick="startNileSoniQFeaturePayment('boost')">Pay for Boost</button><div id="boostPaymentMessage" class="message" role="status"></div></section>
-<section id="growthListenerPanel" class="hidden"><h3>Listener subscriptions</h3><p>Fans can subscribe to an artist for UGX 5,000 per 30 days. Verified subscribers' authenticated plays earn the artist 2× their normal package rate. Subscription fees are retained by NileSoniQ.</p><h4>Recent feature payments</h4><div id="featurePaymentHistory">Payment history will appear here.</div></section></div>
 
 <div class="dashboard-card" id="withdrawalCard" style="background:transparent;border:0;padding:0;margin:0;box-shadow:none;">
 <div id="withdrawalFormPanel" class="hidden" style="margin-top:18px;">
@@ -4192,6 +4196,7 @@ const authApi = {
         currentUser = data.user;
         currentAdmin = data.admin || null;
         currentArtist = data.artist || null;
+        if(currentArtist) setTimeout(loadArtistBoostSongs,0);
         return {data:{session:{user:currentUser}}};
       }
       currentUser = null;
@@ -5234,7 +5239,7 @@ async function loadArtistProfile(){
 
 
     currentArtist = data;
-
+    if(currentArtist) setTimeout(loadArtistBoostSongs,0);
 
         updateArtistWithdrawalMinimumDisplay();
 
@@ -5885,6 +5890,40 @@ const publicTableCache = new Map();
 const publicTableRequests = new Map();
 const PUBLIC_TABLE_CACHE_MS = 15000;
 
+async function loadArtistBoostSongs(){
+  const box=document.getElementById("boostSongChoices"); if(!box||!currentArtist)return;
+  box.innerHTML='<p style="color:#999;">Loading approved songs…</p>';
+  try{
+    const all=await loadPublicTable("songs",{limit:500});
+    const ids=new Set([String(currentArtist.id),String(currentArtist.user_id||"")]);
+    const songs=(all||[]).filter(song=>isSongApproved(song)&&ids.has(String(song.artist_id)));
+    if(!songs.length){box.innerHTML='<p style="color:#999;">No approved songs are available to Boost yet.</p>';return;}
+    box.innerHTML=songs.map(song=>`<label style="display:flex;align-items:center;gap:10px;padding:10px;border:1px solid #333;border-radius:10px;"><input type="checkbox" class="boost-song-choice" value="${escapeAttribute(song.id)}" style="width:18px;height:18px;"><span><strong>${escapeHtml(song.title||"Untitled")}</strong><small style="display:block;color:#888;">${formatNumber(song.plays||0)} plays · ${formatNumber(song.downloads||0)} downloads</small></span></label>`).join("");
+  }catch(e){console.error("Boost song list failed",e);box.innerHTML='<p style="color:#f88;">Could not load songs. Refresh the dashboard and try again.</p>';}
+}
+async function submitArtistBoost(){
+  const message=document.getElementById("boostPaymentMessage");
+  if(!currentUser||!currentArtist){message.textContent="Please sign in to your artist account.";return;}
+  const song_ids=[...document.querySelectorAll(".boost-song-choice:checked")].map(x=>x.value);
+  if(!song_ids.length){message.textContent="Select at least one approved song first.";return;}
+  const phone_number=document.getElementById("boostPhone")?.value||"";
+  const provider=document.getElementById("boostNetwork")?.value||"mtn";
+  const package_code=document.getElementById("boostPackage")?.value||"starter";
+  message.textContent="Sending secure payment request…";
+  try{const r=await fetch("/api/payments/feature-payment",{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({payment_type:"boost",artist_id:currentArtist.id,song_ids,package_code,phone_number,provider})});const data=await r.json().catch(()=>({}));if(!r.ok)throw new Error(data.error||data.message||"Could not start payment");message.textContent=data.message||"Approve the mobile-money prompt to activate your Boost.";}catch(e){message.textContent=e.message||"Payment request failed.";}
+}
+async function subscribeToPublicArtist(artistId){
+  const message=document.getElementById("publicSubscribeMessage");
+  if(!currentUser){message.textContent="Please log in as a listener before subscribing.";return;}
+  const phone_number=document.getElementById("publicSubscribePhone")?.value||"";
+  const provider=document.getElementById("publicSubscribeNetwork")?.value||"mtn";
+  message.textContent="Sending secure payment request…";
+  try{const r=await fetch("/api/payments/feature-payment",{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({payment_type:"listener_subscription",artist_id:artistId,phone_number,provider})});const data=await r.json().catch(()=>({}));if(!r.ok)throw new Error(data.error||data.message||"Could not start subscription");message.textContent=data.message||"Approve the mobile-money prompt to activate your subscription.";}catch(e){message.textContent=e.message||"Subscription request failed.";}
+}
+async function loadPublicArtistStats(artistId){
+  try{await fetch(`/api/artist/public-stats?artist_id=${encodeURIComponent(artistId)}`,{method:"POST",credentials:"include",cache:"no-store"});const r=await fetch(`/api/artist/public-stats?artist_id=${encodeURIComponent(artistId)}`,{credentials:"include",cache:"no-store"});const d=await r.json();const v=document.getElementById("publicArtistViews"),s=document.getElementById("publicArtistSubscribers");if(v)v.textContent=formatNumber(d.views||0);if(s)s.textContent=formatNumber(d.monthly_subscribers||0);}catch(e){console.warn("Public artist stats unavailable",e);}
+}
+
 async function loadPublicTable(table, params = {}) {
   const query = new URLSearchParams({
     select: params.select || "*",
@@ -6034,12 +6073,10 @@ async function loadSongsTabFeatures(){
     const activePaidArtists=artists.filter(artist=>isArtistPremiumActive(artist));
     const artistIds=new Set(activePaidArtists.flatMap(artist=>[artist.id,artist.user_id].filter(Boolean).map(String)));
     const artistNames=new Set(activePaidArtists.map(artist=>normalizeSearchText(artist.name||'')).filter(Boolean));
-    let boostedSongIds=new Set();
-    try{const boostResponse=await fetch('/api/payments/feature-payment?public=boosted');const boostData=await boostResponse.json();boostedSongIds=new Set((boostData.data||[]).map(String));}catch(e){console.warn('Could not load active boosted songs',e);}
     featuredSongsList=(Array.isArray(currentSongs)?currentSongs:[]).filter(song=>{
       const id=String(song.artist_id||'');
       const name=normalizeSearchText(song.artist||'');
-      return boostedSongIds.has(String(song.id))||(id&&artistIds.has(id))||(!id&&name&&artistNames.has(name))||(id&&artistNames.has(name));
+      return (id&&artistIds.has(id))||(!id&&name&&artistNames.has(name))||(id&&artistNames.has(name));
     }).sort((a,b)=>Number(b.plays||0)-Number(a.plays||0)||new Date(b.created_at||0)-new Date(a.created_at||0));
     featuredSongsPageIndex=0;renderFeaturedSongs();restartFeaturedSongsRotation();
   }catch(error){
@@ -7482,12 +7519,6 @@ function openSongLink(song){
    PUBLIC ARTIST PROFILE
 ========================================================= */
 
-function showGrowthTab(tab){document.getElementById('growthBoostPanel')?.classList.toggle('hidden',tab!=='boost');document.getElementById('growthListenerPanel')?.classList.toggle('hidden',tab!=='listener');if(tab==='boost')loadBoostSongChoices();if(tab==='listener')loadFeaturePaymentHistory();}
-async function loadBoostSongChoices(){const el=document.getElementById('boostSongs');if(!el||!currentArtist)return;el.innerHTML='<option disabled>Loading approved songs…</option>';try{let rows=[];let r=await sb.from('songs').select('id,title,song_title,artist').eq('artist_id',currentArtist.id).eq('approved',true).order('created_at',{ascending:false});if(!r.error&&r.data)rows=r.data;if(!rows.length&&currentArtist.user_id){r=await sb.from('songs').select('id,title,song_title,artist').eq('artist_id',currentArtist.user_id).eq('approved',true).order('created_at',{ascending:false});if(!r.error&&r.data)rows=r.data;}el.innerHTML=rows.length?rows.map(x=>`<option value="${escapeAttribute(x.id)}">${escapeHtml(x.title||x.song_title||x.artist||'Untitled song')}</option>`).join(''):'<option disabled>No approved songs available</option>';}catch(e){el.innerHTML='<option disabled>Could not load songs</option>';}}
-async function startNileSoniQFeaturePayment(type,artistId){const boost=type==='boost',phone=document.getElementById(boost?'boostPhone':'publicSubscribePhone'),network=document.getElementById(boost?'boostNetwork':'publicSubscribeNetwork'),message=document.getElementById(boost?'boostPaymentMessage':'publicArtistSubscribeMessage'),target=artistId||currentArtist?.id;if(!target){if(message)message.textContent='Artist details are unavailable.';return;}const body={payment_type:type,artist_id:target,phone_number:phone?.value||'',provider:network?.value||'mtn'};if(boost){body.package_code=document.getElementById('boostPackage')?.value;body.song_ids=Array.from(document.getElementById('boostSongs')?.selectedOptions||[]).map(x=>x.value);}if(message)message.textContent='Sending secure payment request…';try{const r=await fetch('/api/payments/feature-payment',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(body)});const j=await r.json().catch(()=>({}));if(!r.ok||!j.success)throw new Error(j.message||j.error||'Could not start payment');if(message)message.textContent=j.message||'Approve the mobile-money prompt on your phone.';loadFeaturePaymentHistory();}catch(e){if(message)message.textContent=e.message||'Payment request failed';}}
-async function subscribeToArtist(id){const message=document.getElementById('publicArtistSubscribeMessage');if(!currentUser){if(message)message.textContent='Please sign in before subscribing.';return;}if(!document.getElementById('publicSubscribeFields')){message?.insertAdjacentHTML('afterend',`<div id="publicSubscribeFields" class="form-grid" style="margin-top:12px"><div class="field"><label>Mobile Money number</label><input id="publicSubscribePhone" type="tel" placeholder="07XXXXXXXX or +2567XXXXXXXX"></div><div class="field"><label>Network</label><select id="publicSubscribeNetwork"><option value="mtn">MTN</option><option value="airtel">Airtel</option></select></div><button class="btn btn-orange" type="button" onclick="startNileSoniQFeaturePayment('listener_subscription','${String(id).replace(/[^a-zA-Z0-9_-]/g,'')}')">Continue to payment</button></div>`);if(message)message.textContent='Enter your number and choose your network.';return;}await startNileSoniQFeaturePayment('listener_subscription',id);}
-async function loadFeaturePaymentHistory(){const el=document.getElementById('featurePaymentHistory');if(!el)return;try{const r=await fetch('/api/payments/feature-payment',{credentials:'include'}),j=await r.json();if(!r.ok)throw new Error(j.message||'Could not load history');el.innerHTML=(j.data||[]).length?j.data.map(x=>`<div style="padding:8px 0;border-bottom:1px solid #333"><strong>${escapeHtml(x.payment_type==='boost'?'Song Boost':'Listener subscription')}</strong> · UGX ${Number(x.amount||0).toLocaleString()}<br><small>${escapeHtml(x.status)}${x.expires_at?' · Expires '+escapeHtml(x.expires_at):''}</small></div>`).join(''):'No feature payments yet.';}catch(e){el.textContent=e.message||'Could not load payment history';}}
-
 async function openArtistProfile(artistId, fromPublicRoute=false){
 
   let modal =
@@ -7637,7 +7668,20 @@ async function openArtistProfile(artistId, fromPublicRoute=false){
 
       </div>
 
-      <div style="margin:14px 0;"><button class="btn btn-orange" type="button" onclick="subscribeToArtist('${escapeAttribute(artist.id)}')">Subscribe to Artist — UGX 5,000 / 30 days</button><div id="publicArtistSubscribeMessage" class="message" role="status" aria-live="polite"></div></div>
+      <div class="artist-profile-section" id="artistPublicStats" style="display:flex;gap:12px;flex-wrap:wrap;">
+        <div class="stat-card"><span>Profile Views</span><strong id="publicArtistViews">…</strong></div>
+        <div class="stat-card"><span>Monthly Subscribers</span><strong id="publicArtistSubscribers">…</strong></div>
+      </div>
+      <div class="artist-profile-section" id="artistPublicSubscribeBox">
+        <h3>Support this Artist</h3>
+        <p style="color:#aaa;margin-bottom:12px;">Subscribe for UGX 5,000 for 30 days. While your subscription is active, your qualified plays support this artist at double the normal artist play rate.</p>
+        <div class="form-grid">
+          <div class="field"><label for="publicSubscribePhone">MTN / Airtel number</label><input id="publicSubscribePhone" type="tel" placeholder="07XXXXXXXX or +2567XXXXXXXX"></div>
+          <div class="field"><label for="publicSubscribeNetwork">Mobile Money network</label><select id="publicSubscribeNetwork"><option value="mtn">MTN Mobile Money</option><option value="airtel">Airtel Money</option></select></div>
+        </div>
+        <div id="publicSubscribeMessage" role="status" style="margin:10px 0;color:#bbb;"></div>
+        <button class="btn btn-orange" type="button" onclick="subscribeToPublicArtist('${escapeAttribute(artist.id)}')">Subscribe — UGX 5,000 / 30 days</button>
+      </div>
 
       <div class="artist-profile-section">
 
@@ -7762,6 +7806,7 @@ async function openArtistProfile(artistId, fromPublicRoute=false){
 
     window.artistProfileSongs =
       artistSongs;
+    loadPublicArtistStats(artist.id);
 
   }catch(error){
 
