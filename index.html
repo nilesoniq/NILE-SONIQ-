@@ -7123,22 +7123,41 @@ async function openArtistBySlug(slug){
 }
 
 async function openSongBySlug(slug){
-  const wanted = cleanSlug(decodeURIComponent(slug || ""));
+  let wanted = "";
   try{
-    const {data,error} = await sb
-      .from("songs")
-      .select("*")
-      .eq("approved",true)
-      .order("created_at",{ascending:false});
-    if(error) throw error;
+    wanted = cleanSlug(decodeURIComponent(String(slug || "")));
+  }catch(_){
+    wanted = cleanSlug(String(slug || ""));
+  }
 
-    // Accept both the current title-artist URL and older title-only links.
-    const song = (data || []).find(item =>
-      songPublicSlug(item) === wanted || cleanSlug(item?.title || "song") === wanted
+  try{
+    // NileSoniQ public song pages now use Cloudflare/D1 through the Worker.
+    // Do not query the retired Supabase project here: shared links must work
+    // even when a visitor opens them directly in a new browser session.
+    const songs = await loadPublicTable("songs", {
+      limit: 1000,
+      order: "created_at.desc"
+    });
+
+    const isApprovedPublicSong = item => item && (
+      item.approved === true || item.approved === 1 ||
+      String(item.approved || "").toLowerCase() === "true" ||
+      String(item.approved || "").toLowerCase() === "1" ||
+      String(item.approved || "").toLowerCase() === "approved"
     );
+
+    // Accept the current title-artist URL and older title-only links.
+    const song = (songs || []).find(item => {
+      if(!isApprovedPublicSong(item)) return false;
+      const currentSlug = songPublicSlug(item);
+      const titleOnlySlug = cleanSlug(item?.title || "song");
+      return currentSlug === wanted || titleOnlySlug === wanted;
+    });
+
     if(!song){
+      console.warn("Public song slug was not found in the Cloudflare song list:", wanted);
       await showPage("home");
-      alert("Song not found.");
+      alert("Song not found. Please check that the song is approved and its link is correct.");
       return;
     }
 
@@ -7146,7 +7165,7 @@ async function openSongBySlug(slug){
   }catch(error){
     console.error("Public song route error:",error);
     await showPage("home");
-    alert("Could not load song.");
+    alert("Could not load this song right now. Please try again.");
   }
 }
 
