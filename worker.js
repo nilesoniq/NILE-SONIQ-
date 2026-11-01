@@ -3624,6 +3624,24 @@ async function paymentWebhookRoute(request, env) {
   }
 }
 
+async function publicArtistStatsRoute(request, env) {
+  const url=new URL(request.url);
+  const artistId=String(url.searchParams.get("artist_id")||"").trim();
+  if(!artistId) return error("Artist ID is required",422);
+  const artist=await env.DB.prepare("SELECT id FROM artists WHERE id=? LIMIT 1").bind(artistId).first();
+  if(!artist) return error("Artist not found",404);
+  if(request.method==="POST"){
+    const ip=request.headers.get("CF-Connecting-IP")||"unknown";
+    const bytes=new TextEncoder().encode(`${artistId}:${ip}`);
+    const digest=await crypto.subtle.digest("SHA-256",bytes);
+    const visitorKey=[...new Uint8Array(digest)].map(x=>x.toString(16).padStart(2,"0")).join("");
+    await env.DB.prepare("INSERT OR IGNORE INTO artist_profile_view_log (artist_id,visitor_key,viewed_on) VALUES (?,?,date('now'))").bind(artistId,visitorKey).run();
+  } else if(request.method!=="GET") return error("Method not allowed",405);
+  const views=await env.DB.prepare("SELECT COUNT(*) AS total FROM artist_profile_view_log WHERE artist_id=?").bind(artistId).first();
+  const subs=await env.DB.prepare("SELECT COUNT(DISTINCT listener_user_id) AS total FROM listener_artist_subscriptions WHERE artist_id=? AND lower(status)='active' AND datetime(expires_at)>datetime('now')").bind(artistId).first();
+  return json({views:Number(views?.total||0),monthly_subscribers:Number(subs?.total||0)});
+}
+
 async function settleExpiredBoostCampaigns(env) {
   const campaigns=await env.DB.prepare(`SELECT * FROM nilesoniq_feature_payments WHERE payment_type='boost' AND lower(status)='active' AND expires_at IS NOT NULL AND datetime(expires_at)<=datetime('now')`).all();
   for(const campaign of campaigns.results||[]) {
@@ -4352,6 +4370,8 @@ export default {
         response = await artistNotificationsRoute(request, env);
       } else if (path === "/api/artist/dashboard") {
         response = await artistDashboardRoute(request, env);
+      } else if (path === "/api/artist/public-stats") {
+        response = await publicArtistStatsRoute(request, env);
       } else if (path === "/api/auth/register-paid") {
         // Paid artist signup must use the dedicated pending-payment flow.
         // The account and verification email are created only after a verified
