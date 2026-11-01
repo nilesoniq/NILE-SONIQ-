@@ -4074,6 +4074,12 @@ function slugForShare(value) {
     .replace(/^-+|-+$/g, "").substring(0, 70) || "song";
 }
 
+function songSlugForShare(song) {
+  const title = slugForShare(song?.title || "song").substring(0, 44).replace(/-+$/g, "");
+  const artist = slugForShare(song?.artist || "artist").substring(0, 25).replace(/-+$/g, "");
+  return `${title}-${artist}`.replace(/-+$/g, "");
+}
+
 function htmlEscape(value) {
   return String(value || "").replace(/[&<>\"']/g, ch => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;"
@@ -4082,14 +4088,23 @@ function htmlEscape(value) {
 
 async function songSharePreview(request, env, url) {
   if (request.method !== "GET" || !env.ASSETS || !/^\/song\/[^/]+\/?$/i.test(url.pathname)) return null;
-  const slug = decodeURIComponent(url.pathname.split("/")[2] || "");
+  let slug = "";
+  try {
+    slug = decodeURIComponent(url.pathname.split("/")[2] || "");
+  } catch {
+    return null;
+  }
   let song = null;
   try {
     const result = await env.DB.prepare(`
       SELECT id, title, artist, description, cover_url
       FROM songs WHERE approved = 1 ORDER BY rowid DESC LIMIT 1000
     `).all();
-    song = (result.results || []).find(item => slugForShare(item.title) === slugForShare(slug)) || null;
+    const requestedSlug = slugForShare(slug);
+    song = (result.results || []).find(item =>
+      songSlugForShare(item) === requestedSlug ||
+      slugForShare(item.title) === requestedSlug
+    ) || null;
   } catch (e) {
     console.error("Song share preview lookup failed:", e.message);
   }
