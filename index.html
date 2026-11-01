@@ -3633,17 +3633,29 @@ function cfQuery(table, initial={}){
     if(state.upsert) state.params.set("upsert","true");
     const url=`/api/db/${encodeURIComponent(table)}?${state.params.toString()}`;
     let res;
-    try{
-      res=await fetch(url,{method:state.method,credentials:"include",headers:{"Content-Type":"application/json","Accept":"application/json"},body:state.method==="GET"||state.method==="DELETE"?undefined:JSON.stringify(state.body)});
-    }catch(fetchError){
-      return {data:null,error:new Error(fetchError?.message || "Could not reach the NileSoniq server.")};
-    }
-    const responseText=await res.text();
-    let json;
-    try{
-      json=responseText ? JSON.parse(responseText) : null;
-    }catch(parseError){
-      json=null;
+    let json=null;
+    let responseText="";
+    const retryableSongWrite=table==="songs" && state.method==="POST" && !!state.body?.id;
+    let attempt=0;
+    while(true){
+      try{
+        res=await fetch(url,{method:state.method,credentials:"include",headers:{"Content-Type":"application/json","Accept":"application/json"},body:state.method==="GET"||state.method==="DELETE"?undefined:JSON.stringify(state.body)});
+        responseText=await res.text();
+        try{json=responseText ? JSON.parse(responseText) : null;}catch(parseError){json=null;}
+      }catch(fetchError){
+        if(!retryableSongWrite){
+          return {data:null,error:new Error(fetchError?.message || "Could not reach the NileSoniq server.")};
+        }
+        attempt++;
+        await new Promise(resolve=>setTimeout(resolve,Math.min(15000,1000*Math.pow(2,Math.min(attempt-1,4)))));
+        continue;
+      }
+      if(retryableSongWrite && (res.status===408 || res.status===425 || res.status===429 || res.status>=500 || (res.ok && (!json || typeof json!=="object")))){
+        attempt++;
+        await new Promise(resolve=>setTimeout(resolve,Math.min(15000,1000*Math.pow(2,Math.min(attempt-1,4)))));
+        continue;
+      }
+      break;
     }
     if(!res.ok){
       return {data:null,error:new Error(json?.error || json?.message || `Request failed (${res.status})`)};
@@ -3665,38 +3677,41 @@ function cfQuery(table, initial={}){
 }
 
 const storageAdapter={from(bucket){return {
-  async upload(path,file){
-    let res;
+  async upload(path,file,options={}){
     const uploadUrl=`/api/storage/upload?bucket=${encodeURIComponent(bucket)}&path=${encodeURIComponent(path)}`;
-    const uploadOptions={method:"POST",credentials:"include",headers:{"Content-Type":file.type||"application/octet-stream"},body:file};
-    try{
-      res=await fetch(uploadUrl,uploadOptions);
-    }catch(fetchError){
-      // Only retry cover images after a network-level failure. Do not retry audio:
-      // repeating an audio upload can create another large orphan object.
-      if(bucket!=="covers"){
-        return {data:null,error:new Error(fetchError?.message || "Could not reach the NileSoniq storage server.")};
-      }
+    const headers={"Content-Type":options.contentType||file.type||"application/octet-stream"};
+    let attempt=0;
+    while(true){
+      let res=null;
+      let responseText="";
+      let j=null;
+      const controller=new AbortController();
+      const timeout=setTimeout(()=>controller.abort(),60000);
       try{
-        // Reuse the exact same path so the retry cannot create a second named cover.
-        res=await fetch(uploadUrl,uploadOptions);
-      }catch(retryError){
-        return {data:null,error:new Error("Could not upload the cover image after one retry. Your audio may already be stored; please do not submit again until this is resolved.")};
+        res=await fetch(uploadUrl,{method:"POST",credentials:"include",headers,body:file,signal:controller.signal});
+        responseText=await res.text();
+        try{j=responseText ? JSON.parse(responseText) : null;}catch(parseError){j=null;}
+      }catch(fetchError){
+        clearTimeout(timeout);
+        attempt++;
+        if(typeof options.onRetry==="function") options.onRetry(attempt,fetchError);
+        await new Promise(resolve=>setTimeout(resolve,Math.min(15000,1000*Math.pow(2,Math.min(attempt-1,4)))));
+        continue;
       }
+      clearTimeout(timeout);
+      // Retry temporary network/gateway responses forever using the exact same
+      // object path. R2 overwrites that key, so a lost response cannot create
+      // duplicate audio or cover objects.
+      if(res.status===408 || res.status===425 || res.status===429 || res.status>=500 || (res.ok && (!j || typeof j!=="object" || !j.data || !j.data.path))){
+        attempt++;
+        if(typeof options.onRetry==="function") options.onRetry(attempt,new Error(`Temporary storage response (${res.status})`));
+        await new Promise(resolve=>setTimeout(resolve,Math.min(15000,1000*Math.pow(2,Math.min(attempt-1,4)))));
+        continue;
+      }
+      if(!res.ok) return {data:null,error:new Error(j?.error || j?.message || `Storage upload failed (${res.status})`)};
+      if(j.error) return {data:null,error:new Error(j.error)};
+      return {data:j.data,error:null};
     }
-    let responseText="";
-    let j=null;
-    try{
-      responseText=await res.text();
-      j=responseText ? JSON.parse(responseText) : null;
-    }catch(readError){
-      return {data:null,error:new Error("The storage server returned an unreadable response. Please try a smaller image or try again.")};
-    }
-    if(!res.ok) return {data:null,error:new Error(j?.error || j?.message || `Storage upload failed (${res.status})`)};
-    if(!j || typeof j!=="object" || j.error || !j.data || !j.data.path){
-      return {data:null,error:new Error(j?.error || "The server did not confirm that the file was stored.")};
-    }
-    return {data:j.data,error:null};
   },
   getPublicUrl(path){return {data:{publicUrl:`/api/storage/public/${encodeURIComponent(bucket)}/${path.split('/').map(encodeURIComponent).join('/')}`}}}
 };}};
@@ -5610,7 +5625,12 @@ async function uploadSong(){
           cacheControl:"3600",
           upsert:false,
           contentType:
-            audioFile.type || undefined
+            audioFile.type || undefined,
+          onRetry:(attempt)=>{
+            uploadButton.textContent="Retrying audio upload...";
+            const message=document.getElementById("uploadMessage");
+            if(message) message.textContent=`Your connection is weak. Retrying the audio upload automatically (attempt ${attempt}). Please keep this page open.`;
+          }
         }
       );
 
@@ -5653,7 +5673,12 @@ async function uploadSong(){
             cacheControl:"3600",
             upsert:false,
             contentType:
-              coverFile.type || undefined
+              coverFile.type || undefined,
+            onRetry:(attempt)=>{
+              uploadButton.textContent="Retrying cover upload...";
+              const message=document.getElementById("uploadMessage");
+              if(message) message.textContent=`Your connection is weak. Retrying the cover upload automatically (attempt ${attempt}). Please keep this page open.`;
+            }
           }
         );
 
@@ -5678,12 +5703,15 @@ async function uploadSong(){
     }
 
 
+    const songUploadId=crypto.randomUUID();
     const {
       data:savedSong,
       error:songError
     } = await sb
       .from("songs")
       .insert({
+
+        id:songUploadId,
 
         title:title,
 
