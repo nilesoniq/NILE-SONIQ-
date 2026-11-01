@@ -2593,16 +2593,26 @@ Save Profile
 </div>
 
 <div class="dashboard-card" id="artistBoostCard" style="margin:18px 0;border:1px solid rgba(255,165,0,.35);">
-<h2>🚀 Song Boost</h2>
-<p>Choose your approved songs and a Boost package. Your songs will be sent for Boost only after payment is confirmed.</p>
-<div id="boostSongChoices" style="margin:14px 0;display:grid;gap:8px;"><p style="color:#999;">Loading your approved songs…</p></div>
-<div class="form-grid">
-<div class="field"><label for="boostPackage">Boost package</label><select id="boostPackage"><option value="starter">Starter — UGX 5,000 · 1,000 plays + 1,000 downloads · 30 days</option><option value="growth">Growth — UGX 10,000 · 3,000 plays + 2,000 downloads · 60 days</option><option value="premium">Premium — UGX 15,000 · 5,000 plays + 3,000 downloads · 120 days</option></select></div>
-<div class="field"><label for="boostPhone">MTN / Airtel number</label><input id="boostPhone" type="tel" placeholder="07XXXXXXXX or +2567XXXXXXXX"></div>
-<div class="field"><label for="boostNetwork">Mobile Money network</label><select id="boostNetwork"><option value="mtn">MTN Mobile Money</option><option value="airtel">Airtel Money</option></select></div>
-</div>
-<div id="boostPaymentMessage" role="status" style="margin:10px 0;color:#bbb;"></div>
-<button class="btn btn-orange" type="button" onclick="submitArtistBoost()">Continue to Boost Payment</button>
+  <button class="btn btn-orange" id="openArtistBoostButton" type="button" aria-expanded="false" aria-controls="artistBoostDetails" onclick="toggleArtistBoostDetails()" style="width:100%;text-align:left;display:flex;justify-content:space-between;align-items:center;">
+    <span>🚀 Song Boost</span><span id="artistBoostChevron" aria-hidden="true">＋</span>
+  </button>
+  <div id="artistBoostDetails" class="hidden" style="padding-top:14px;">
+    <p>Open the song list, choose one or more of your approved songs, then select a Boost package. Nothing is submitted until you confirm payment.</p>
+    <div class="field" style="margin:14px 0;">
+      <label for="boostSongPickerSummary">Approved songs</label>
+      <details id="boostSongPicker" style="position:relative;">
+        <summary id="boostSongPickerSummary" style="cursor:pointer;list-style:none;padding:13px 14px;border:1px solid #555;border-radius:9px;background:#171717;color:#fff;">Choose approved songs <span style="float:right;">▾</span></summary>
+        <div style="margin-top:7px;padding:10px;border:1px solid #444;border-radius:9px;background:#111;"><select id="boostSongSelect" multiple size="6" aria-label="Choose approved songs to boost" onchange="updateBoostSongPickerLabel()" style="width:100%;min-height:150px;background:#171717;color:#fff;border:0;outline:none;padding:6px;"><option disabled>Open Song Boost to load your approved songs…</option></select><small style="display:block;color:#999;margin-top:7px;">Tap a song to select it. Select more than one if needed. No songs are selected automatically.</small></div>
+      </details>
+    </div>
+    <div class="form-grid">
+      <div class="field"><label for="boostPackage">Boost package</label><select id="boostPackage"><option value="starter">Starter — UGX 5,000 · 1,000 plays + 1,000 downloads · 30 days</option><option value="growth">Growth — UGX 10,000 · 3,000 plays + 2,000 downloads · 60 days</option><option value="premium">Premium — UGX 15,000 · 5,000 plays + 3,000 downloads · 120 days</option></select></div>
+      <div class="field"><label for="boostPhone">MTN / Airtel number</label><input id="boostPhone" type="tel" placeholder="07XXXXXXXX or +2567XXXXXXXX"></div>
+      <div class="field"><label for="boostNetwork">Mobile Money network</label><select id="boostNetwork"><option value="mtn">MTN Mobile Money</option><option value="airtel">Airtel Money</option></select></div>
+    </div>
+    <div id="boostPaymentMessage" role="status" style="margin:10px 0;color:#bbb;"></div>
+    <button class="btn btn-orange" type="button" onclick="submitArtistBoost()">Continue to Boost Payment</button>
+  </div>
 </div>
 
 <div class="dashboard-card" id="premiumSubscriptionCard" style="display:none;margin:18px 0;border:1px solid rgba(255,165,0,.45);" hidden>
@@ -5890,27 +5900,48 @@ const publicTableCache = new Map();
 const publicTableRequests = new Map();
 const PUBLIC_TABLE_CACHE_MS = 15000;
 
+function toggleArtistBoostDetails(){
+  const panel=document.getElementById("artistBoostDetails");
+  const button=document.getElementById("openArtistBoostButton");
+  const open=panel?.classList.toggle("hidden")===false;
+  if(button){button.setAttribute("aria-expanded",String(open));}
+  const chevron=document.getElementById("artistBoostChevron");if(chevron)chevron.textContent=open?"−":"＋";
+  if(open)loadArtistBoostSongs();
+}
+function updateBoostSongPickerLabel(){
+  const picker=document.getElementById("boostSongSelect");
+  const selected=picker?[...picker.selectedOptions].filter(o=>!o.disabled):[];
+  const label=document.getElementById("boostSongPickerSummary");
+  if(label)label.innerHTML=(selected.length?`${selected.length} song${selected.length===1?"":"s"} selected`:"Choose approved songs")+' <span style="float:right;">▾</span>';
+}
 async function loadArtistBoostSongs(){
-  const box=document.getElementById("boostSongChoices"); if(!box||!currentArtist)return;
-  box.innerHTML='<p style="color:#999;">Loading approved songs…</p>';
+  const picker=document.getElementById("boostSongSelect"); if(!picker||!currentArtist)return;
+  picker.innerHTML='<option disabled>Loading approved songs…</option>';
   try{
     const all=await loadPublicTable("songs",{limit:500});
-    const ids=new Set([String(currentArtist.id),String(currentArtist.user_id||"")]);
-    const songs=(all||[]).filter(song=>isSongApproved(song)&&ids.has(String(song.artist_id)));
-    if(!songs.length){box.innerHTML='<p style="color:#999;">No approved songs are available to Boost yet.</p>';return;}
-    box.innerHTML=songs.map(song=>`<label style="display:flex;align-items:center;gap:10px;padding:10px;border:1px solid #333;border-radius:10px;"><input type="checkbox" class="boost-song-choice" value="${escapeAttribute(song.id)}" style="width:18px;height:18px;"><span><strong>${escapeHtml(song.title||"Untitled")}</strong><small style="display:block;color:#888;">${formatNumber(song.plays||0)} plays · ${formatNumber(song.downloads||0)} downloads</small></span></label>`).join("");
-  }catch(e){console.error("Boost song list failed",e);box.innerHTML='<p style="color:#f88;">Could not load songs. Refresh the dashboard and try again.</p>';}
+    const ids=new Set([String(currentArtist.id||""),String(currentArtist.user_id||"")].filter(Boolean));
+    const songs=(all||[]).filter(song=>isSongApproved(song)&&ids.has(String(song.artist_id||"")));
+    if(!songs.length){picker.innerHTML='<option disabled>No approved songs available</option>';updateBoostSongPickerLabel();return;}
+    picker.innerHTML=songs.map(song=>`<option value="${escapeAttribute(song.id)}">${escapeHtml(song.title||"Untitled")} — ${formatNumber(song.plays||0)} plays · ${formatNumber(song.downloads||0)} downloads</option>`).join("");
+    updateBoostSongPickerLabel();
+  }catch(e){console.error("Boost song list failed",e);picker.innerHTML='<option disabled>Could not load songs — refresh and try again</option>';}
 }
 async function submitArtistBoost(){
   const message=document.getElementById("boostPaymentMessage");
   if(!currentUser||!currentArtist){message.textContent="Please sign in to your artist account.";return;}
-  const song_ids=[...document.querySelectorAll(".boost-song-choice:checked")].map(x=>x.value);
+  const song_ids=[...(document.getElementById("boostSongSelect")?.selectedOptions||[])].filter(x=>!x.disabled).map(x=>x.value);
   if(!song_ids.length){message.textContent="Select at least one approved song first.";return;}
   const phone_number=document.getElementById("boostPhone")?.value||"";
   const provider=document.getElementById("boostNetwork")?.value||"mtn";
   const package_code=document.getElementById("boostPackage")?.value||"starter";
   message.textContent="Sending secure payment request…";
   try{const r=await fetch("/api/payments/feature-payment",{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({payment_type:"boost",artist_id:currentArtist.id,song_ids,package_code,phone_number,provider})});const data=await r.json().catch(()=>({}));if(!r.ok)throw new Error(data.error||data.message||"Could not start payment");message.textContent=data.message||"Approve the mobile-money prompt to activate your Boost.";}catch(e){message.textContent=e.message||"Payment request failed.";}
+}
+function togglePublicArtistSubscribeForm(){
+  const form=document.getElementById("publicArtistSubscribeForm");
+  const button=document.getElementById("publicArtistSubscribeOpenButton");
+  const open=form?.classList.toggle("hidden")===false;
+  if(button){button.setAttribute("aria-expanded",String(open));button.textContent=open?"Close Subscription Details":"Subscribe to Artist — UGX 5,000 / 30 days";}
 }
 async function subscribeToPublicArtist(artistId){
   const message=document.getElementById("publicSubscribeMessage");
@@ -7672,15 +7703,18 @@ async function openArtistProfile(artistId, fromPublicRoute=false){
         <div class="stat-card"><span>Profile Views</span><strong id="publicArtistViews">…</strong></div>
         <div class="stat-card"><span>Monthly Subscribers</span><strong id="publicArtistSubscribers">…</strong></div>
       </div>
-      <div class="artist-profile-section" id="artistPublicSubscribeBox">
+      <div class="artist-profile-section" id="artistPublicSubscribeBox" style="border:1px solid rgba(255,165,0,.4);border-radius:12px;padding:16px;margin-top:14px;">
         <h3>Support this Artist</h3>
-        <p style="color:#aaa;margin-bottom:12px;">Subscribe for UGX 5,000 for 30 days. While your subscription is active, your qualified plays support this artist at double the normal artist play rate.</p>
-        <div class="form-grid">
-          <div class="field"><label for="publicSubscribePhone">MTN / Airtel number</label><input id="publicSubscribePhone" type="tel" placeholder="07XXXXXXXX or +2567XXXXXXXX"></div>
-          <div class="field"><label for="publicSubscribeNetwork">Mobile Money network</label><select id="publicSubscribeNetwork"><option value="mtn">MTN Mobile Money</option><option value="airtel">Airtel Money</option></select></div>
+        <p style="color:#aaa;margin:8px 0 12px;">Subscribe for UGX 5,000 for 30 days. While active, your qualified plays support this artist at double the normal artist play rate.</p>
+        <button class="btn btn-orange" id="publicArtistSubscribeOpenButton" type="button" aria-expanded="false" aria-controls="publicArtistSubscribeForm" onclick="togglePublicArtistSubscribeForm()" style="width:100%;">Subscribe to Artist — UGX 5,000 / 30 days</button>
+        <div id="publicArtistSubscribeForm" class="hidden" style="padding-top:14px;">
+          <div class="form-grid">
+            <div class="field"><label for="publicSubscribePhone">MTN / Airtel number</label><input id="publicSubscribePhone" type="tel" inputmode="tel" placeholder="07XXXXXXXX or +2567XXXXXXXX"></div>
+            <div class="field"><label for="publicSubscribeNetwork">Mobile Money network</label><select id="publicSubscribeNetwork"><option value="mtn">MTN Mobile Money</option><option value="airtel">Airtel Money</option></select></div>
+          </div>
+          <div id="publicSubscribeMessage" role="status" style="margin:10px 0;color:#bbb;"></div>
+          <button class="btn btn-orange" type="button" onclick="subscribeToPublicArtist('${escapeAttribute(artist.id)}')">Continue to Mobile Money Payment</button>
         </div>
-        <div id="publicSubscribeMessage" role="status" style="margin:10px 0;color:#bbb;"></div>
-        <button class="btn btn-orange" type="button" onclick="subscribeToPublicArtist('${escapeAttribute(artist.id)}')">Subscribe — UGX 5,000 / 30 days</button>
       </div>
 
       <div class="artist-profile-section">
