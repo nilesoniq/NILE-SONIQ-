@@ -3738,6 +3738,103 @@ async function paymentWebhookRoute(request, env) {
   }
 }
 
+
+async function artistPostsRoute(request, env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS artist_posts (
+    id TEXT PRIMARY KEY, user_id TEXT NOT NULL, artist_id TEXT NOT NULL,
+    content TEXT NOT NULL, image_url TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+  if (request.method === 'GET') {
+    const rows = await env.DB.prepare(`SELECT p.id,p.user_id,p.artist_id,p.content,p.image_url,p.created_at,
+      COALESCE(a.name,'NileSoniQ Artist') artist_name,a.avatar_url
+      FROM artist_posts p LEFT JOIN artists a ON a.id=p.artist_id
+      ORDER BY datetime(p.created_at) DESC LIMIT 100`).all();
+    return json({data: rows.results || []});
+  }
+  const user = await currentUser(request, env);
+  if (!user) return error('Authentication required',401);
+  if (request.method === 'POST') {
+    const body = await readBody(request);
+    const content = String(body.content || '').trim().slice(0,2000);
+    const imageUrl = String(body.image_url || '').trim();
+    if (!content && !imageUrl) return error('Write something or add a picture before posting.',422);
+    if (imageUrl && !imageUrl.startsWith('https://')) return error('Post picture must use HTTPS.',422);
+    const artist = await env.DB.prepare('SELECT id FROM artists WHERE user_id=? LIMIT 1').bind(user.id).first();
+    if (!artist) return error('Artist profile not found.',403);
+    const id = crypto.randomUUID();
+    await env.DB.prepare(`INSERT INTO artist_posts (id,user_id,artist_id,content,image_url,created_at) VALUES (?,?,?,?,?,datetime('now'))`).bind(id,user.id,artist.id,content,imageUrl||null).run();
+    const row = await env.DB.prepare(`SELECT p.id,p.user_id,p.artist_id,p.content,p.image_url,p.created_at,COALESCE(a.name,'NileSoniQ Artist') artist_name,a.avatar_url FROM artist_posts p LEFT JOIN artists a ON a.id=p.artist_id WHERE p.id=?`).bind(id).first();
+    return json({data:row},201);
+  }
+  if (request.method === 'DELETE') {
+    const id = new URL(request.url).searchParams.get('id') || '';
+    if (!id) return error('Post ID is required.',422);
+    const result = await env.DB.prepare('DELETE FROM artist_posts WHERE id=? AND user_id=?').bind(id,user.id).run();
+    return Number(result?.meta?.changes || 0) ? json({success:true}) : error('Post not found or not yours.',404);
+  }
+  return error('Method not allowed',405);
+}
+
+async function artistFollowsRoute(request, env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS artist_follows (
+    id TEXT PRIMARY KEY, follower_user_id TEXT NOT NULL, artist_id TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(follower_user_id,artist_id)
+  )`).run();
+  const user = await currentUser(request, env);
+  if (!user) return error('Authentication required',401);
+  const url = new URL(request.url);
+  if (request.method === 'GET') {
+    const artistId = String(url.searchParams.get('artist_id') || '').trim();
+    if (artistId) {
+      const row = await env.DB.prepare('SELECT id FROM artist_follows WHERE follower_user_id=? AND artist_id=?').bind(user.id,artistId).first();
+      return json({following:!!row});
+    }
+    const rows = await env.DB.prepare('SELECT artist_id FROM artist_follows WHERE follower_user_id=? ORDER BY created_at DESC').bind(user.id).all();
+    return json({data:rows.results || []});
+  }
+  const body = request.method === 'POST' ? await readBody(request) : {};
+  const artistId = String(body.artist_id || url.searchParams.get('artist_id') || '').trim();
+  if (!artistId) return error('Artist ID is required.',422);
+  const artist = await env.DB.prepare('SELECT id,user_id FROM artists WHERE id=? LIMIT 1').bind(artistId).first();
+  if (!artist) return error('Artist not found.',404);
+  if (String(artist.user_id) === String(user.id)) return error('You cannot follow your own artist account.',422);
+  if (request.method === 'POST') {
+    await env.DB.prepare('INSERT OR IGNORE INTO artist_follows (id,follower_user_id,artist_id) VALUES (?,?,?)').bind(crypto.randomUUID(),user.id,artistId).run();
+    return json({success:true,following:true});
+  }
+  if (request.method === 'DELETE') {
+    await env.DB.prepare('DELETE FROM artist_follows WHERE follower_user_id=? AND artist_id=?').bind(user.id,artistId).run();
+    return json({success:true,following:false});
+  }
+  return error('Method not allowed',405);
+}
+
+async function discoverRoute(request, env) {
+  if (request.method !== 'GET') return error('Method not allowed',405);
+  try {
+    await settleExpiredBoostCampaigns(env);
+    const artists = await env.DB.prepare(`SELECT a.id,a.user_id,a.name,a.bio,a.location,a.avatar_url,a.verified,
+      p.package_name,p.expires_at
+      FROM artists a JOIN premium_subscriptions p ON p.user_id=a.user_id
+      WHERE lower(p.status)='active' AND p.expires_at IS NOT NULL AND datetime(p.expires_at)>datetime('now')
+      AND lower(COALESCE(p.package_name,'free'))<>'free'
+      AND p.id=(SELECT p2.id FROM premium_subscriptions p2 WHERE p2.user_id=a.user_id AND lower(p2.status)='active' AND p2.expires_at IS NOT NULL AND datetime(p2.expires_at)>datetime('now') ORDER BY datetime(COALESCE(p2.paid_at,p2.created_at)) DESC LIMIT 1)
+      ORDER BY datetime(p.paid_at) DESC LIMIT 100`).all();
+    const songs = await env.DB.prepare(`SELECT DISTINCT s.id,s.title,s.artist,s.artist_id,s.genre,s.plays,s.cover_url,s.audio_url,s.file_url,s.created_at,
+      CASE WHEN EXISTS(SELECT 1 FROM premium_subscriptions p JOIN artists a ON a.user_id=p.user_id WHERE (s.artist_id=a.user_id OR s.artist_id=a.id) AND lower(p.status)='active' AND p.expires_at IS NOT NULL AND datetime(p.expires_at)>datetime('now') AND lower(COALESCE(p.package_name,'free'))<>'free') THEN 1 ELSE 0 END upgraded_artist,
+      CASE WHEN EXISTS(SELECT 1 FROM song_boost_campaign_songs bs JOIN nilesoniq_feature_payments fp ON fp.id=bs.campaign_id WHERE bs.song_id=s.id AND lower(fp.status)='active' AND datetime(fp.expires_at)>datetime('now')) THEN 1 ELSE 0 END boosted
+      FROM songs s WHERE s.approved=1 AND (
+        EXISTS(SELECT 1 FROM premium_subscriptions p JOIN artists a ON a.user_id=p.user_id WHERE (s.artist_id=a.user_id OR s.artist_id=a.id) AND lower(p.status)='active' AND p.expires_at IS NOT NULL AND datetime(p.expires_at)>datetime('now') AND lower(COALESCE(p.package_name,'free'))<>'free')
+        OR EXISTS(SELECT 1 FROM song_boost_campaign_songs bs JOIN nilesoniq_feature_payments fp ON fp.id=bs.campaign_id WHERE bs.song_id=s.id AND lower(fp.status)='active' AND datetime(fp.expires_at)>datetime('now'))
+      ) ORDER BY boosted DESC, plays DESC, datetime(created_at) DESC LIMIT 200`).all();
+    return json({data:{artists:artists.results||[],songs:songs.results||[]}});
+  } catch(e) {
+    console.error('Discover feed failed:',e.message);
+    return error('Could not load featured artists and songs.',500);
+  }
+}
+
 async function publicArtistStatsRoute(request, env) {
   const url=new URL(request.url);
   const artistId=String(url.searchParams.get("artist_id")||"").trim();
@@ -4484,6 +4581,12 @@ export default {
         response = await artistNotificationsRoute(request, env);
       } else if (path === "/api/artist/dashboard") {
         response = await artistDashboardRoute(request, env);
+      } else if (path === "/api/artist/posts") {
+        response = await artistPostsRoute(request, env);
+      } else if (path === "/api/artist/follows") {
+        response = await artistFollowsRoute(request, env);
+      } else if (path === "/api/discover") {
+        response = await discoverRoute(request, env);
       } else if (path === "/api/artist/public-stats") {
         response = await publicArtistStatsRoute(request, env);
       } else if (path === "/api/auth/register-paid") {
