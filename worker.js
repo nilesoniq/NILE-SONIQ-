@@ -3744,33 +3744,94 @@ async function artistPostsRoute(request, env) {
     id TEXT PRIMARY KEY, user_id TEXT NOT NULL, artist_id TEXT NOT NULL,
     content TEXT NOT NULL, image_url TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`).run();
+  const user = request.method === 'GET' && new URL(request.url).searchParams.get('mine') === '1'
+    ? await currentUser(request, env) : null;
   if (request.method === 'GET') {
-    const rows = await env.DB.prepare(`SELECT p.id,p.user_id,p.artist_id,p.content,p.image_url,p.created_at,
-      COALESCE(a.name,'NileSoniQ Artist') artist_name,a.avatar_url
-      FROM artist_posts p LEFT JOIN artists a ON a.id=p.artist_id
-      ORDER BY datetime(p.created_at) DESC LIMIT 100`).all();
+    const mine = new URL(request.url).searchParams.get('mine') === '1';
+    if (mine && !user) return error('Authentication required',401);
+    const rows = mine
+      ? await env.DB.prepare(`SELECT p.id,p.user_id,p.artist_id,p.content,p.image_url,p.created_at,COALESCE(a.name,'NileSoniQ Artist') artist_name,a.avatar_url FROM artist_posts p LEFT JOIN artists a ON a.id=p.artist_id WHERE p.user_id=? ORDER BY datetime(p.created_at) DESC LIMIT 100`).bind(user.id).all()
+      : await env.DB.prepare(`SELECT p.id,p.user_id,p.artist_id,p.content,p.image_url,p.created_at,COALESCE(a.name,'NileSoniQ Artist') artist_name,a.avatar_url FROM artist_posts p LEFT JOIN artists a ON a.id=p.artist_id ORDER BY datetime(p.created_at) DESC LIMIT 100`).all();
     return json({data: rows.results || []});
   }
-  const user = await currentUser(request, env);
-  if (!user) return error('Authentication required',401);
+  const authenticated = await currentUser(request, env);
+  if (!authenticated) return error('Authentication required',401);
   if (request.method === 'POST') {
     const body = await readBody(request);
     const content = String(body.content || '').trim().slice(0,2000);
     const imageUrl = String(body.image_url || '').trim();
     if (!content && !imageUrl) return error('Write something or add a picture before posting.',422);
-    if (imageUrl && !imageUrl.startsWith('https://')) return error('Post picture must use HTTPS.',422);
-    const artist = await env.DB.prepare('SELECT id FROM artists WHERE user_id=? LIMIT 1').bind(user.id).first();
+    if (imageUrl && !/^https:\/\//i.test(imageUrl)) return error('Post picture must use HTTPS.',422);
+    const artist = await env.DB.prepare('SELECT id FROM artists WHERE user_id=? LIMIT 1').bind(authenticated.id).first();
     if (!artist) return error('Artist profile not found.',403);
     const id = crypto.randomUUID();
-    await env.DB.prepare(`INSERT INTO artist_posts (id,user_id,artist_id,content,image_url,created_at) VALUES (?,?,?,?,?,datetime('now'))`).bind(id,user.id,artist.id,content,imageUrl||null).run();
+    await env.DB.prepare(`INSERT INTO artist_posts (id,user_id,artist_id,content,image_url,created_at) VALUES (?,?,?,?,?,datetime('now'))`).bind(id,authenticated.id,artist.id,content,imageUrl||null).run();
     const row = await env.DB.prepare(`SELECT p.id,p.user_id,p.artist_id,p.content,p.image_url,p.created_at,COALESCE(a.name,'NileSoniQ Artist') artist_name,a.avatar_url FROM artist_posts p LEFT JOIN artists a ON a.id=p.artist_id WHERE p.id=?`).bind(id).first();
     return json({data:row},201);
   }
   if (request.method === 'DELETE') {
+    await env.DB.prepare(`CREATE TABLE IF NOT EXISTS artist_post_comments (id TEXT PRIMARY KEY, post_id TEXT NOT NULL, user_id TEXT NOT NULL, comment TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')))` ).run();
+    await env.DB.prepare(`CREATE TABLE IF NOT EXISTS artist_post_reactions (id TEXT PRIMARY KEY, post_id TEXT NOT NULL, user_id TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), UNIQUE(post_id,user_id))`).run();
     const id = new URL(request.url).searchParams.get('id') || '';
     if (!id) return error('Post ID is required.',422);
-    const result = await env.DB.prepare('DELETE FROM artist_posts WHERE id=? AND user_id=?').bind(id,user.id).run();
-    return Number(result?.meta?.changes || 0) ? json({success:true}) : error('Post not found or not yours.',404);
+    const owned = await env.DB.prepare('SELECT id FROM artist_posts WHERE id=? AND user_id=?').bind(id,authenticated.id).first();
+    if (!owned) return error('Post not found or not yours.',404);
+    await env.DB.prepare('DELETE FROM artist_post_comments WHERE post_id=?').bind(id).run();
+    await env.DB.prepare('DELETE FROM artist_post_reactions WHERE post_id=?').bind(id).run();
+    await env.DB.prepare('DELETE FROM artist_posts WHERE id=? AND user_id=?').bind(id,authenticated.id).run();
+    return json({success:true});
+  }
+  return error('Method not allowed',405);
+}
+
+async function artistPostInteractionsRoute(request, env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS artist_post_comments (
+    id TEXT PRIMARY KEY, post_id TEXT NOT NULL, user_id TEXT NOT NULL, comment TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+  await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_artist_post_comments_post ON artist_post_comments(post_id, created_at)`).run();
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS artist_post_reactions (
+    id TEXT PRIMARY KEY, post_id TEXT NOT NULL, user_id TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')), UNIQUE(post_id,user_id)
+  )`).run();
+  const url = new URL(request.url);
+  const postId = String(url.searchParams.get('post_id') || '').trim();
+  if (!postId) return error('Post ID is required.',422);
+  const post = await env.DB.prepare('SELECT id FROM artist_posts WHERE id=?').bind(postId).first();
+  if (!post) return error('Post not found.',404);
+  if (request.method === 'GET') {
+    const user = await currentUser(request, env);
+    const comments = await env.DB.prepare(`SELECT c.id,c.post_id,c.user_id,c.comment,c.created_at,COALESCE(a.name,u.email,'NileSoniQ listener') author_name FROM artist_post_comments c LEFT JOIN auth_users u ON u.id=c.user_id LEFT JOIN artists a ON a.user_id=c.user_id WHERE c.post_id=? ORDER BY datetime(c.created_at) ASC LIMIT 100`).bind(postId).all();
+    const counts = await env.DB.prepare('SELECT COUNT(*) AS total FROM artist_post_reactions WHERE post_id=?').bind(postId).first();
+    let reacted = false;
+    if (user) reacted = !!(await env.DB.prepare('SELECT id FROM artist_post_reactions WHERE post_id=? AND user_id=?').bind(postId,user.id).first());
+    return json({comments:comments.results||[],reaction_count:Number(counts?.total||0),reacted});
+  }
+  const user = await currentUser(request, env);
+  if (!user) return error('Sign in to comment or react.',401);
+  if (request.method === 'POST') {
+    const body = await readBody(request);
+    if (String(body.action||'') === 'comment') {
+      const comment = String(body.comment||'').trim().slice(0,1000);
+      if (!comment) return error('Write a comment first.',422);
+      const id=crypto.randomUUID();
+      await env.DB.prepare('INSERT INTO artist_post_comments (id,post_id,user_id,comment) VALUES (?,?,?,?)').bind(id,postId,user.id,comment).run();
+      return json({success:true,id},201);
+    }
+    if (String(body.action||'') === 'react') {
+      const existing=await env.DB.prepare('SELECT id FROM artist_post_reactions WHERE post_id=? AND user_id=?').bind(postId,user.id).first();
+      if (existing) await env.DB.prepare('DELETE FROM artist_post_reactions WHERE id=?').bind(existing.id).run();
+      else await env.DB.prepare('INSERT INTO artist_post_reactions (id,post_id,user_id) VALUES (?,?,?)').bind(crypto.randomUUID(),postId,user.id).run();
+      const count=await env.DB.prepare('SELECT COUNT(*) AS total FROM artist_post_reactions WHERE post_id=?').bind(postId).first();
+      return json({success:true,reacted:!existing,reaction_count:Number(count?.total||0)});
+    }
+    return error('Unsupported interaction.',422);
+  }
+  if (request.method === 'DELETE') {
+    const commentId=String(url.searchParams.get('comment_id')||'');
+    if (!commentId) return error('Comment ID is required.',422);
+    const result=await env.DB.prepare('DELETE FROM artist_post_comments WHERE id=? AND user_id=?').bind(commentId,user.id).run();
+    return Number(result?.meta?.changes||0)?json({success:true}):error('Comment not found or not yours.',404);
   }
   return error('Method not allowed',405);
 }
@@ -4583,6 +4644,10 @@ export default {
         response = await artistDashboardRoute(request, env);
       } else if (path === "/api/artist/posts") {
         response = await artistPostsRoute(request, env);
+      } else if (path === "/api/artist/post-interactions") {
+        response = await artistPostInteractionsRoute(request, env);
+      } else if (path === "/api/artist/post-interactions") {
+        response = await artistPostInteractionsRoute(request, env);
       } else if (path === "/api/artist/follows") {
         response = await artistFollowsRoute(request, env);
       } else if (path === "/api/discover") {
