@@ -3836,6 +3836,53 @@ async function artistPostInteractionsRoute(request, env) {
   return error('Method not allowed',405);
 }
 
+async function artistMessagesRoute(request, env) {
+  const user = await currentUser(request, env);
+  if (!user) return error("Authentication required", 401);
+  const myArtist = await env.DB.prepare("SELECT id FROM artists WHERE user_id=? LIMIT 1").bind(user.id).first();
+  if (!myArtist) return error("Only artist accounts can use artist messaging.", 403);
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS artist_messages (
+    id TEXT PRIMARY KEY,
+    sender_user_id TEXT NOT NULL,
+    recipient_user_id TEXT NOT NULL,
+    message TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    read_at TEXT
+  )`).run();
+  await env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_artist_messages_pair ON artist_messages(sender_user_id,recipient_user_id,created_at)").run();
+  await env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_artist_messages_recipient ON artist_messages(recipient_user_id,read_at)").run();
+  const url = new URL(request.url);
+  if (request.method === "GET") {
+    const otherId = String(url.searchParams.get("with_user_id") || "").trim();
+    if (otherId) {
+      if (otherId === user.id) return error("You cannot message your own account.", 422);
+      const other = await env.DB.prepare("SELECT user_id,name,location FROM artists WHERE user_id=? LIMIT 1").bind(otherId).first();
+      if (!other) return error("Artist not found.", 404);
+      const rows = await env.DB.prepare(`SELECT id,sender_user_id,recipient_user_id,message,created_at FROM artist_messages
+        WHERE (sender_user_id=? AND recipient_user_id=?) OR (sender_user_id=? AND recipient_user_id=?)
+        ORDER BY datetime(created_at) ASC LIMIT 300`).bind(user.id,otherId,otherId,user.id).all();
+      await env.DB.prepare("UPDATE artist_messages SET read_at=datetime('now') WHERE sender_user_id=? AND recipient_user_id=? AND read_at IS NULL").bind(otherId,user.id).run();
+      return json({artist:other,messages:(rows.results||[]).map(m=>({...m,is_mine:m.sender_user_id===user.id}))});
+    }
+    const artists = await env.DB.prepare(`SELECT user_id,name,location,avatar_url FROM artists
+      WHERE user_id<>? AND user_id IS NOT NULL AND COALESCE(name,'')<>'' ORDER BY name COLLATE NOCASE LIMIT 300`).bind(user.id).all();
+    return json({artists:artists.results||[]});
+  }
+  if (request.method === "POST") {
+    const body = await readBody(request);
+    const recipient = String(body.recipient_user_id||"").trim();
+    const message = String(body.message||"").trim().slice(0,3000);
+    if (!recipient || recipient===user.id) return error("Choose another artist to message.",422);
+    if (!message) return error("Write a message first.",422);
+    const other = await env.DB.prepare("SELECT user_id FROM artists WHERE user_id=? LIMIT 1").bind(recipient).first();
+    if (!other) return error("The recipient must be an artist account.",404);
+    const id=crypto.randomUUID();
+    await env.DB.prepare("INSERT INTO artist_messages (id,sender_user_id,recipient_user_id,message) VALUES (?,?,?,?)").bind(id,user.id,recipient,message).run();
+    return json({success:true,id},201);
+  }
+  return error("Method not allowed",405);
+}
+
 async function artistFollowsRoute(request, env) {
   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS artist_follows (
     id TEXT PRIMARY KEY, follower_user_id TEXT NOT NULL, artist_id TEXT NOT NULL,
@@ -4644,6 +4691,8 @@ export default {
         response = await artistDashboardRoute(request, env);
       } else if (path === "/api/artist/posts") {
         response = await artistPostsRoute(request, env);
+      } else if (path === "/api/artist/messages") {
+        response = await artistMessagesRoute(request, env);
       } else if (path === "/api/artist/post-interactions") {
         response = await artistPostInteractionsRoute(request, env);
       } else if (path === "/api/artist/post-interactions") {
