@@ -413,8 +413,11 @@ async function completePaidArtistSignup(env, reference, status, transactionId, a
   const incomingTx = String(transactionId || "");
   if (row.provider_transaction_id && incomingTx && row.provider_transaction_id !== incomingTx) return {matched:true,changed:false,reason:"transaction_id_mismatch"};
   if (isSuccessfulPaymentStatus(status)) {
-    if (Number(amount) !== Number(row.amount) || String(currency || "").toUpperCase() !== "UGX") {
-      console.error("Paid signup payment amount/currency mismatch",{reference,expectedAmount:row.amount,receivedAmount:amount,receivedCurrency:currency});
+    const confirmedAmount = Number(amount);
+    const confirmedCurrency = String(currency || "").trim().toUpperCase();
+    const requiredAmount = Number(row.amount);
+    if (!Number.isFinite(confirmedAmount) || !Number.isFinite(requiredAmount) || confirmedAmount < requiredAmount || confirmedCurrency !== "UGX") {
+      console.error("Paid signup payment amount/currency mismatch",{reference,expectedMinimumAmount:row.amount,receivedAmount:amount,receivedCurrency:currency});
       return {matched:true,changed:false,reason:"amount_currency_mismatch"};
     }
     // Atomically claim this payment before creating anything. Duplicate/concurrent
@@ -3439,21 +3442,19 @@ async function applyPremiumPaymentStatus(
     const expectedAmount = Number(payment.amount);
     const expectedCurrency = String(payment.currency || "").trim().toUpperCase();
 
-    // PesaJet receipts may report the customer total (package price + fee),
-    // while the pending subscription stores the package price alone. Accept
-    // either the exact package amount or package amount + the fee explicitly
-    // supplied by this signed provider event. Do not infer a fee or accept an
-    // unexplained amount difference.
+    // PesaJet may report a customer collection total above the selected
+    // package price (for example, UGX 10,350 for a UGX 10,000 package).
+    // The package price remains the entitlement amount; any higher confirmed
+    // UGX collection is accepted, while the package whitelist and transaction
+    // reference checks below continue to protect entitlement activation.
     const feeValue = confirmedFee === null || confirmedFee === undefined || confirmedFee === ""
       ? null
       : Number(confirmedFee);
-    const feeKnown = feeValue !== null && Number.isFinite(feeValue) && feeValue >= 0;
-    const amountMatchesPackage = Number.isFinite(amount) && amount === expectedAmount;
-    const amountMatchesPackagePlusFee = feeKnown && feeValue > 0 && Number.isFinite(amount) && amount === expectedAmount + feeValue;
+    const feeSupplied = feeValue !== null;
+    const feeValid = !feeSupplied || (Number.isFinite(feeValue) && feeValue >= 0 && feeValue <= amount);
     if (
-      !Number.isFinite(amount) || !currency ||
-      (!amountMatchesPackage && !amountMatchesPackagePlusFee) ||
-      currency !== expectedCurrency ||
+      !Number.isFinite(amount) || !Number.isFinite(expectedAmount) || amount < expectedAmount || !currency ||
+      !feeValid || currency !== expectedCurrency ||
       ![5000,10000,20000,30000].includes(expectedAmount) || expectedCurrency !== "UGX"
     ) {
       console.error("Premium payment confirmation failed amount/currency validation", {
@@ -3462,8 +3463,8 @@ async function applyPremiumPaymentStatus(
         receivedCurrency: currency || null,
         expectedAmount,
         expectedCurrency,
-        feeKnown,
-        receivedFee: feeKnown ? feeValue : null
+        feeSupplied,
+        receivedFee: feeSupplied ? feeValue : null
       });
       return { matched: true, changed: false, reason: "amount_currency_mismatch" };
     }
@@ -3517,9 +3518,9 @@ async function applyPremiumPaymentStatus(
           payment.id,
           ref,
           amount,
-          feeKnown ? feeValue : 0,
-          feeKnown ? "posted" : "fee_unverified",
-          feeKnown
+          feeSupplied ? feeValue : 0,
+          feeSupplied ? "posted" : "fee_unverified",
+          feeSupplied
             ? "Premium subscription confirmed. Actual PesaJet fee supplied by the confirmed provider event."
             : "Premium subscription confirmed. Actual PesaJet collection fee was not supplied by the confirmed transaction event; zero here does not mean fee-free."
         ),
@@ -3529,7 +3530,7 @@ async function applyPremiumPaymentStatus(
               updated_at = datetime('now')
           WHERE id = (SELECT id FROM platform_wallet ORDER BY created_at LIMIT 1)
             AND changes() > 0
-        `).bind(amount, feeKnown ? feeValue : 0)
+        `).bind(amount, feeSupplied ? feeValue : 0)
       ]);
     }
     // The artist entitlement mirrors the verified subscription expiry. Re-sync
