@@ -932,6 +932,12 @@ async function dbRoute(request, env, path) {
       }
     }
 
+    // Published news is the only news content available to ordinary visitors.
+    // Admins retain access to drafts for editorial management.
+    if (table === "news" && !admin) {
+      where = appendCondition(where, "published = 1");
+    }
+
     // Non-admin users may read approved songs and their own submissions.
     if (table === "songs" && !admin) {
       if (user) {
@@ -4596,6 +4602,119 @@ function htmlEscape(value) {
   }[ch]));
 }
 
+
+function artistSlugForShare(value) {
+  return slugForShare(value || "artist");
+}
+
+function absolutePublicImage(value) {
+  try {
+    const candidate = new URL(String(value || "").trim(), "https://nilesoniq.com");
+    return candidate.protocol === "https:" ? candidate.href : "https://nilesoniq.com/favicon.png";
+  } catch {
+    return "https://nilesoniq.com/favicon.png";
+  }
+}
+
+function replaceSeoHead(html, tags) {
+  let updated = html.replace(/<title>[\s\S]*?<\/title>/i, "");
+  updated = updated.replace(/<meta\s+name=["']description["'][^>]*>/i, "");
+  updated = updated.replace(/<link\s+rel=["']canonical["'][^>]*>/i, "");
+  updated = updated.replace(/<meta\s+property=["']og:[^>]*>/gi, "");
+  updated = updated.replace(/<meta\s+name=["']twitter:[^>]*>/gi, "");
+  return updated.replace(/<head[^>]*>/i, match => `${match}\n${tags}`);
+}
+
+function notFoundHtml() {
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,follow"><title>Page not found | NileSoniq</title><meta name="description" content="The requested NileSoniq page could not be found."></head><body style="font-family:Arial,sans-serif;max-width:680px;margin:12vh auto;padding:24px;line-height:1.6"><h1>Page not found</h1><p>This artist or song page may have been removed, or its link may be incorrect.</p><p><a href="https://nilesoniq.com/">Return to NileSoniq</a></p></body></html>`;
+}
+
+async function artistSharePreview(request, env, url) {
+  if (request.method !== "GET" || !env.ASSETS || !/^\/artist\/[^/]+\/?$/i.test(url.pathname)) return null;
+  let requestedSlug = "";
+  try { requestedSlug = decodeURIComponent(url.pathname.split("/")[2] || ""); }
+  catch { return new Response(notFoundHtml(), { status: 404, headers: { "Content-Type": "text/html; charset=utf-8", "X-Robots-Tag": "noindex, follow" } }); }
+
+  let artist = null;
+  try {
+    const result = await env.DB.prepare(`
+      SELECT id, name, bio, avatar_url, location, verified, is_premium, created_at
+      FROM artists
+      WHERE NOT EXISTS (
+        SELECT 1 FROM copyright_removals cr
+        WHERE cr.content_type = 'artist'
+          AND (cr.content_id = artists.id OR cr.content_id = artists.user_id)
+      )
+      ORDER BY created_at DESC, rowid DESC LIMIT 1000
+    `).all();
+    const wanted = artistSlugForShare(requestedSlug);
+    artist = (result.results || []).find(item => artistSlugForShare(item.name) === wanted) || null;
+  } catch (e) {
+    console.error("Artist share preview lookup failed:", e.message);
+  }
+
+  if (!artist) {
+    return new Response(notFoundHtml(), { status: 404, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=60", "X-Robots-Tag": "noindex, follow" } });
+  }
+
+  const assetResponse = await env.ASSETS.fetch(new Request(new URL("/", url.origin), { method: "GET", headers: request.headers }));
+  const html = await assetResponse.text();
+  const name = String(artist.name || "Artist").trim();
+  const title = `${name} | Artist Profile on NileSoniq`;
+  const description = String(artist.bio || `Discover music and songs by ${name} on NileSoniq.`).replace(/\s+/g, " ").trim().slice(0, 155);
+  const canonical = `https://nilesoniq.com/artist/${artistSlugForShare(name)}`;
+  const image = absolutePublicImage(artist.avatar_url);
+  const tags = [
+    `<title>${htmlEscape(title)}</title>`,
+    `<meta name="description" content="${htmlEscape(description)}">`,
+    `<link rel="canonical" href="${htmlEscape(canonical)}">`,
+    `<meta property="og:type" content="profile">`,
+    `<meta property="og:site_name" content="NileSoniq">`,
+    `<meta property="og:title" content="${htmlEscape(title)}">`,
+    `<meta property="og:description" content="${htmlEscape(description)}">`,
+    `<meta property="og:url" content="${htmlEscape(canonical)}">`,
+    `<meta property="og:image" content="${htmlEscape(image)}">`,
+    `<meta name="twitter:card" content="summary_large_image">`,
+    `<meta name="twitter:title" content="${htmlEscape(title)}">`,
+    `<meta name="twitter:description" content="${htmlEscape(description)}">`,
+    `<meta name="twitter:image" content="${htmlEscape(image)}">`
+  ].join("\n");
+  return new Response(replaceSeoHead(html, tags), { status: assetResponse.status, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=300" } });
+}
+
+async function dynamicSitemap(request, env, url) {
+  if (request.method !== "GET" || url.pathname !== "/sitemap.xml") return null;
+  const base = "https://nilesoniq.com";
+  const urls = new Map();
+  const add = (path, lastmod) => {
+    if (!path || !path.startsWith("/")) return;
+    const loc = `${base}${path}`;
+    if (!urls.has(loc)) urls.set(loc, lastmod ? String(lastmod).slice(0, 10) : "");
+  };
+  add("/");
+  try {
+    const [artists, songs, news] = await Promise.all([
+      env.DB.prepare(`SELECT id, name, created_at FROM artists WHERE NOT EXISTS (SELECT 1 FROM copyright_removals cr WHERE cr.content_type = 'artist' AND (cr.content_id = artists.id OR cr.content_id = artists.user_id)) ORDER BY created_at DESC, rowid DESC LIMIT 2000`).all(),
+      env.DB.prepare(`SELECT id, title, artist, created_at FROM songs WHERE approved = 1 AND NOT EXISTS (SELECT 1 FROM copyright_removals cr WHERE cr.content_type = 'song' AND cr.content_id = songs.id) ORDER BY rowid DESC LIMIT 5000`).all(),
+      env.DB.prepare(`SELECT id, slug, updated_at, published_at, created_at FROM news WHERE published = 1 AND slug IS NOT NULL AND TRIM(slug) <> '' ORDER BY rowid DESC LIMIT 2000`).all()
+    ]);
+    const artistSlugs = new Set();
+    for (const a of artists.results || []) {
+      const slug = artistSlugForShare(a.name);
+      if (artistSlugs.has(slug)) continue;
+      artistSlugs.add(slug);
+      add(`/artist/${slug}`, a.created_at);
+    }
+    for (const song of songs.results || []) add(`/song/${songSlugForShare(song)}`, song.created_at);
+    for (const article of news.results || []) add(`/news/${slugForShare(article.slug)}`, article.updated_at || article.published_at || article.created_at);
+  } catch (e) {
+    console.error("Dynamic sitemap generation failed:", e.message);
+    return new Response("Sitemap temporarily unavailable", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" } });
+  }
+  const body = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${Array.from(urls.entries()).map(([loc, lastmod]) => `<url><loc>${htmlEscape(loc)}</loc>${/^\d{4}-\d{2}-\d{2}$/.test(lastmod) ? `<lastmod>${lastmod}</lastmod>` : ""}</url>`).join("")}\n</urlset>`;
+  return new Response(body, { status: 200, headers: { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "public, max-age=900" } });
+}
+
 async function songSharePreview(request, env, url) {
   if (request.method !== "GET" || !env.ASSETS || !/^\/song\/[^/]+\/?$/i.test(url.pathname)) return null;
   let slug = "";
@@ -4626,18 +4745,10 @@ async function songSharePreview(request, env, url) {
     : "Discover and stream music from Ugandan artists on NileSoniq.";
   // Artwork URLs may be stored as absolute URLs or site-relative R2/API paths.
   // Resolve relative paths to absolute HTTPS URLs so WhatsApp can fetch them.
-  let image = "https://nilesoniq.com/favicon.png";
-  if (song && song.cover_url) {
-    try {
-      const candidate = new URL(String(song.cover_url).trim(), "https://nilesoniq.com");
-      if (candidate.protocol === "https:") {
-        image = candidate.href;
-      }
-    } catch (e) {
-      console.warn("Song artwork URL could not be resolved for share preview:", e.message);
-    }
-  }
-  const canonical = `https://nilesoniq.com${url.pathname}`;
+  const image = song ? absolutePublicImage(song.cover_url) : "https://nilesoniq.com/favicon.png";
+  const canonical = song
+    ? `https://nilesoniq.com/song/${songSlugForShare(song)}`
+    : `https://nilesoniq.com${url.pathname}`;
   const tags = [
     `<title>${htmlEscape(title)}</title>`,
     `<meta name="description" content="${htmlEscape(description)}">`,
@@ -4657,12 +4768,7 @@ async function songSharePreview(request, env, url) {
     `<meta name="twitter:description" content="${htmlEscape(description)}">`,
     `<meta name="twitter:image" content="${htmlEscape(image)}">`
   ].join("\n");
-  let updated = html.replace(/<title>[\s\S]*?<\/title>/i, "");
-  updated = updated.replace(/<meta\s+name=["']description["'][^>]*>/i, "");
-  updated = updated.replace(/<link\s+rel=["']canonical["'][^>]*>/i, "");
-  updated = updated.replace(/<meta\s+property=["']og:[^>]*>/gi, "");
-  updated = updated.replace(/<meta\s+name=["']twitter:[^>]*>/gi, "");
-  updated = updated.replace(/<head[^>]*>/i, match => `${match}\n${tags}`);
+  const updated = replaceSeoHead(html, tags);
   return new Response(updated, { status: assetResponse.status, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=300" } });
 }
 
@@ -4782,6 +4888,11 @@ export default {
           ok: true,
           service: "nilesoniq"
         });
+      } else if (path === "/sitemap.xml") {
+        response = await dynamicSitemap(request, env, url);
+      } else if (path.startsWith("/artist/") && env.ASSETS) {
+        response = await artistSharePreview(request, env, url);
+        if (!response) response = await env.ASSETS.fetch(request);
       } else if (path.startsWith("/song/") && env.ASSETS) {
         response = await songSharePreview(request, env, url);
         if (!response) response = await env.ASSETS.fetch(request);
