@@ -4625,17 +4625,33 @@ function replaceSeoHead(html, tags) {
   return updated.replace(/<head[^>]*>/i, match => `${match}\n${tags}`);
 }
 
+// The site shell is hosted by Vercel. This Worker is routed only for SEO
+// paths, so fetching "/" does not re-enter this Worker route.
+async function fetchVercelSiteShell(request, url) {
+  const headers = new Headers({ "Accept": "text/html" });
+  const response = await fetch(new Request(new URL("/", url.origin), {
+    method: "GET",
+    headers,
+    redirect: "follow"
+  }));
+  if (!response.ok) {
+    console.error("Vercel site shell fetch failed:", response.status);
+  }
+  return response;
+}
+
 function notFoundHtml() {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,follow"><title>Page not found | NileSoniq</title><meta name="description" content="The requested NileSoniq page could not be found."></head><body style="font-family:Arial,sans-serif;max-width:680px;margin:12vh auto;padding:24px;line-height:1.6"><h1>Page not found</h1><p>This artist or song page may have been removed, or its link may be incorrect.</p><p><a href="https://nilesoniq.com/">Return to NileSoniq</a></p></body></html>`;
 }
 
 async function artistSharePreview(request, env, url) {
-  if (request.method !== "GET" || !env.ASSETS || !/^\/artist\/[^/]+\/?$/i.test(url.pathname)) return null;
+  if (request.method !== "GET" || !/^\/artist\/[^/]+\/?$/i.test(url.pathname)) return null;
   let requestedSlug = "";
   try { requestedSlug = decodeURIComponent(url.pathname.split("/")[2] || ""); }
   catch { return new Response(notFoundHtml(), { status: 404, headers: { "Content-Type": "text/html; charset=utf-8", "X-Robots-Tag": "noindex, follow" } }); }
 
   let artist = null;
+  let lookupFailed = false;
   try {
     const result = await env.DB.prepare(`
       SELECT id, name, bio, avatar_url, location, verified, is_premium, created_at
@@ -4650,14 +4666,28 @@ async function artistSharePreview(request, env, url) {
     const wanted = artistSlugForShare(requestedSlug);
     artist = (result.results || []).find(item => artistSlugForShare(item.name) === wanted) || null;
   } catch (e) {
+    lookupFailed = true;
     console.error("Artist share preview lookup failed:", e.message);
+  }
+
+  if (lookupFailed) {
+    return new Response("Artist page temporarily unavailable", {
+      status: 503,
+      headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" }
+    });
   }
 
   if (!artist) {
     return new Response(notFoundHtml(), { status: 404, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=60", "X-Robots-Tag": "noindex, follow" } });
   }
 
-  const assetResponse = await env.ASSETS.fetch(new Request(new URL("/", url.origin), { method: "GET", headers: request.headers }));
+  const assetResponse = await fetchVercelSiteShell(request, url);
+  if (!assetResponse.ok) {
+    return new Response("NileSoniq website temporarily unavailable", {
+      status: 502,
+      headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" }
+    });
+  }
   const html = await assetResponse.text();
   const name = String(artist.name || "Artist").trim();
   const title = `${name} | Artist Profile on NileSoniq`;
@@ -4716,7 +4746,7 @@ async function dynamicSitemap(request, env, url) {
 }
 
 async function songSharePreview(request, env, url) {
-  if (request.method !== "GET" || !env.ASSETS || !/^\/song\/[^/]+\/?$/i.test(url.pathname)) return null;
+  if (request.method !== "GET" || !/^\/song\/[^/]+\/?$/i.test(url.pathname)) return null;
   let slug = "";
   try {
     slug = decodeURIComponent(url.pathname.split("/")[2] || "");
@@ -4724,10 +4754,16 @@ async function songSharePreview(request, env, url) {
     return null;
   }
   let song = null;
+  let lookupFailed = false;
   try {
     const result = await env.DB.prepare(`
       SELECT id, title, artist, description, cover_url
-      FROM songs WHERE approved = 1 ORDER BY rowid DESC LIMIT 1000
+      FROM songs WHERE approved = 1
+        AND NOT EXISTS (
+          SELECT 1 FROM copyright_removals cr
+          WHERE cr.content_type = 'song' AND cr.content_id = songs.id
+        )
+      ORDER BY rowid DESC LIMIT 2000
     `).all();
     const requestedSlug = slugForShare(slug);
     song = (result.results || []).find(item =>
@@ -4735,20 +4771,37 @@ async function songSharePreview(request, env, url) {
       slugForShare(item.title) === requestedSlug
     ) || null;
   } catch (e) {
+    lookupFailed = true;
     console.error("Song share preview lookup failed:", e.message);
   }
-  const assetResponse = await env.ASSETS.fetch(new Request(new URL("/", url.origin), { method: "GET", headers: request.headers }));
+
+  if (lookupFailed) {
+    return new Response("Song page temporarily unavailable", {
+      status: 503,
+      headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" }
+    });
+  }
+  if (!song) {
+    return new Response(notFoundHtml(), {
+      status: 404,
+      headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=60", "X-Robots-Tag": "noindex, follow" }
+    });
+  }
+
+  const assetResponse = await fetchVercelSiteShell(request, url);
+  if (!assetResponse.ok) {
+    return new Response("NileSoniq website temporarily unavailable", {
+      status: 502,
+      headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" }
+    });
+  }
   const html = await assetResponse.text();
-  const title = song ? `${song.title || "Song"} — ${song.artist || "NileSoniq"}` : "NileSoniq — Ugandan Music Platform";
-  const description = song
-    ? `Listen to ${song.title || "this song"} by ${song.artist || "this artist"} on NileSoniq.`
-    : "Discover and stream music from Ugandan artists on NileSoniq.";
+  const title = `${song.title || "Song"} — ${song.artist || "NileSoniq"}`;
+  const description = `Listen to ${song.title || "this song"} by ${song.artist || "this artist"} on NileSoniq.`;
   // Artwork URLs may be stored as absolute URLs or site-relative R2/API paths.
   // Resolve relative paths to absolute HTTPS URLs so WhatsApp can fetch them.
   const image = song ? absolutePublicImage(song.cover_url) : "https://nilesoniq.com/favicon.png";
-  const canonical = song
-    ? `https://nilesoniq.com/song/${songSlugForShare(song)}`
-    : `https://nilesoniq.com${url.pathname}`;
+  const canonical = `https://nilesoniq.com/song/${songSlugForShare(song)}`;
   const tags = [
     `<title>${htmlEscape(title)}</title>`,
     `<meta name="description" content="${htmlEscape(description)}">`,
@@ -4890,14 +4943,13 @@ export default {
         });
       } else if (path === "/sitemap.xml") {
         response = await dynamicSitemap(request, env, url);
-      } else if (path.startsWith("/artist/") && env.ASSETS) {
+        if (!response) response = error("Method not allowed", 405);
+      } else if (path.startsWith("/artist/")) {
         response = await artistSharePreview(request, env, url);
-        if (!response) response = await env.ASSETS.fetch(request);
-      } else if (path.startsWith("/song/") && env.ASSETS) {
+        if (!response) response = error("Method not allowed", 405);
+      } else if (path.startsWith("/song/")) {
         response = await songSharePreview(request, env, url);
-        if (!response) response = await env.ASSETS.fetch(request);
-      } else if (env.ASSETS) {
-        response = await env.ASSETS.fetch(request);
+        if (!response) response = error("Method not allowed", 405);
       } else {
         response = error("Not found", 404);
       }
