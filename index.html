@@ -7472,14 +7472,14 @@ function isShortPublicRoute(){
 }
 
 async function openArtistBySlug(slug){
-  const wanted = cleanSlug(decodeURIComponent(slug || ""));
+  let wanted = "";
+  try{ wanted = cleanSlug(decodeURIComponent(String(slug || ""))); }
+  catch(_){ wanted = cleanSlug(String(slug || "")); }
   try{
-    const {data,error} = await sb
-      .from("artists")
-      .select("*")
-      .order("created_at",{ascending:false});
-    if(error) throw error;
-    const artist = (data || []).find(item => artistPublicSlug(item) === wanted);
+    // Use the same Cloudflare/D1 public source used by the Worker-generated
+    // canonical metadata. Public artist API responses intentionally omit user_id.
+    const artists = await loadPublicTable("artists", {limit:500, order:"created_at.desc"});
+    const artist = (artists || []).find(item => artistPublicSlug(item) === wanted);
     if(!artist){
       await showPage("home");
       alert("Artist profile not found.");
@@ -7865,48 +7865,47 @@ async function openArtistProfile(artistId, fromPublicRoute=false){
     }
 
     let artistSongs = [];
-
-    const {
-      data:songsById,
-      error:songsByIdError
-    } = await sb
-      .from("songs")
-      .select("*")
-      .eq("artist_id",artist.id)
-      .eq("approved",true)
-      .order("created_at",{ascending:false});
-
-    if(!songsByIdError && songsById){
-      artistSongs = songsById;
+    try{
+      const publicSongs = await loadPublicTable("songs", {limit:1000, order:"created_at.desc"});
+      const isApprovedPublicSong = item => item && (
+        item.approved === true || item.approved === 1 ||
+        String(item.approved || "").toLowerCase() === "true" ||
+        String(item.approved || "").toLowerCase() === "1" ||
+        String(item.approved || "").toLowerCase() === "approved"
+      );
+      artistSongs = (publicSongs || []).filter(song => {
+        if(!isApprovedPublicSong(song)) return false;
+        if(song.artist_id && String(song.artist_id) === String(artist.id)) return true;
+        return normalizeSearchText(song.artist_name || song.artist || "") === normalizeSearchText(artist.name || "");
+      });
+    }catch(songLoadError){
+      console.warn("Could not load public artist songs from Cloudflare:", songLoadError);
+      artistSongs = [];
     }
+    window.artistProfileSongs = artistSongs;
+    window.__nileSongRegistry = window.__nileSongRegistry || {};
+    artistSongs.forEach(song => { window.__nileSongRegistry[String(song.id)] = song; });
 
-    if(artistSongs.length === 0 && artist.user_id){
-
-      const {data:songsByUser} = await sb
-        .from("songs")
-        .select("*")
-        .eq("artist_id",artist.user_id)
-        .eq("approved",true)
-        .order("created_at",{ascending:false});
-
-      if(songsByUser){
-        artistSongs = songsByUser;
-      }
-    }
-
-    if(artistSongs.length === 0 && artist.name){
-
-      const {data:songsByName} = await sb
-        .from("songs")
-        .select("*")
-        .eq("artist",artist.name)
-        .eq("approved",true)
-        .order("created_at",{ascending:false});
-
-      if(songsByName){
-        artistSongs = songsByName;
-      }
-    }
+    // Update browser metadata as well as the server-rendered metadata seen by crawlers.
+    const publicArtistName = String(artist.name || "Artist").trim();
+    const artistUrl = "https://nilesoniq.com" + artistPublicUrl(artist);
+    const artistDescription = String(artist.bio || `Discover music and songs by ${publicArtistName} on NileSoniq.`).replace(/\s+/g," ").trim().slice(0,155);
+    document.title = `${publicArtistName} | Artist Profile on NileSoniq`;
+    let artistCanonical = document.querySelector('link[rel="canonical"]');
+    if(!artistCanonical){ artistCanonical=document.createElement("link"); artistCanonical.rel="canonical"; document.head.appendChild(artistCanonical); }
+    artistCanonical.href = artistUrl;
+    let artistDescriptionMeta = document.querySelector('meta[name="description"]');
+    if(!artistDescriptionMeta){ artistDescriptionMeta=document.createElement("meta"); artistDescriptionMeta.name="description"; document.head.appendChild(artistDescriptionMeta); }
+    artistDescriptionMeta.content = artistDescription;
+    const setArtistMeta = (selector, attribute, value, create) => {
+      let element = document.querySelector(selector);
+      if(!element){ element=document.createElement("meta"); create(element); document.head.appendChild(element); }
+      element.setAttribute(attribute, value);
+    };
+    setArtistMeta('meta[property="og:title"]',"content",document.title,el=>el.setAttribute("property","og:title"));
+    setArtistMeta('meta[property="og:description"]',"content",artistDescription,el=>el.setAttribute("property","og:description"));
+    setArtistMeta('meta[property="og:url"]',"content",artistUrl,el=>el.setAttribute("property","og:url"));
+    if(artist.avatar_url) setArtistMeta('meta[property="og:image"]',"content",new URL(artist.avatar_url,window.location.origin).href,el=>el.setAttribute("property","og:image"));
 
     const photo =
       artist.avatar_url
@@ -8123,6 +8122,11 @@ function closeArtistProfile(){
 
   if(isShortPublicRoute()){
     window.history.pushState({},"", "/");
+    document.title = "NileSoniq — Ugandan Music Platform";
+    const canonical = document.querySelector('link[rel="canonical"]');
+    if(canonical) canonical.href = "https://nilesoniq.com/";
+    const description = document.querySelector('meta[name="description"]');
+    if(description) description.content = "Discover and stream music from Ugandan artists on NileSoniq.";
     showPage("home");
   }
 }
