@@ -4063,7 +4063,37 @@ async function applyFeaturePaymentStatus(env, reference, status, transactionId, 
   const payment=await env.DB.prepare("SELECT * FROM nilesoniq_feature_payments WHERE reference=? LIMIT 1").bind(reference).first();
   if(!payment) return {matched:false};
   if(isSuccessfulPaymentStatus(status)) {
-    if(Number(amount)!==Number(payment.amount) || String(currency||'').toUpperCase()!=='UGX') return {matched:true,changed:false,reason:'amount_or_currency_mismatch'};
+    const confirmedAmount = Number(amount);
+    const expectedAmount = Number(payment.amount);
+    const confirmedCurrency = String(currency || '').trim().toUpperCase();
+    const feeValue = fee === null || fee === undefined || fee === '' ? null : Number(fee);
+    const feeSupplied = feeValue !== null;
+    const feeValid = !feeSupplied || (Number.isFinite(feeValue) && feeValue >= 0 && feeValue <= confirmedAmount);
+    const allowedAmounts = payment.payment_type === 'boost'
+      ? [5000, 10000, 15000]
+      : payment.payment_type === 'listener_subscription' ? [5000] : [];
+
+    // PesaJet may confirm a customer collection total above the advertised
+    // package price because of its transaction fee/tax. This applies to BOTH
+    // Song Boost and Listener Artist Subscription payments. Keep each feature
+    // entitlement fixed at payment.amount (including the listener's 30-day
+    // subscription), but accept a higher confirmed UGX collection. The signed
+    // webhook reference and successful status remain mandatory, and any
+    // reported fee must be a valid non-negative amount no greater than the
+    // confirmed collection.
+    if (
+      !Number.isFinite(confirmedAmount) || !Number.isFinite(expectedAmount) ||
+      confirmedAmount < expectedAmount || confirmedCurrency !== 'UGX' || !feeValid ||
+      !allowedAmounts.includes(expectedAmount)
+    ) {
+      console.error('Feature payment confirmation failed amount/currency validation', {
+        reference, paymentType: payment.payment_type,
+        receivedAmount: Number.isFinite(confirmedAmount) ? confirmedAmount : null,
+        receivedCurrency: confirmedCurrency || null,
+        expectedAmount, feeSupplied, receivedFee: feeSupplied ? feeValue : null
+      });
+      return {matched:true,changed:false,reason:'amount_or_currency_mismatch'};
+    }
     const now=new Date().toISOString();
     const expires=new Date(Date.now()+Number(payment.duration_days||0)*86400000).toISOString();
     const upd=await env.DB.prepare(`UPDATE nilesoniq_feature_payments SET status='active',provider_transaction_id=?,paid_at=?,expires_at=? WHERE reference=? AND lower(status)='pending'`).bind(transactionId||'',now,expires,reference).run();
@@ -4078,13 +4108,13 @@ async function applyFeaturePaymentStatus(env, reference, status, transactionId, 
       await env.DB.prepare(`UPDATE listener_artist_subscriptions SET status='active',started_at=?,expires_at=? WHERE payment_id=?`).bind(now,expires,payment.id).run();
     }
     if(changed) {
-      const feeKnown=fee!==null&&fee!==undefined&&Number.isFinite(Number(fee));
-      const feeAmount=feeKnown?Number(fee):0;
+      const feeKnown=feeSupplied && feeValid;
+      const feeAmount=feeKnown?feeValue:0;
       const sourceType=payment.payment_type==='listener_subscription'?'listener_subscription':'song_boost';
-      const note=payment.payment_type==='listener_subscription'?'Verified listener subscription fee retained by NileSoniQ; no artist share.':'Verified Song Boost campaign payment.';
+      const note=payment.payment_type==='listener_subscription'?'Verified listener subscription fee retained by NileSoniQ; no artist share.':'Verified Song Boost campaign payment; package entitlement remains at its advertised fixed price.';
       await env.DB.batch([
-        env.DB.prepare(`INSERT OR IGNORE INTO platform_financial_ledger (event_key,event_type,source_type,source_id,reference,amount_signed,currency,pesajet_fee_amount,tax_liability_amount,status,note,occurred_at) VALUES (?,'income',?,?,?,?,'UGX',?,0,?,?,?)`).bind(`${sourceType}:${payment.id}`,sourceType,payment.id,reference,payment.amount,feeAmount,feeKnown?'posted':'fee_unverified',note,now),
-        env.DB.prepare(`UPDATE platform_wallet SET balance=MAX(0,balance+?-?),updated_at=datetime('now') WHERE id=(SELECT id FROM platform_wallet ORDER BY created_at LIMIT 1)`).bind(payment.amount,feeAmount)
+        env.DB.prepare(`INSERT OR IGNORE INTO platform_financial_ledger (event_key,event_type,source_type,source_id,reference,amount_signed,currency,pesajet_fee_amount,tax_liability_amount,status,note,occurred_at) VALUES (?,'income',?,?,?,?,'UGX',?,0,?,?,?)`).bind(`${sourceType}:${payment.id}`,sourceType,payment.id,reference,confirmedAmount,feeAmount,feeKnown?'posted':'fee_unverified',note,now),
+        env.DB.prepare(`UPDATE platform_wallet SET balance=MAX(0,balance+?-?),updated_at=datetime('now') WHERE id=(SELECT id FROM platform_wallet ORDER BY created_at LIMIT 1)`).bind(confirmedAmount,feeAmount)
       ]);
     }
     return {matched:true,changed,reason:changed?'verified_success':'already_processed'};
