@@ -1,19 +1,49 @@
-
+# NileSoniQ production Worker configuration.
+# Keep the existing API routes and add SEO page routes.
 name = "nile-soniq-auth"
 main = "worker.js"
+account_id = "ba3c67de5e57e912aafb48b471f70a33"
 compatibility_date = "2026-10-05"
+workers_dev = false
+usage_model = "standard"
+
+routes = [
+  # Existing API routes (preserved from the connected Cloudflare account)
+  { pattern = "www.nilesoniq.com/api/*", zone_name = "nilesoniq.com" },
+  { pattern = "nilesoniq.com/api/admin/*", zone_name = "nilesoniq.com" },
+  { pattern = "nilesoniq.com/api/db/*", zone_name = "nilesoniq.com" },
+  { pattern = "nilesoniq.com/api/storage/*", zone_name = "nilesoniq.com" },
+  { pattern = "nilesoniq.com/api/auth/*", zone_name = "nilesoniq.com" },
+  { pattern = "nilesoniq.com/api/rpc/*", zone_name = "nilesoniq.com" },
+  { pattern = "nilesoniq.com/api/health", zone_name = "nilesoniq.com" },
+  { pattern = "nilesoniq.com/api/payments/*", zone_name = "nilesoniq.com" },
+  { pattern = "nilesoniq.com/api/*", zone_name = "nilesoniq.com" },
+  { pattern = "nilesoniq.com/api/uploads/*", zone_name = "nilesoniq.com" },
+  { pattern = "nilesoniq.com/api/artist/*", zone_name = "nilesoniq.com" },
+  { pattern = "www.nilesoniq.com/api/storage/*", zone_name = "nilesoniq.com" },
+  { pattern = "nilesoniq.com/api/ads", zone_name = "nilesoniq.com" },
+  { pattern = "www.nilesoniq.com/api/ads", zone_name = "nilesoniq.com" },
+
+  # New SEO routes: these send public page requests through this Worker.
+  { pattern = "nilesoniq.com/artist/*", zone_name = "nilesoniq.com" },
+  { pattern = "nilesoniq.com/song/*", zone_name = "nilesoniq.com" },
+  { pattern = "nilesoniq.com/sitemap.xml", zone_name = "nilesoniq.com" },
+  { pattern = "www.nilesoniq.com/artist/*", zone_name = "nilesoniq.com" },
+  { pattern = "www.nilesoniq.com/song/*", zone_name = "nilesoniq.com" },
+  { pattern = "www.nilesoniq.com/sitemap.xml", zone_name = "nilesoniq.com" }
+]
 
 [[d1_databases]]
 binding = "DB"
 database_name = "nilesoniq-db"
 database_id = "c0848806-7d6d-491a-a837-0ee93902f2f9"
-migrations_dir = "migrations"
 
 [[r2_buckets]]
 binding = "MEDIA_BUCKET"
 bucket_name = "nilesoniq-media"
 
-[vars]
-# Configure real payment endpoints only when verified.
-# PESAJET_COLLECTION_URL = ""
-# PESAJET_DISBURSEMENT_URL = ""
+# Keep these existing Worker secrets configured in Cloudflare:
+# PESAJET_API_KEY
+# PESAJET_WEBHOOK_SECRET
+# RESEND_API_KEY
+# Do not put secret values in this file.
