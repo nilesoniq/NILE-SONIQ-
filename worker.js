@@ -392,7 +392,17 @@ async function paidSignupRoute(request, env) {
     .bind(id,reference,email,passwordHash,artistName,phone,provider,packageCode,amount).run();
   let response, result;
   try {
-    response = await fetch(`${baseUrl}/payments`, {method:"POST",headers:{"Content-Type":"application/json","X-API-Key":apiKey},body:JSON.stringify({type:"COLLECTION",amount,currency:"UGX",phoneNumber:phone,provider,reference,description:`NileSoniQ ${packageCode} artist signup`,idempotencyKey:`nilesoniq-${reference}`})});
+    // PesaJet support confirmed reference, description and idempotencyKey are
+    // optional. For Airtel signup only, omit these optional fields to avoid
+    // the provider-side "Transaction Id already exists" rejection. Keep our
+    // own reference in D1 and associate the returned transactionId with it.
+    const paymentPayload = {type:"COLLECTION",amount,currency:"UGX",phoneNumber:phone,provider};
+    if (provider !== "airtel") {
+      paymentPayload.reference = reference;
+      paymentPayload.description = `NileSoniQ ${packageCode} artist signup`;
+      paymentPayload.idempotencyKey = `nilesoniq-${reference}`;
+    }
+    response = await fetch(`${baseUrl}/payments`, {method:"POST",headers:{"Content-Type":"application/json","X-API-Key":apiKey},body:JSON.stringify(paymentPayload)});
     result = await response.json().catch(()=>({}));
   } catch (e) {
     console.error("Paid signup payment request outcome uncertain:",e.message);
@@ -3726,12 +3736,22 @@ async function paymentWebhookRoute(request, env) {
   }
 
   const webhookPayment = readPesaJetWebhookPaymentFields(payload);
-  const reference = webhookPayment.reference;
+  let reference = webhookPayment.reference;
   const transactionId = webhookPayment.transactionId;
 
+  // Airtel signup requests omit PesaJet's optional reference field. Resolve
+  // the internal NileSoniQ reference using the transactionId returned by
+  // PesaJet and saved when the collection request was created.
+  if (!reference && transactionId) {
+    const signup = await env.DB.prepare(
+      "SELECT reference FROM pending_artist_signups WHERE provider_transaction_id=? LIMIT 1"
+    ).bind(transactionId).first();
+    if (signup?.reference) reference = signup.reference;
+  }
+
   if (!reference) {
-    console.error("PesaJet webhook rejected: payment reference missing.", { event, status });
-    return error("Webhook reference is required", 422);
+    console.error("PesaJet webhook could not be matched to an internal payment reference.", { event, status, hasTransactionId: Boolean(transactionId) });
+    return error("Webhook payment could not be matched", 422);
   }
 
   try {
