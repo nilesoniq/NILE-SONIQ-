@@ -351,8 +351,15 @@ async function paidSignupRoute(request, env) {
   if (request.method === "GET") {
     const reference = String(new URL(request.url).searchParams.get("reference") || "").trim();
     if (!/^NILESONIQ-SIGNUP-[A-F0-9-]{20,80}$/i.test(reference)) return error("A valid payment reference is required", 422);
-    const row = await env.DB.prepare("SELECT status, failure_message FROM pending_artist_signups WHERE reference = ? LIMIT 1").bind(reference).first();
+    let row = await env.DB.prepare("SELECT status, failure_message, provider_transaction_id, amount FROM pending_artist_signups WHERE reference = ? LIMIT 1").bind(reference).first();
     if (!row) return error("Payment request not found", 404);
+    if (String(row.status).toLowerCase() === "pending" && row.provider_transaction_id) {
+      const checked = await fetchPesaJetTransactionStatus(env, row.provider_transaction_id);
+      if (checked.ok && checked.status && checked.status !== "PENDING" && checked.status !== "PROCESSING") {
+        const applied = await completePaidArtistSignup(env, reference, checked.status, row.provider_transaction_id, checked.amount, checked.currency, checked.message || checked.status);
+        row = await env.DB.prepare("SELECT status, failure_message FROM pending_artist_signups WHERE reference = ? LIMIT 1").bind(reference).first();
+      }
+    }
     return json({status: row.status, message: row.status === "completed" ? "Payment confirmed. Your account was created and a verification email was sent if email delivery is available." : row.status === "failed" ? (row.failure_message || "Payment failed.") : "Payment is still pending confirmation."});
   }
   if (request.method !== "POST") return error("Method not allowed", 405);
@@ -3590,6 +3597,83 @@ function readPesaJetWebhookPaymentFields(payload) {
 }
 
 
+// Query the provider's documented GET /payments/{transactionId} endpoint.
+// This is deliberately one request per browser poll; do not hold a Worker
+// invocation open for the SDK's full 60-second polling window.
+async function fetchPesaJetTransactionStatus(env, transactionId) {
+  const id = String(transactionId || "").trim();
+  if (!id) return { ok: false, reason: "missing_transaction_id" };
+  const apiKey = env.PESAJET_API_KEY || env.PESAJET_TOKEN;
+  if (!apiKey) return { ok: false, reason: "missing_api_key" };
+  const baseUrl = String(env.PESAJET_API_BASE_URL || "https://payments.pesajet.com/api/v1").replace(/\/+$/, "");
+  let response;
+  try {
+    response = await fetch(`${baseUrl}/payments/${encodeURIComponent(id)}`, {
+      method: "GET",
+      headers: { "Accept": "application/json", "X-API-Key": apiKey }
+    });
+  } catch (e) {
+    console.error("PesaJet status request failed:", e.message);
+    return { ok: false, reason: "provider_unreachable" };
+  }
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    console.error("PesaJet status request returned HTTP error:", response.status);
+    return { ok: false, reason: "provider_http_error", httpStatus: response.status };
+  }
+  const data = payload?.data && typeof payload.data === "object" ? payload.data : {};
+  const tx = payload?.transaction && typeof payload.transaction === "object"
+    ? payload.transaction
+    : data?.transaction && typeof data.transaction === "object" ? data.transaction : data;
+  const fields = readPesaJetWebhookPaymentFields(payload);
+  const rawStatus = tx?.status ?? tx?.transactionStatus ?? tx?.paymentStatus ?? tx?.state ??
+    data?.status ?? data?.transactionStatus ?? payload?.status ?? payload?.transactionStatus ?? "";
+  const status = String(rawStatus || "").toUpperCase().replace(/[\s-]+/g, "_");
+  return {
+    ok: true,
+    status,
+    amount: fields.amount,
+    currency: fields.currency,
+    fee: fields.fee,
+    message: String(tx?.failureReason || tx?.failure_reason || tx?.message || data?.failureReason || data?.message || payload?.failureReason || payload?.message || "")
+  };
+}
+
+async function pesajetPaymentStatusRoute(request, env) {
+  if (request.method !== "GET") return error("Method not allowed", 405);
+  const user = await currentUser(request, env);
+  if (!user) return error("Authentication required", 401);
+  const reference = String(new URL(request.url).searchParams.get("reference") || "").trim();
+  if (!reference || reference.length > 120) return error("A valid payment reference is required", 422);
+
+  const feature = await env.DB.prepare("SELECT * FROM nilesoniq_feature_payments WHERE reference=? AND payer_user_id=? LIMIT 1").bind(reference, user.id).first();
+  const premium = feature ? null : await env.DB.prepare("SELECT * FROM premium_subscriptions WHERE reference=? AND user_id=? LIMIT 1").bind(reference, user.id).first();
+  if (!feature && !premium) return error("Payment reference not found", 404);
+  const payment = feature || premium;
+  const currentStatus = String(payment.status || "").toUpperCase();
+  if (currentStatus !== "PENDING") return json({ success: true, status: currentStatus, reference, final: true });
+  const transactionId = String(payment.provider_transaction_id || "").trim();
+  if (!transactionId) return json({ success: true, status: "PENDING", reference, final: false, message: "Waiting for PesaJet to return the transaction ID." }, 202);
+
+  const checked = await fetchPesaJetTransactionStatus(env, transactionId);
+  if (!checked.ok) return json({ success: true, status: "PENDING", reference, final: false, message: "Payment is still awaiting provider confirmation." }, 202);
+  if (!checked.status || ["PENDING", "PROCESSING", "INITIATED", "ACCEPTED", "IN_PROGRESS"].includes(checked.status)) {
+    return json({ success: true, status: checked.status || "PENDING", reference, final: false }, 202);
+  }
+
+  if (feature) {
+    await applyFeaturePaymentStatus(env, reference, checked.status, transactionId, checked.amount, checked.currency, checked.fee);
+  } else {
+    await applyPremiumPaymentStatus(env, reference, checked.status, transactionId, checked.amount, checked.currency, checked.message, checked.fee);
+  }
+  const refreshed = feature
+    ? await env.DB.prepare("SELECT status FROM nilesoniq_feature_payments WHERE reference=? LIMIT 1").bind(reference).first()
+    : await env.DB.prepare("SELECT status FROM premium_subscriptions WHERE reference=? LIMIT 1").bind(reference).first();
+  const finalStatus = String(refreshed?.status || "pending").toUpperCase();
+  return json({ success: true, status: finalStatus, reference, final: ["ACTIVE", "FAILED", "COMPLETED", "EXPIRED"].includes(finalStatus), message: checked.message || null });
+}
+
+
 async function paymentWebhookRoute(request, env) {
   if (request.method !== "POST") {
     return error("Method not allowed", 405);
@@ -4050,13 +4134,17 @@ async function featurePaymentRoute(request, env) {
   let response,result;
   try { response=await fetch(`${baseUrl}/payments`,{method:'POST',headers:{'Content-Type':'application/json','X-API-Key':apiKey},body:JSON.stringify({type:'COLLECTION',amount,currency:'UGX',phoneNumber:phone,provider,reference,description:type==='boost'?`NileSoniQ ${packageCode} Boost`:'NileSoniQ Listener Artist Subscription - 30 days',idempotencyKey:`nilesoniq-${reference}`})}); result=await response.json().catch(()=>({})); }
   catch(e){ console.error('Feature payment request uncertain:',e.message); return error('Payment request outcome is uncertain; it remains pending.',502); }
+  const featureData=result?.data&&typeof result.data==='object'?result.data:{};
+  const featureTx=result?.transaction&&typeof result.transaction==='object'?result.transaction:(featureData?.transaction&&typeof featureData.transaction==='object'?featureData.transaction:featureData);
+  const featureTransactionId=String(featureTx?.transactionId||featureTx?.transaction_id||featureData?.transactionId||result?.transactionId||result?.transaction_id||'');
   if(!response.ok || result?.success===false || result?.error){
     const msg=String(result?.message||result?.error?.message||'PesaJet rejected the payment request');
     await env.DB.prepare("UPDATE nilesoniq_feature_payments SET status='failed',failure_message=? WHERE id=? AND status='pending'").bind(msg,id).run();
     if(type==='listener_subscription') await env.DB.prepare("UPDATE listener_artist_subscriptions SET status='failed' WHERE payment_id=? AND status='pending'").bind(id).run();
     return error(msg,response.status>=400&&response.status<500?response.status:502);
   }
-  return json({success:true,status:'PENDING',reference,message:`Approve the UGX ${amount.toLocaleString('en-US')} mobile-money prompt. The feature activates only after PesaJet confirms payment.`});
+  if(featureTransactionId) await env.DB.prepare("UPDATE nilesoniq_feature_payments SET provider_transaction_id=? WHERE id=? AND status='pending'").bind(featureTransactionId,id).run();
+  return json({success:true,status:'PENDING',reference,transactionId:featureTransactionId||null,message:`Approve the UGX ${amount.toLocaleString('en-US')} mobile-money prompt. The feature activates only after PesaJet confirms payment.`});
 }
 
 async function applyFeaturePaymentStatus(env, reference, status, transactionId, amount, currency, fee) {
@@ -4946,6 +5034,8 @@ export default {
         );
       } else if (path === "/api/payments/feature-payment") {
         response = await featurePaymentRoute(request, env);
+      } else if (path === "/api/payments/pesajet-status") {
+        response = await pesajetPaymentStatusRoute(request, env);
       } else if (path === "/api/payments/premium-subscription") {
         response = await premiumSubscriptionRoute(request, env);
       } else if (path.startsWith("/api/storage/public/")) {
