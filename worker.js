@@ -380,8 +380,9 @@ async function paidSignupRoute(request, env) {
   if (!["mtn","airtel"].includes(provider)) return error("Provider must be MTN or Airtel.", 422);
   const existing = await env.DB.prepare("SELECT id FROM auth_users WHERE lower(email)=? AND deleted_at IS NULL LIMIT 1").bind(email).first();
   if (existing) return error("An account with that email already exists.", 409);
-  const activePending = await env.DB.prepare("SELECT reference FROM pending_artist_signups WHERE lower(email)=? AND status='pending' ORDER BY created_at DESC LIMIT 1").bind(email).first();
-  if (activePending) return error(`A payment request is already pending for this email. Reference: ${activePending.reference}. Please do not pay again.`, 409);
+  // Each signup attempt is independent. Do not block a new attempt merely
+  // because this email or Airtel number has another payment still pending.
+  // The unique internal reference below keeps every attempt separately mapped.
   const apiKey = env.PESAJET_API_KEY || env.PESAJET_TOKEN;
   const baseUrl = String(env.PESAJET_API_BASE_URL || "https://payments.pesajet.com/api/v1").replace(/\/+$/, "");
   if (!apiKey) return error("Payment service is not configured.", 503);
@@ -418,8 +419,27 @@ async function paidSignupRoute(request, env) {
     await env.DB.prepare("UPDATE pending_artist_signups SET status='failed',failure_message=? WHERE reference=? AND status='pending'").bind(reason.slice(0,300),reference).run();
     return error(reason, response.status >= 400 && response.status < 500 ? response.status : 502);
   }
-  await env.DB.prepare("UPDATE pending_artist_signups SET provider_transaction_id=? WHERE reference=? AND status='pending'").bind(providerId,reference).run();
-  return json({success:true,status:"pending",reference,amount,currency:"UGX",package_code:packageCode,message:`Payment prompt requested for UGX ${amount}. Approve it on your phone. Your account and verification email will be created only after a verified successful payment.`},202);
+  if (!providerId) {
+    console.error("PesaJet accepted paid signup request without returning a transactionId.", { reference, provider });
+    return error(`PesaJet did not return a transaction ID. This request may still be active; do not submit it again until its status is checked. Reference: ${reference}`, 502);
+  }
+  // PesaJet creates transactionId values. We cannot choose that provider ID;
+  // save the returned value only if no other signup attempt already owns it.
+  // This prevents two internal attempts from being matched to one provider payment.
+  const savedTransaction = await env.DB.prepare(`
+    UPDATE pending_artist_signups
+       SET provider_transaction_id=?
+     WHERE reference=? AND status='pending'
+       AND NOT EXISTS (
+         SELECT 1 FROM pending_artist_signups
+          WHERE provider_transaction_id=? AND reference<>?
+       )
+  `).bind(providerId,reference,providerId,reference).run();
+  if (!savedTransaction?.meta || Number(savedTransaction.meta.changes || 0) !== 1) {
+    console.error("PesaJet transactionId was already linked to another signup attempt.", { reference, providerId });
+    return error(`PesaJet returned a transaction ID already linked to another signup. The payment has not been attached to this account. Contact support before retrying. Reference: ${reference}`, 502);
+  }
+  return json({success:true,status:"pending",reference,transactionId:providerId,amount,currency:"UGX",package_code:packageCode,message:`Payment prompt requested for UGX ${amount}. Approve it on your phone. Your account and verification email will be created only after a verified successful payment.`},202);
 }
 
 async function completePaidArtistSignup(env, reference, status, transactionId, amount, currency, failureMessage="") {
