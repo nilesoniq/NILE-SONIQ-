@@ -2522,6 +2522,12 @@ Artist Login
   </div>
 </div>
 
+<div class="dashboard-card hidden" id="artistUploadLimitNotice" role="status" aria-live="polite" style="margin-top:12px;border:1px solid rgba(255,165,0,.45);">
+  <h3 style="margin-top:0;">Monthly upload limit reached</h3>
+  <p id="artistUploadLimitMessage" style="color:#bbb;line-height:1.6;margin-bottom:12px;">You have used all song uploads for your current package cycle.</p>
+  <button class="btn btn-orange" type="button" onclick="openArtistPackageUpgrade()">Upgrade your package</button>
+</div>
+
 <div class="dashboard-card hidden" id="artistProfileEditForm" style="margin-top:0;">
 
 <h2>Edit Artist Profile</h2>
@@ -4452,6 +4458,7 @@ async function updateUI(){
 
 
     await loadArtistProfile();
+    await refreshArtistUploadAllowance();
 
     await loadMySongs();
 
@@ -4480,6 +4487,7 @@ async function updateUI(){
     dashboardContent.classList.add("hidden");
 
     currentAdmin = null;
+    await refreshArtistUploadAllowance();
 
   }
 
@@ -4584,6 +4592,7 @@ async function showPage(page, updateUrl=true){
     if(currentUser){
 
       await loadArtistProfile();
+      await refreshArtistUploadAllowance();
 
       await loadMySongs();
 
@@ -5333,13 +5342,65 @@ function toggleWithdrawalForm(){
 function toggleArtistProfileEdit(){
   const form=document.getElementById("artistProfileEditForm");
   const button=document.getElementById("toggleArtistProfileEdit");
-  if(!form || !button) return;
+  if(!form || !button || button.classList.contains("hidden")) return;
   const opening=form.classList.contains("hidden");
   form.classList.toggle("hidden",!opening);
   button.setAttribute("aria-expanded",String(opening));
   button.textContent=opening ? "Cancel Edit" : "Edit Biography";
   if(opening){ form.scrollIntoView({behavior:"smooth",block:"center"}); document.getElementById("artistName")?.focus({preventScroll:true}); }
 }
+
+async function refreshArtistUploadAllowance(){
+  const button=document.getElementById("toggleSongUpload");
+  const form=document.getElementById("songUploadForm");
+  const notice=document.getElementById("artistUploadLimitNotice");
+  const message=document.getElementById("artistUploadLimitMessage");
+  if(!button || !form || !notice) return;
+  if(!currentUser || !currentArtist){
+    button.classList.remove("hidden");
+    notice.classList.add("hidden");
+    form.classList.add("hidden");
+    button.setAttribute("aria-expanded","false");
+    button.textContent="Upload Song";
+    return;
+  }
+  try{
+    const response=await fetch(`${AUTH_API.replace(/\/api\/auth$/,"")}/api/uploads/check`,{
+      method:"GET",credentials:"include",cache:"no-store",headers:{"Accept":"application/json"}
+    });
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok || typeof data.allowed!=="boolean") throw new Error("Upload allowance could not be checked");
+    const full=!data.allowed;
+    button.classList.toggle("hidden",full);
+    notice.classList.toggle("hidden",!full);
+    if(full){
+      form.classList.add("hidden");
+      button.setAttribute("aria-expanded","false");
+      button.textContent="Upload Song";
+      const reset=data.reset_at ? new Date(data.reset_at.replace(" ","T")+"Z") : null;
+      const resetText=reset && Number.isFinite(reset.getTime())
+        ? reset.toLocaleString(undefined,{dateStyle:"long",timeStyle:"short",timeZone:"UTC"})+" UTC"
+        : "your next package-cycle reset";
+      if(message) message.textContent=`You have used ${data.used} of ${data.limit ?? "unlimited"} song uploads for this ${String(data.package_code||"current").replace(/_/g," ")} package cycle. You can upgrade your package for more uploads, or wait until ${resetText}. Your dashboard and other features remain available.`;
+    }else{
+      notice.classList.add("hidden");
+    }
+  }catch(e){
+    // Fail open for the dashboard UI. The server-side upload check still
+    // enforces the package allowance before any files are uploaded.
+    button.classList.remove("hidden");
+    notice.classList.add("hidden");
+  }
+}
+
+function openArtistPackageUpgrade(){
+  const card=document.getElementById("premiumSubscriptionCard");
+  if(!card) return;
+  card.hidden=false;
+  card.style.display="";
+  card.scrollIntoView({behavior:"smooth",block:"start"});
+}
+
 function toggleSongUpload(){
   const form=document.getElementById("songUploadForm");
   const button=document.getElementById("toggleSongUpload");
