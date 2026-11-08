@@ -997,27 +997,6 @@ async function dbRoute(request, env, path) {
       );
     }
 
-    // Search is opt-in: no search query runs until the visitor supplies a
-    // search term. Keep the searchable fields table-specific and bind values.
-    const searchTerm = (url.searchParams.get("search") || "").trim().slice(0, 120);
-    if (searchTerm) {
-      const searchableColumns = {
-        songs: ["title", "artist"],
-        artists: ["name"],
-        news: ["title"]
-      };
-      const searchColumns = searchableColumns[table] || [];
-      if (!searchColumns.length) {
-        return error("Search is not supported for this table", 400);
-      }
-      const escapedTerm = searchTerm.replace(/[\\%_]/g, "\\$&");
-      const searchClause = searchColumns
-        .map(column => `LOWER(${column}) LIKE LOWER(?) ESCAPE '\\'`)
-        .join(" OR ");
-      where = appendCondition(where, `(${searchClause})`);
-      values = [...values, ...searchColumns.map(() => `%${escapedTerm}%`)];
-    }
-
     const effectiveColumns =
       publicArtistRead && columns.includes("*")
         ? "id, name, bio, avatar_url, location, total_plays, verified, is_premium, premium_expiry_date, created_at"
@@ -1026,26 +1005,29 @@ async function dbRoute(request, env, path) {
     let query = `SELECT ${effectiveColumns} FROM ${table}${where}`;
 
     const order = url.searchParams.get("order");
+
     if (order) {
       const [column, direction] = order.split(".");
+
       if (safeIdentifier(column)) {
-        query += ` ORDER BY ${column} ${direction === "desc" ? "DESC" : "ASC"}`;
+        query += ` ORDER BY ${column} ${
+          direction === "desc" ? "DESC" : "ASC"
+        }`;
       }
     }
 
-    const requestedLimit = Number(url.searchParams.get("limit") || 100);
-    const limit = Math.min(Math.max(Number.isFinite(requestedLimit) ? Math.floor(requestedLimit) : 100, 1), 500);
-    const requestedOffset = Number(url.searchParams.get("offset") || 0);
-    const offset = Math.min(Math.max(Number.isFinite(requestedOffset) ? Math.floor(requestedOffset) : 0, 0), 100000);
+    const requestedLimit = Number(
+      url.searchParams.get("limit") || 100
+    );
 
-    // Read one extra row to indicate whether another page is available.
-    query += ` LIMIT ${limit + 1} OFFSET ${offset}`;
+    query += ` LIMIT ${Math.min(
+      Math.max(requestedLimit || 100, 1),
+      500
+    )}`;
 
     try {
       const result = await env.DB.prepare(query).bind(...values).all();
       let rows = result.results || [];
-      const hasMore = rows.length > limit;
-      if (hasMore) rows = rows.slice(0, limit);
 
       if (!admin) {
         rows = redactSensitiveColumns(rows);
@@ -1063,16 +1045,7 @@ async function dbRoute(request, env, path) {
         });
       }
 
-      return json({
-        data: rows,
-        error: null,
-        pagination: {
-          limit,
-          offset,
-          has_more: hasMore,
-          next_offset: hasMore ? offset + limit : null
-        }
-      });
+      return json({ data: rows, error: null });
     } catch (e) {
       console.error("Database read failed:", e.message);
       return error("Database request failed", 500);
@@ -1343,8 +1316,8 @@ async function dbRoute(request, env, path) {
           if (!anchorRow?.cycle_anchor) return error("Could not verify your upload-cycle date. No song was uploaded.", 503);
           const uploadCycle = getArtistUploadCycle(anchorRow.cycle_anchor);
 
-          // Only admin-approved songs count toward the package cycle limit.
-          // Pending and rejected submissions do not consume an allowance.
+          // Submitted songs consume an allowance immediately, including while
+          // pending review. Rejected submissions do not consume an allowance.
           // Keep the count and insert in one SQL statement to handle simultaneous
           // uploads safely. Preserve the existing rollout cutoff behavior.
           const insertResult = await env.DB.prepare(`
@@ -1353,7 +1326,7 @@ async function dbRoute(request, env, path) {
             WHERE (
               SELECT COUNT(*) FROM songs
               WHERE artist_id = ?
-                AND approved = 1
+                AND COALESCE(lower(review_status), CASE WHEN approved = 1 THEN 'approved' ELSE 'pending' END) != 'rejected'
                 AND datetime(created_at) >= CASE
                   WHEN datetime(?) > datetime(?) THEN datetime(?) ELSE datetime(?) END
                 AND datetime(created_at) < datetime(?)
@@ -1379,7 +1352,7 @@ async function dbRoute(request, env, path) {
             }
             const limitLabel = uploadLimit >= Number.MAX_SAFE_INTEGER ? 'unlimited' : String(uploadLimit);
             return error(
-              `Monthly song upload limit reached for your ${packageCode} package (${limitLabel} songs per month). Upgrade or try again next month.`,
+              `Monthly song submission limit reached for your ${packageCode} package (${limitLabel} submissions per package cycle). Rejected submissions do not count. Upgrade or try again after your next cycle starts.`,
               429
             );
           }
@@ -2238,75 +2211,18 @@ async function adminRoute(request, env, path) {
         return error("Song not found", 404);
       }
 
-      // Approval is the moment a song starts consuming the artist's monthly
-      // allowance. Pending and rejected songs do not count. Keep this check
-      // inside the UPDATE statement so two simultaneous approvals cannot
-      // both exceed the artist's package limit.
-      let uploadLimit = null;
-      if (status === "approved" && Number(song.approved) !== 1) {
-        let entitlement;
-        try {
-          entitlement = await syncArtistPremiumEntitlement(env, song.artist_id);
-        } catch (entitlementError) {
-          console.error("Could not verify artist package before approval:", entitlementError.message);
-          return error("Could not verify the artist's package. The song was not approved. Please try again.", 503);
-        }
-
-        const packageCode = String(entitlement?.packageCode || "free").toLowerCase();
-        uploadLimit = ARTIST_PACKAGE_UPLOAD_LIMITS[packageCode] ?? ARTIST_PACKAGE_UPLOAD_LIMITS.free;
-        const anchorRow = await env.DB.prepare(`
-          SELECT COALESCE(
-            (SELECT COALESCE(paid_at, created_at) FROM premium_subscriptions
-             WHERE user_id = ? AND lower(status) = 'active' AND expires_at IS NOT NULL
-               AND datetime(expires_at) > datetime('now')
-             ORDER BY datetime(COALESCE(paid_at, created_at)) DESC, datetime(created_at) DESC
-             LIMIT 1),
-            (SELECT created_at FROM auth_users WHERE id = ? LIMIT 1)
-          ) AS cycle_anchor
-        `).bind(song.artist_id, song.artist_id).first();
-        if (!anchorRow?.cycle_anchor) return error("Could not verify the artist's upload-cycle date. The song was not approved.", 503);
-        const uploadCycle = getArtistUploadCycle(anchorRow.cycle_anchor);
-
-        const updateResult = await env.DB.prepare(`
-          UPDATE songs
-          SET approved = 1, review_status = 'approved'
-          WHERE id = ?
-            AND (
-              SELECT COUNT(*)
-              FROM songs AS counted
-              WHERE counted.artist_id = songs.artist_id
-                AND counted.approved = 1
-                AND counted.id != songs.id
-                AND datetime(counted.created_at) >= CASE
-                  WHEN datetime(?) > datetime(?) THEN datetime(?) ELSE datetime(?) END
-                AND datetime(counted.created_at) < datetime(?)
-            ) < ?
-        `).bind(
-          songId,
-          uploadCycle.cycleStart, PACKAGE_LIMITS_EFFECTIVE_AT,
-          PACKAGE_LIMITS_EFFECTIVE_AT, uploadCycle.cycleStart,
-          uploadCycle.nextReset,
-          uploadLimit
-        ).run();
-
-        if (Number(updateResult?.meta?.changes || 0) === 0) {
-          const limitLabel = uploadLimit >= Number.MAX_SAFE_INTEGER ? "unlimited" : String(uploadLimit);
-          return error(
-            `This song cannot be approved because the artist has reached the ${packageCode.replace(/_/g, " ")} package limit (${limitLabel} approved songs this month). Pending and rejected songs do not count.`,
-            429
-          );
-        }
-      } else {
-        await env.DB.prepare(`
-          UPDATE songs
-          SET approved = ?, review_status = ?
-          WHERE id = ?
-        `).bind(
-          status === "approved" ? 1 : 0,
-          status,
-          songId
-        ).run();
-      }
+      // The submission already consumed its package-cycle slot, including
+      // while pending review. Approval must not consume a second slot or fail
+      // merely because the artist has since filled the rest of the allowance.
+      await env.DB.prepare(`
+        UPDATE songs
+        SET approved = ?, review_status = ?
+        WHERE id = ?
+      `).bind(
+        status === "approved" ? 1 : 0,
+        status,
+        songId
+      ).run();
 
       return json({
         success: true,
@@ -2802,7 +2718,7 @@ async function uploadPreflightRoute(request, env) {
       SELECT COUNT(*) AS total
       FROM songs
       WHERE artist_id = ?
-        AND approved = 1
+        AND COALESCE(lower(review_status), CASE WHEN approved = 1 THEN 'approved' ELSE 'pending' END) != 'rejected'
         AND datetime(created_at) >= CASE
           WHEN datetime(?) > datetime(?) THEN datetime(?) ELSE datetime(?) END
         AND datetime(created_at) < datetime(?)
@@ -2822,8 +2738,8 @@ async function uploadPreflightRoute(request, env) {
     const allowed = used < limit;
     const label = limit >= Number.MAX_SAFE_INTEGER ? "unlimited" : String(limit);
     const message = allowed
-      ? `${Math.max(0, limit - used)} upload${limit - used === 1 ? "" : "s"} remaining in this package cycle.`
-      : `Your ${packageCode.replace(/_/g, " ")} package upload limit has been reached (${used}/${label}). You can upgrade your package or upload again after ${cycle.nextReset} UTC.`;
+      ? `${Math.max(0, limit - used)} submission${limit - used === 1 ? "" : "s"} remaining in this package cycle.`
+      : `Your ${packageCode.replace(/_/g, " ")} package submission limit has been reached (${used}/${label}). Rejected submissions do not count. You can upgrade your package or submit again after ${cycle.nextReset} UTC.`;
 
     const result = {
       allowed,
