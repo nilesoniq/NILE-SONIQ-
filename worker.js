@@ -1303,8 +1303,20 @@ async function dbRoute(request, env, path) {
           }
           const packageCode = String(entitlement?.packageCode || 'free').toLowerCase();
           const uploadLimit = ARTIST_PACKAGE_UPLOAD_LIMITS[packageCode] ?? ARTIST_PACKAGE_UPLOAD_LIMITS.free;
+          const anchorRow = await env.DB.prepare(`
+            SELECT COALESCE(
+              (SELECT COALESCE(paid_at, created_at) FROM premium_subscriptions
+               WHERE user_id = ? AND lower(status) = 'active' AND expires_at IS NOT NULL
+                 AND datetime(expires_at) > datetime('now')
+               ORDER BY datetime(COALESCE(paid_at, created_at)) DESC, datetime(created_at) DESC
+               LIMIT 1),
+              (SELECT created_at FROM auth_users WHERE id = ? LIMIT 1)
+            ) AS cycle_anchor
+          `).bind(user.id, user.id).first();
+          if (!anchorRow?.cycle_anchor) return error("Could not verify your upload-cycle date. No song was uploaded.", 503);
+          const uploadCycle = getArtistUploadCycle(anchorRow.cycle_anchor);
 
-          // Only admin-approved songs count toward the monthly package limit.
+          // Only admin-approved songs count toward the package cycle limit.
           // Pending and rejected submissions do not consume an allowance.
           // Keep the count and insert in one SQL statement to handle simultaneous
           // uploads safely. Preserve the existing rollout cutoff behavior.
@@ -1316,17 +1328,15 @@ async function dbRoute(request, env, path) {
               WHERE artist_id = ?
                 AND approved = 1
                 AND datetime(created_at) >= CASE
-                  WHEN datetime('now', 'start of month') > datetime(?)
-                    THEN datetime('now', 'start of month')
-                  ELSE datetime(?)
-                END
-                AND datetime(created_at) < datetime('now', 'start of month', '+1 month')
+                  WHEN datetime(?) > datetime(?) THEN datetime(?) ELSE datetime(?) END
+                AND datetime(created_at) < datetime(?)
             ) < ?
           `).bind(
             ...insertKeys.map(k => safeRow[k] ?? null),
             user.id,
-            PACKAGE_LIMITS_EFFECTIVE_AT,
-            PACKAGE_LIMITS_EFFECTIVE_AT,
+            uploadCycle.cycleStart, PACKAGE_LIMITS_EFFECTIVE_AT,
+            PACKAGE_LIMITS_EFFECTIVE_AT, uploadCycle.cycleStart,
+            uploadCycle.nextReset,
             uploadLimit
           ).run();
 
@@ -2217,6 +2227,18 @@ async function adminRoute(request, env, path) {
 
         const packageCode = String(entitlement?.packageCode || "free").toLowerCase();
         uploadLimit = ARTIST_PACKAGE_UPLOAD_LIMITS[packageCode] ?? ARTIST_PACKAGE_UPLOAD_LIMITS.free;
+        const anchorRow = await env.DB.prepare(`
+          SELECT COALESCE(
+            (SELECT COALESCE(paid_at, created_at) FROM premium_subscriptions
+             WHERE user_id = ? AND lower(status) = 'active' AND expires_at IS NOT NULL
+               AND datetime(expires_at) > datetime('now')
+             ORDER BY datetime(COALESCE(paid_at, created_at)) DESC, datetime(created_at) DESC
+             LIMIT 1),
+            (SELECT created_at FROM auth_users WHERE id = ? LIMIT 1)
+          ) AS cycle_anchor
+        `).bind(song.artist_id, song.artist_id).first();
+        if (!anchorRow?.cycle_anchor) return error("Could not verify the artist's upload-cycle date. The song was not approved.", 503);
+        const uploadCycle = getArtistUploadCycle(anchorRow.cycle_anchor);
 
         const updateResult = await env.DB.prepare(`
           UPDATE songs
@@ -2229,16 +2251,14 @@ async function adminRoute(request, env, path) {
                 AND counted.approved = 1
                 AND counted.id != songs.id
                 AND datetime(counted.created_at) >= CASE
-                  WHEN datetime('now', 'start of month') > datetime(?)
-                    THEN datetime('now', 'start of month')
-                  ELSE datetime(?)
-                END
-                AND datetime(counted.created_at) < datetime('now', 'start of month', '+1 month')
+                  WHEN datetime(?) > datetime(?) THEN datetime(?) ELSE datetime(?) END
+                AND datetime(counted.created_at) < datetime(?)
             ) < ?
         `).bind(
           songId,
-          PACKAGE_LIMITS_EFFECTIVE_AT,
-          PACKAGE_LIMITS_EFFECTIVE_AT,
+          uploadCycle.cycleStart, PACKAGE_LIMITS_EFFECTIVE_AT,
+          PACKAGE_LIMITS_EFFECTIVE_AT, uploadCycle.cycleStart,
+          uploadCycle.nextReset,
           uploadLimit
         ).run();
 
@@ -2682,53 +2702,114 @@ async function rpcRoute(request, env, name) {
   }
 }
 
+
+function getArtistUploadCycle(anchorValue, nowValue = new Date()) {
+  const anchor = new Date(anchorValue);
+  const now = new Date(nowValue);
+  if (!Number.isFinite(anchor.getTime())) throw new Error("Missing upload-cycle anchor");
+  const monthIndex = (now.getUTCFullYear() - anchor.getUTCFullYear()) * 12
+    + now.getUTCMonth() - anchor.getUTCMonth();
+  const makeBoundary = (monthOffset) => {
+    const monthStart = new Date(Date.UTC(
+      anchor.getUTCFullYear(),
+      anchor.getUTCMonth() + monthOffset,
+      1,
+      anchor.getUTCHours(),
+      anchor.getUTCMinutes(),
+      anchor.getUTCSeconds(),
+      anchor.getUTCMilliseconds()
+    ));
+    const lastDay = new Date(Date.UTC(
+      monthStart.getUTCFullYear(),
+      monthStart.getUTCMonth() + 1,
+      0
+    )).getUTCDate();
+    monthStart.setUTCDate(Math.min(anchor.getUTCDate(), lastDay));
+    return monthStart;
+  };
+  let cycleStart = makeBoundary(monthIndex);
+  if (cycleStart > now) cycleStart = makeBoundary(monthIndex - 1);
+  const nextReset = makeBoundary(monthIndex + (cycleStart.getTime() === makeBoundary(monthIndex).getTime() ? 1 : 0));
+  return { cycleStart: cycleStart.toISOString().replace("T", " ").replace(/\.\d{3}Z$/, ""), nextReset: nextReset.toISOString().replace("T", " ").replace(/\.\d{3}Z$/, "") };
+}
+
 async function uploadPreflightRoute(request, env) {
-  if (request.method !== "POST") return error("Method not allowed", 405);
+  if (!["GET", "POST"].includes(request.method)) return error("Method not allowed", 405);
   const user = await currentUser(request, env);
   if (!user) return error("Authentication required", 401);
-  const body = await readBody(request);
-  const audioSize = Number(body.audio_size || 0);
-  const coverSize = Number(body.cover_size || 0);
-  if (!Number.isSafeInteger(audioSize) || audioSize <= 0 || audioSize > 50 * 1024 * 1024) return error("Audio file must be between 1 byte and 50 MB.", 413);
-  if (!Number.isSafeInteger(coverSize) || coverSize <= 0 || coverSize > 5 * 1024 * 1024) return error("Cover image must be between 1 byte and 5 MB.", 413);
+
+  let body = {};
+  if (request.method === "POST") {
+    body = await readBody(request);
+    const audioSize = Number(body.audio_size || 0);
+    const coverSize = Number(body.cover_size || 0);
+    if (!Number.isSafeInteger(audioSize) || audioSize <= 0 || audioSize > 50 * 1024 * 1024) return error("Audio file must be between 1 byte and 50 MB.", 413);
+    if (!Number.isSafeInteger(coverSize) || coverSize <= 0 || coverSize > 5 * 1024 * 1024) return error("Cover image must be between 1 byte and 5 MB.", 413);
+  }
 
   try {
     const artist = await env.DB.prepare("SELECT id FROM artists WHERE user_id = ? LIMIT 1").bind(user.id).first();
     if (!artist) return error("Artist profile not found.", 403);
 
-    // Use the same verified subscription source as the actual song insert and
-    // keep the artist package/rate fields synchronized with that entitlement.
     const entitlement = await syncArtistPremiumEntitlement(env, user.id, artist.id);
     const packageCode = String(entitlement?.packageCode || "free").toLowerCase();
     const limit = ARTIST_PACKAGE_UPLOAD_LIMITS[packageCode] ?? ARTIST_PACKAGE_UPLOAD_LIMITS.free;
+
+    // Each artist's upload month is anchored to their own package activation
+    // date. Free accounts use their account creation date; paid accounts use
+    // the confirmed payment date of their current active package.
+    const anchorRow = await env.DB.prepare(`
+      SELECT COALESCE(
+        (SELECT COALESCE(paid_at, created_at) FROM premium_subscriptions
+         WHERE user_id = ? AND lower(status) = 'active' AND expires_at IS NOT NULL
+           AND datetime(expires_at) > datetime('now')
+         ORDER BY datetime(COALESCE(paid_at, created_at)) DESC, datetime(created_at) DESC
+         LIMIT 1),
+        (SELECT created_at FROM auth_users WHERE id = ? LIMIT 1)
+      ) AS cycle_anchor
+    `).bind(user.id, user.id).first();
+    if (!anchorRow?.cycle_anchor) return error("We could not verify your upload-cycle date. No files were uploaded. Please try again shortly.", 503);
+    const cycle = getArtistUploadCycle(anchorRow.cycle_anchor);
+
     const count = await env.DB.prepare(`
       SELECT COUNT(*) AS total
       FROM songs
       WHERE artist_id = ?
         AND approved = 1
         AND datetime(created_at) >= CASE
-          WHEN datetime('now', 'start of month') > datetime(?)
-            THEN datetime('now', 'start of month')
-          ELSE datetime(?)
-        END
-        AND datetime(created_at) < datetime('now', 'start of month', '+1 month')
-    `).bind(user.id, PACKAGE_LIMITS_EFFECTIVE_AT, PACKAGE_LIMITS_EFFECTIVE_AT).first();
+          WHEN datetime(?) > datetime(?) THEN datetime(?) ELSE datetime(?) END
+        AND datetime(created_at) < datetime(?)
+    `).bind(
+      user.id,
+      cycle.cycleStart, PACKAGE_LIMITS_EFFECTIVE_AT,
+      PACKAGE_LIMITS_EFFECTIVE_AT, cycle.cycleStart,
+      cycle.nextReset
+    ).first();
+
     if (!count || count.total === undefined || count.total === null) {
       return error("We could not verify your monthly upload count. No files were uploaded. Please try again shortly.", 503);
     }
     const used = Number(count.total);
     if (!Number.isFinite(used)) return error("We could not verify your monthly upload count. No files were uploaded. Please try again shortly.", 503);
-    if (used >= limit) {
-      const label = limit >= Number.MAX_SAFE_INTEGER ? "unlimited" : String(limit);
-      return error(`Your ${packageCode.replace(/_/g, " ")} package upload limit has been reached (${used}/${label} songs this month). No files were uploaded.`, 429);
-    }
-    return json({
-      allowed: true,
+
+    const allowed = used < limit;
+    const label = limit >= Number.MAX_SAFE_INTEGER ? "unlimited" : String(limit);
+    const message = allowed
+      ? `${Math.max(0, limit - used)} upload${limit - used === 1 ? "" : "s"} remaining in this package cycle.`
+      : `Your ${packageCode.replace(/_/g, " ")} package upload limit has been reached (${used}/${label}). You can upgrade your package or upload again after ${cycle.nextReset} UTC.`;
+
+    const result = {
+      allowed,
       package_code: packageCode,
       used,
       limit: limit >= Number.MAX_SAFE_INTEGER ? null : limit,
-      remaining: limit >= Number.MAX_SAFE_INTEGER ? null : limit - used
-    });
+      remaining: limit >= Number.MAX_SAFE_INTEGER ? null : Math.max(0, limit - used),
+      cycle_start: cycle.cycleStart,
+      reset_at: cycle.nextReset,
+      message
+    };
+    if (!allowed && request.method === "POST") return json({ ...result, error: message }, 429);
+    return json(result);
   } catch (e) {
     console.error("Artist upload preflight failed:", e.message);
     return error("We could not verify your package or upload count. No files were uploaded. Please try again shortly.", 503);
