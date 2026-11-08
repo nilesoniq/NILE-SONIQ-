@@ -997,6 +997,27 @@ async function dbRoute(request, env, path) {
       );
     }
 
+    // Search is opt-in: no search query runs until the visitor supplies a
+    // search term. Keep the searchable fields table-specific and bind values.
+    const searchTerm = (url.searchParams.get("search") || "").trim().slice(0, 120);
+    if (searchTerm) {
+      const searchableColumns = {
+        songs: ["title", "artist"],
+        artists: ["name"],
+        news: ["title"]
+      };
+      const searchColumns = searchableColumns[table] || [];
+      if (!searchColumns.length) {
+        return error("Search is not supported for this table", 400);
+      }
+      const escapedTerm = searchTerm.replace(/[\\%_]/g, "\\$&");
+      const searchClause = searchColumns
+        .map(column => `LOWER(${column}) LIKE LOWER(?) ESCAPE '\\'`)
+        .join(" OR ");
+      where = appendCondition(where, `(${searchClause})`);
+      values = [...values, ...searchColumns.map(() => `%${escapedTerm}%`)];
+    }
+
     const effectiveColumns =
       publicArtistRead && columns.includes("*")
         ? "id, name, bio, avatar_url, location, total_plays, verified, is_premium, premium_expiry_date, created_at"
@@ -1005,29 +1026,26 @@ async function dbRoute(request, env, path) {
     let query = `SELECT ${effectiveColumns} FROM ${table}${where}`;
 
     const order = url.searchParams.get("order");
-
     if (order) {
       const [column, direction] = order.split(".");
-
       if (safeIdentifier(column)) {
-        query += ` ORDER BY ${column} ${
-          direction === "desc" ? "DESC" : "ASC"
-        }`;
+        query += ` ORDER BY ${column} ${direction === "desc" ? "DESC" : "ASC"}`;
       }
     }
 
-    const requestedLimit = Number(
-      url.searchParams.get("limit") || 100
-    );
+    const requestedLimit = Number(url.searchParams.get("limit") || 100);
+    const limit = Math.min(Math.max(Number.isFinite(requestedLimit) ? Math.floor(requestedLimit) : 100, 1), 500);
+    const requestedOffset = Number(url.searchParams.get("offset") || 0);
+    const offset = Math.min(Math.max(Number.isFinite(requestedOffset) ? Math.floor(requestedOffset) : 0, 0), 100000);
 
-    query += ` LIMIT ${Math.min(
-      Math.max(requestedLimit || 100, 1),
-      500
-    )}`;
+    // Read one extra row to indicate whether another page is available.
+    query += ` LIMIT ${limit + 1} OFFSET ${offset}`;
 
     try {
       const result = await env.DB.prepare(query).bind(...values).all();
       let rows = result.results || [];
+      const hasMore = rows.length > limit;
+      if (hasMore) rows = rows.slice(0, limit);
 
       if (!admin) {
         rows = redactSensitiveColumns(rows);
@@ -1045,7 +1063,16 @@ async function dbRoute(request, env, path) {
         });
       }
 
-      return json({ data: rows, error: null });
+      return json({
+        data: rows,
+        error: null,
+        pagination: {
+          limit,
+          offset,
+          has_more: hasMore,
+          next_offset: hasMore ? offset + limit : null
+        }
+      });
     } catch (e) {
       console.error("Database read failed:", e.message);
       return error("Database request failed", 500);
