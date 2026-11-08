@@ -325,6 +325,17 @@ async function ensureAuthEmailColumns(env) {
   }
 }
 
+function paymentReferenceName(value, fallback = "ARTIST") {
+  const slug = String(value || fallback)
+    .normalize("NFKD")
+    .replace(/[\\u0300-\\u036f]/g, "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 36);
+  return slug || fallback;
+}
+
 async function ensurePendingArtistSignups(env) {
   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS pending_artist_signups (
     id TEXT PRIMARY KEY,
@@ -350,7 +361,7 @@ async function paidSignupRoute(request, env) {
   await ensurePendingArtistSignups(env);
   if (request.method === "GET") {
     const reference = String(new URL(request.url).searchParams.get("reference") || "").trim();
-    if (!/^NILESONIQ-SIGNUP-[A-F0-9-]{20,80}$/i.test(reference)) return error("A valid payment reference is required", 422);
+    if (!/^(?:NILESONIQ-SIGNUP-[A-F0-9-]{20,80}|NILESONIQ-ARTIST-REGISTRATION-[A-Z0-9-]{8,100})$/i.test(reference)) return error("A valid payment reference is required", 422);
     const row = await env.DB.prepare("SELECT status, failure_message FROM pending_artist_signups WHERE reference = ? LIMIT 1").bind(reference).first();
     if (!row) return error("Payment request not found", 404);
     return json({status: row.status, message: row.status === "completed" ? "Payment confirmed. Your account was created and a verification email was sent if email delivery is available." : row.status === "failed" ? (row.failure_message || "Payment failed.") : "Payment is still pending confirmation."});
@@ -373,19 +384,18 @@ async function paidSignupRoute(request, env) {
   if (!["mtn","airtel"].includes(provider)) return error("Provider must be MTN or Airtel.", 422);
   const existing = await env.DB.prepare("SELECT id FROM auth_users WHERE lower(email)=? AND deleted_at IS NULL LIMIT 1").bind(email).first();
   if (existing) return error("An account with that email already exists.", 409);
-  const activePending = await env.DB.prepare("SELECT reference FROM pending_artist_signups WHERE lower(email)=? AND status='pending' ORDER BY created_at DESC LIMIT 1").bind(email).first();
-  if (activePending) return error(`A payment request is already pending for this email. Reference: ${activePending.reference}. Please do not pay again.`, 409);
   const apiKey = env.PESAJET_API_KEY || env.PESAJET_TOKEN;
   const baseUrl = String(env.PESAJET_API_BASE_URL || "https://payments.pesajet.com/api/v1").replace(/\/+$/, "");
   if (!apiKey) return error("Payment service is not configured.", 503);
-  const reference = `NILESONIQ-SIGNUP-${crypto.randomUUID().replace(/-/g, "").toUpperCase()}`;
+  const reference = `NILESONIQ-ARTIST-REGISTRATION-${paymentReferenceName(artistName)}-${crypto.randomUUID().replace(/-/g, "").slice(0, 16).toUpperCase()}`;
+  const description = `NileSoniQ Artist Registration - ${artistName}`.slice(0, 250);
   const id = crypto.randomUUID();
   const passwordHash = await bcrypt.hash(password, 10);
   await env.DB.prepare(`INSERT INTO pending_artist_signups (id,reference,email,password_hash,artist_name,phone_number,provider,package_code,amount,currency,status) VALUES (?,?,?,?,?,?,?,?,?,'UGX','pending')`)
     .bind(id,reference,email,passwordHash,artistName,phone,provider,packageCode,amount).run();
   let response, result;
   try {
-    response = await fetch(`${baseUrl}/payments`, {method:"POST",headers:{"Content-Type":"application/json","X-API-Key":apiKey},body:JSON.stringify({type:"COLLECTION",amount,currency:"UGX",phoneNumber:phone,provider,reference,description:`NileSoniQ ${packageCode} artist signup`,idempotencyKey:`nilesoniq-${reference}`})});
+    response = await fetch(`${baseUrl}/payments`, {method:"POST",headers:{"Content-Type":"application/json","X-API-Key":apiKey},body:JSON.stringify({type:"COLLECTION",amount,currency:"UGX",phoneNumber:phone,provider,reference,description,idempotencyKey:`nilesoniq-${reference}`})});
     result = await response.json().catch(()=>({}));
   } catch (e) {
     console.error("Paid signup payment request outcome uncertain:",e.message);
@@ -922,7 +932,7 @@ async function dbRoute(request, env, path) {
           : "artist_id";
 
       if (ownerColumn === "artist_id") {
-        const artistProfile = await env.DB.prepare("SELECT id FROM artists WHERE user_id = ? LIMIT 1").bind(user.id).first();
+        const artistProfile = await env.DB.prepare("SELECT id, name FROM artists WHERE user_id = ? LIMIT 1").bind(user.id).first();
         const artistProfileId = String(artistProfile?.id || user.id);
         where = appendCondition(where, `${ownerColumn} IN (?, ?)`);
         values = [...values, user.id, artistProfileId];
@@ -3304,9 +3314,8 @@ async function premiumSubscriptionRoute(request, env) {
   // MTN and Airtel continue through the same PesaJet /payments endpoint and webhook.
   // Use a shorter unique reference for Airtel to reduce possible downstream
   // reference truncation/collision. Keep MTN's existing reference format unchanged.
-  const reference = provider === "airtel"
-    ? `NSPA${Date.now().toString(36).toUpperCase()}${crypto.randomUUID().replace(/-/g, "").slice(0, 8).toUpperCase()}`
-    : `NILESONIQ-PREMIUM-${crypto.randomUUID()}`;
+  const reference = `NILESONIQ-PREMIUM-${paymentReferenceName(artist.name)}-${crypto.randomUUID().replace(/-/g, "").slice(0, 16).toUpperCase()}`;
+  const description = `NileSoniQ Premium Upgrade - ${artist.name || "Artist"}`.slice(0, 250);
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
   await env.DB.prepare(`
@@ -3320,7 +3329,7 @@ async function premiumSubscriptionRoute(request, env) {
     response = await fetch(`${baseUrl}/payments`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-API-Key": apiKey },
-      body: JSON.stringify({ type: "COLLECTION", amount: packageAmount, currency: "UGX", phoneNumber: phone, provider, reference, description: `NileSoniQ ${packageCode} package - 30 days`, idempotencyKey: `nilesoniq-${reference}` })
+      body: JSON.stringify({ type: "COLLECTION", amount: packageAmount, currency: "UGX", phoneNumber: phone, provider, reference, description, idempotencyKey: `nilesoniq-${reference}` })
     });
     result = await response.json().catch(() => ({}));
   } catch (e) {
@@ -3653,7 +3662,7 @@ async function paymentWebhookRoute(request, env) {
   try {
     const featureResult = await applyFeaturePaymentStatus(env, reference, status, transactionId, webhookPayment.amount, webhookPayment.currency, webhookPayment.fee);
     if (featureResult.matched) return json({received:true, featurePayment:true, applied:Boolean(featureResult.changed)});
-    const paidSignupResult = reference.startsWith("NILESONIQ-SIGNUP-")
+    const paidSignupResult = (reference.startsWith("NILESONIQ-SIGNUP-") || reference.startsWith("NILESONIQ-ARTIST-REGISTRATION-"))
       ? await completePaidArtistSignup(env, reference, status, transactionId, webhookPayment.amount, webhookPayment.currency,
           payload?.message || payload?.description || payload?.reason || payload?.failureMessage || payload?.failure_message || "")
       : { matched: false };
@@ -4016,7 +4025,7 @@ async function featurePaymentRoute(request, env) {
   const provider = String(body.provider || "").trim().toLowerCase();
   if (!/^\+256\d{9}$/.test(phone)) return error("Enter a valid Ugandan mobile-money number",422);
   if (!["mtn","airtel"].includes(provider)) return error("Provider must be MTN or Airtel",422);
-  const artist = await env.DB.prepare("SELECT id,user_id FROM artists WHERE id = ? LIMIT 1").bind(String(body.artist_id||"")).first();
+  const artist = await env.DB.prepare("SELECT id,user_id,name FROM artists WHERE id = ? LIMIT 1").bind(String(body.artist_id||"")).first();
   if (!artist) return error("Artist not found",404);
   let amount=0, packageCode="", days=0, plays=0, downloads=0, songIds=[];
   if (type === "boost") {
@@ -4044,11 +4053,15 @@ async function featurePaymentRoute(request, env) {
   const baseUrl=String(env.PESAJET_API_BASE_URL||"https://payments.pesajet.com/api/v1").replace(/\/+$/,"");
   if(!apiKey) return error("Payment service is not configured",503);
   const id=crypto.randomUUID();
-  const reference=provider==="airtel"?`NSF${Date.now().toString(36).toUpperCase()}${crypto.randomUUID().replace(/-/g,"").slice(0,8).toUpperCase()}`:`NILESONIQ-${type==='boost'?'BOOST':'LISTENER'}-${crypto.randomUUID()}`;
+  const artistLabel = paymentReferenceName(artist.name);
+  const reference = `NILESONIQ-${type === "boost" ? "SONG-BOOST" : "LISTENER-SUBSCRIPTION"}-${artistLabel}-${crypto.randomUUID().replace(/-/g, "").slice(0, 16).toUpperCase()}`;
+  const description = (type === "boost"
+    ? `NileSoniQ Song Boost - ${artist.name || "Artist"} - ${packageCode}`
+    : `NileSoniQ Listener Subscription - ${artist.name || "Artist"} - 30 days`).slice(0, 250);
   await env.DB.prepare(`INSERT INTO nilesoniq_feature_payments (id,reference,payment_type,payer_user_id,artist_id,amount,currency,provider,phone_number,status,package_code,duration_days,play_guarantee,download_guarantee,song_ids_json) VALUES (?,?, ?,?,?,?,'UGX',?,?,'pending',?,?,?,?,?)`).bind(id,reference,type,user.id,artist.id,amount,provider,phone,packageCode,days,plays,downloads,JSON.stringify(songIds)).run();
   if(type==='listener_subscription') await env.DB.prepare(`INSERT INTO listener_artist_subscriptions (id,payment_id,listener_user_id,artist_id,status) VALUES (?,?,?,?,'pending')`).bind(crypto.randomUUID(),id,user.id,artist.id).run();
   let response,result;
-  try { response=await fetch(`${baseUrl}/payments`,{method:'POST',headers:{'Content-Type':'application/json','X-API-Key':apiKey},body:JSON.stringify({type:'COLLECTION',amount,currency:'UGX',phoneNumber:phone,provider,reference,description:type==='boost'?`NileSoniQ ${packageCode} Boost`:'NileSoniQ Listener Artist Subscription - 30 days',idempotencyKey:`nilesoniq-${reference}`})}); result=await response.json().catch(()=>({})); }
+  try { response=await fetch(`${baseUrl}/payments`,{method:'POST',headers:{'Content-Type':'application/json','X-API-Key':apiKey},body:JSON.stringify({type:'COLLECTION',amount,currency:'UGX',phoneNumber:phone,provider,reference,description,idempotencyKey:`nilesoniq-${reference}`})}); result=await response.json().catch(()=>({})); }
   catch(e){ console.error('Feature payment request uncertain:',e.message); return error('Payment request outcome is uncertain; it remains pending.',502); }
   if(!response.ok || result?.success===false || result?.error){
     const msg=String(result?.message||result?.error?.message||'PesaJet rejected the payment request');
@@ -4170,9 +4183,10 @@ async function paymentRoute(request, env, type) {
     return error("Payment service is not configured.", 503);
   }
 
-  const reference = String(
-    body.reference || `NILESONIQ-${type.toUpperCase()}-${crypto.randomUUID()}`
-  ).trim().slice(0, 120);
+  const generatedReference = type === "collection"
+    ? `NILESONIQ-PLATFORM-WALLET-DEPOSIT-${crypto.randomUUID().replace(/-/g, "").slice(0, 16).toUpperCase()}`
+    : `NILESONIQ-PLATFORM-WALLET-WITHDRAWAL-${crypto.randomUUID().replace(/-/g, "").slice(0, 16).toUpperCase()}`;
+  const reference = String(body.reference || generatedReference).trim().slice(0, 120);
 
   if (!reference) {
     return error("A payment reference is required", 422);
