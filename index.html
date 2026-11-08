@@ -3847,14 +3847,11 @@ const NEW_RELEASES_PER_PAGE = 8;
 let topChartSongs = [];
 const expandedSongLists = new Set();
 let approvedSongsPageIndex = 0;
-let approvedSongsHasMore = false;
 const APPROVED_SONGS_PER_PAGE = 8;
 let topChartsPageIndex = 0;
-let topChartsHasMore = false;
 const TOP_CHARTS_PER_PAGE = 10;
 let artistsListExpanded = false;
 let artistsCurrentPage = 0;
-let artistsHasMore = false;
 const ARTISTS_PER_PAGE = 4;
 
 let currentAuthMode = "login";
@@ -3886,7 +3883,6 @@ const PLAY_COUNT_THRESHOLD_SECONDS = 30;
 ========================================================= */
 
 let searchTimer = null;
-let activeSearchRequest = 0;
 
 
 /* =========================================================
@@ -3995,42 +3991,142 @@ function searchSongs(){
    PERFORM SEARCH
 ========================================================= */
 
-async function performSearch(){
-  const input = document.getElementById("searchInput");
-  const resultsSection = document.getElementById("searchResultsSection");
-  const resultsContainer = document.getElementById("searchResultsContainer");
-  const status = document.getElementById("searchStatus");
-  const description = document.getElementById("searchResultsDescription");
-  if(!input || !resultsSection || !resultsContainer) return;
-  const rawQuery = String(input.value || "").trim();
-  const query = normalizeSearchText(rawQuery);
-  const requestId = ++activeSearchRequest;
-  if(!query){
-    resultsSection.classList.add("hidden");
-    resultsContainer.innerHTML = "";
-    if(status) status.textContent = "";
-    showNormalMusicSections();
+function performSearch(){
+
+  const input =
+    document.getElementById(
+      "searchInput"
+    );
+
+  const resultsSection =
+    document.getElementById(
+      "searchResultsSection"
+    );
+
+  const resultsContainer =
+    document.getElementById(
+      "searchResultsContainer"
+    );
+
+  const status =
+    document.getElementById(
+      "searchStatus"
+    );
+
+  const description =
+    document.getElementById(
+      "searchResultsDescription"
+    );
+
+
+  if(!input || !resultsSection || !resultsContainer){
     return;
   }
-  hideNormalMusicSections();
-  resultsSection.classList.remove("hidden");
-  if(status) status.textContent = `Searching for "${rawQuery}"...`;
-  if(description) description.textContent = "Searching songs by title and artist.";
-  resultsContainer.innerHTML = '<div class="loading">Searching songs...</div>';
-  try{
-    const results = await loadPublicTable("songs", {limit:100, offset:0, order:"created_at.desc", search:rawQuery});
-    if(requestId !== activeSearchRequest) return;
-    window.__nileSearchResults = results;
-    if(status) status.textContent = `${results.length}${results.length === 1 ? " result" : " results"}`;
-    if(description) description.textContent = results.length ? "Songs matching your search." : "No songs matched your search.";
-    renderSongCards(results, "searchResultsContainer", "No songs found", "Try another song title or artist name.");
-  }catch(error){
-    if(requestId !== activeSearchRequest) return;
-    if(status) status.textContent = "Search could not be completed.";
-    if(description) description.textContent = error.message || "Please try again.";
-    resultsContainer.innerHTML = `<div class="empty">${escapeHtml(error.message || "Search failed")}</div>`;
+
+
+  const query =
+    normalizeSearchText(
+      input.value
+    );
+
+
+  /* EMPTY SEARCH */
+
+  if(!query){
+
+    resultsSection.classList.add(
+      "hidden"
+    );
+
+    resultsContainer.innerHTML = "";
+
+    if(status){
+
+      status.textContent = "";
+
+    }
+
+    showNormalMusicSections();
+
+    return;
+
   }
+
+
+  /* SEARCH MODE */
+
+  hideNormalMusicSections();
+
+  resultsSection.classList.remove(
+    "hidden"
+  );
+
+
+  if(status){
+
+    status.textContent =
+      "Searching for \"" +
+      input.value.trim() +
+      "\"...";
+
+  }
+
+
+  const results =
+    currentSongs.filter(song => {
+
+      const title =
+        normalizeSearchText(
+          song.title
+        );
+
+      const artist =
+        normalizeSearchText(
+          song.artist
+        );
+
+
+      return (
+        title.includes(query) ||
+        artist.includes(query)
+      );
+
+    });
+
+
+  if(status){
+
+    status.textContent =
+      results.length +
+      (
+        results.length === 1
+        ? " result"
+        : " results"
+      );
+
+  }
+
+
+  if(description){
+
+    description.textContent =
+      results.length
+      ? "Songs matching your search."
+      : "No songs matched your search.";
+
+  }
+
+
+  window.__nileSearchResults = results;
+  renderSongCards(
+    results,
+    "searchResultsContainer",
+    "No songs found",
+    "Try another song title or artist name."
+  );
+
 }
+
 
 /* =========================================================
    SEARCH NORMALIZATION
@@ -6169,12 +6265,10 @@ async function loadPublicArtistStats(artistId){
 async function loadPublicTable(table, params = {}) {
   const query = new URLSearchParams({
     select: params.select || "*",
-    limit: String(params.limit || 20),
-    offset: String(Math.max(0, Number(params.offset) || 0))
+    limit: String(params.limit || 500)
   });
 
   if (params.order) query.set("order", params.order);
-  if (params.search) query.set("search", String(params.search).trim().slice(0, 120));
 
   const url = `/api/db/${encodeURIComponent(table)}?${query.toString()}`;
   const cacheKey = url;
@@ -6313,11 +6407,17 @@ async function loadSongsTabFeatures(){
   const track=document.getElementById('featuredSongsTrack');
   if(!track)return;
   try{
-    const artists=await loadPublicTable('artists',{limit:500});
+    // Load a separate carousel pool. Do not derive featured songs from the
+    // currently visible/paginated songs page, which may contain only 8 songs.
+    const [artists, songRows]=await Promise.all([
+      loadPublicTable('artists',{limit:500}),
+      loadPublicTable('songs',{limit:500,order:'plays.desc'})
+    ]);
     const activePaidArtists=artists.filter(artist=>isArtistPremiumActive(artist));
     const artistIds=new Set(activePaidArtists.flatMap(artist=>[artist.id,artist.user_id].filter(Boolean).map(String)));
     const artistNames=new Set(activePaidArtists.map(artist=>normalizeSearchText(artist.name||'')).filter(Boolean));
-    featuredSongsList=(Array.isArray(currentSongs)?currentSongs:[]).filter(song=>{
+    featuredSongsList=songRows.filter(song=>{
+      if(!(Number(song.approved)===1||String(song.approved).toLowerCase()==='true'))return false;
       const id=String(song.artist_id||'');
       const name=normalizeSearchText(song.artist||'');
       return (id&&artistIds.has(id))||(!id&&name&&artistNames.has(name))||(id&&artistNames.has(name));
@@ -6334,23 +6434,41 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden){startTren
    SONGS
 ========================================================= */
 
-async function loadSongs(offset = 0){
+async function loadSongs(){
   const container = document.getElementById("songsContainer");
   if (!container) return;
+
+  // Keep the song-card placeholders visible until real songs arrive.
+
   try {
-    const rows = await loadPublicTable("songs", {limit:APPROVED_SONGS_PER_PAGE, offset, order:"plays.desc"});
-    const approved = rows.filter(song => Number(song.approved) === 1 || String(song.approved).toLowerCase() === "true");
-    if(offset === 0) currentSongs = approved; else currentSongs = currentSongs.concat(approved);
-    approvedSongsHasMore = rows.length === APPROVED_SONGS_PER_PAGE;
-    approvedSongsPageIndex = Math.floor(offset / APPROVED_SONGS_PER_PAGE);
+    const rows = await loadPublicTable("songs", { limit: 500 });
+
+    currentSongs = rows
+      .filter(song =>
+        Number(song.approved) === 1 ||
+        String(song.approved).toLowerCase() === "true"
+      )
+      .sort((a, b) =>
+        Number(b.plays || 0) - Number(a.plays || 0) ||
+        new Date(b.created_at || 0) - new Date(a.created_at || 0)
+      );
+
     renderSongs(currentSongs);
-    renderSongCards(currentSongs, "songsPageContainer", "No approved songs yet", "New music will appear here after approval.");
     loadSongsTabFeatures();
+    renderSongCards(currentSongs, "songsPageContainer", "No approved songs yet", "New music will appear here after approval.");
+
     const searchInput = document.getElementById("searchInput");
-    if(searchInput && searchInput.value.trim()) performSearch();
+    if (searchInput && searchInput.value.trim()) {
+      performSearch();
+    }
   } catch (error) {
     console.error("Public songs load error:", error);
-    container.innerHTML = `<div class="empty"><h3>Could not load songs</h3><p style="margin-top:8px;">${escapeHtml(error.message || "Unknown error")}</p></div>`;
+    container.innerHTML = `
+      <div class="empty">
+        <h3>Could not load songs</h3>
+        <p style="margin-top:8px;">${escapeHtml(error.message || "Unknown error")}</p>
+      </div>
+    `;
   }
 }
 
@@ -6359,22 +6477,62 @@ async function loadSongs(offset = 0){
    NEW RELEASES
 ========================================================= */
 
-async function loadNewReleases(offset = 0){
+async function loadNewReleases(){
   const container = document.getElementById("newReleasesContainer");
   if (!container) return;
+
+  // Keep the section clean while songs are fetched; do not show a loading message.
+
   try {
-    const rows = await loadPublicTable("songs", {limit:NEW_RELEASES_PER_PAGE, offset, order:"release_date.desc"});
-    newReleaseSongs = rows.filter(song => Number(song.approved) === 1 || String(song.approved).toLowerCase() === "true");
-    newReleasesPageIndex = Math.floor(offset / NEW_RELEASES_PER_PAGE);
+    const rows = await loadPublicTable("songs", { limit: 500 });
+    newReleaseSongs = rows
+      .filter(song =>
+        Number(song.approved) === 1 ||
+        String(song.approved).toLowerCase() === "true"
+      )
+      .sort((a, b) => {
+        const stamp = song => {
+          const raw = song.release_date || song.created_at || song.updated_at || "";
+          if (!raw) return 0;
+          // Safari/macOS is stricter about non-ISO date strings; normalize date-only values.
+          const normalized = /^\d{4}-\d{2}-\d{2}$/.test(String(raw)) ? String(raw) + "T00:00:00Z" : String(raw);
+          const parsed = Date.parse(normalized);
+          return Number.isFinite(parsed) ? parsed : 0;
+        };
+        return stamp(b) - stamp(a);
+      })
+      .slice(0, 500);
+
+    newReleasesPageIndex = 0;
     renderNewReleases(newReleaseSongs);
-    const controls = document.getElementById("newReleasesPagination");
-    const buttons = controls ? controls.querySelectorAll("button") : [];
-    if(buttons.length >= 2){ buttons[0].disabled = newReleasesPageIndex === 0; buttons[1].disabled = rows.length < NEW_RELEASES_PER_PAGE; }
-    if(controls) controls.style.display = "flex";
-    const label=document.getElementById("newReleasesPageLabel"); if(label) label.textContent=`${newReleasesPageIndex+1}`;
-  } catch(error){
-    console.error("New releases load error:",error);
-    container.innerHTML=`<div class="empty"><h3>Could not load new releases</h3><p style="margin-top:8px;">${escapeHtml(error.message || "Unknown error")}</p><button class="btn btn-dark" type="button" onclick="loadNewReleases(0)">Try Again</button></div>`;
+  } catch (error) {
+    console.error("New releases load error:", error);
+    // If another homepage section already loaded approved songs, still show them here.
+    const fallback = Array.isArray(currentSongs) ? currentSongs.filter(song =>
+      Number(song.approved) === 1 || String(song.approved).toLowerCase() === "true"
+    ) : [];
+    if (fallback.length) {
+      newReleaseSongs = fallback.slice().sort((a, b) => {
+        const stamp = song => {
+          const raw = song.release_date || song.created_at || song.updated_at || "";
+          if (!raw) return 0;
+          const normalized = /^\d{4}-\d{2}-\d{2}$/.test(String(raw)) ? String(raw) + "T00:00:00Z" : String(raw);
+          const parsed = Date.parse(normalized);
+          return Number.isFinite(parsed) ? parsed : 0;
+        };
+        return stamp(b) - stamp(a);
+      });
+      newReleasesPageIndex = 0;
+      renderNewReleases(newReleaseSongs);
+    } else {
+      container.innerHTML = `
+        <div class="empty">
+          <h3>Could not load new releases</h3>
+          <p style="margin-top:8px;">${escapeHtml(error.message || "Unknown error")}</p>
+          <button class="btn btn-dark" type="button" onclick="loadNewReleases()">Try Again</button>
+        </div>
+      `;
+    }
   }
 }
 
@@ -6383,18 +6541,38 @@ async function loadNewReleases(offset = 0){
    TOP CHARTS
 ========================================================= */
 
-async function loadTopCharts(offset = 0){
+async function loadTopCharts(){
   const container = document.getElementById("topChartsContainer");
   if (!container) return;
+
+  // Keep the section clean while songs are fetched; do not show a loading message.
+
   try {
-    const rows = await loadPublicTable("songs", {limit:TOP_CHARTS_PER_PAGE, offset, order:"plays.desc"});
-    topChartSongs = rows.filter(song => Number(song.approved) === 1 || String(song.approved).toLowerCase() === "true");
-    topChartsPageIndex = Math.floor(offset / TOP_CHARTS_PER_PAGE);
-    topChartsHasMore = rows.length === TOP_CHARTS_PER_PAGE;
+    const rows = await loadPublicTable("songs", { limit: 500 });
+    // Only approved songs qualify. Filter first, then rank every qualifying
+    // song by real play count so the next eligible song automatically fills
+    // any place left by a song that is no longer approved.
+    topChartSongs = rows
+      .filter(song =>
+        Number(song.approved) === 1 ||
+        String(song.approved).toLowerCase() === "true"
+      )
+      .sort((a, b) =>
+        Number(b.plays || 0) - Number(a.plays || 0) ||
+        new Date(b.created_at || 0) - new Date(a.created_at || 0)
+      )
+      .slice(0, 100);
+
+    topChartsPageIndex = 0;
     renderTopCharts(topChartSongs);
-  } catch(error){
-    console.error("Top charts load error:",error);
-    container.innerHTML=`<div class="empty"><h3>Could not load top charts</h3><p style="margin-top:8px;">${escapeHtml(error.message || "Unknown error")}</p></div>`;
+  } catch (error) {
+    console.error("Top charts load error:", error);
+    container.innerHTML = `
+      <div class="empty">
+        <h3>Could not load top charts</h3>
+        <p style="margin-top:8px;">${escapeHtml(error.message || "Unknown error")}</p>
+      </div>
+    `;
   }
 }
 
@@ -6432,21 +6610,30 @@ function renderSongCards(songs, containerId, emptyTitle, emptyText){
   let visibleSongs;
   let paginationControls = "";
   if(isCharts){
+    const pageCount = Math.max(1, Math.ceil(list.length / TOP_CHARTS_PER_PAGE));
+    topChartsPageIndex = Math.min(topChartsPageIndex, pageCount - 1);
     const start = topChartsPageIndex * TOP_CHARTS_PER_PAGE;
-    visibleSongs = list.slice(0, TOP_CHARTS_PER_PAGE).map((song,index)=>({...song,__rank:start+index+1}));
-    paginationControls = `<div class="top-charts-pagination" style="grid-column:1/-1;display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;padding:16px 0;">
-      <button type="button" class="btn btn-dark" onclick="changeTopChartsPage(-1)" ${topChartsPageIndex===0?"disabled":""}>‹ Previous</button>
-      <span style="color:#aaa;font-size:13px;">Page ${topChartsPageIndex+1}</span>
-      <button type="button" class="btn btn-dark" onclick="changeTopChartsPage(1)" ${!topChartsHasMore?"disabled":""}>Next ›</button>
-    </div>`;
+    visibleSongs = list.slice(start, start + TOP_CHARTS_PER_PAGE)
+      .map((song, index) => ({...song, __rank: start + index + 1}));
+    if(pageCount > 1){
+      paginationControls = `<div class="top-charts-pagination" style="grid-column:1/-1;display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;padding:16px 0;">
+        <button type="button" class="btn btn-dark" onclick="changeTopChartsPage(-1)" ${topChartsPageIndex === 0 ? "disabled" : ""}>‹ Previous</button>
+        <span style="color:#aaa;font-size:13px;">Page ${topChartsPageIndex + 1} of ${pageCount} · ${list.length} songs</span>
+        <button type="button" class="btn btn-dark" onclick="changeTopChartsPage(1)" ${topChartsPageIndex >= pageCount - 1 ? "disabled" : ""}>Next ›</button>
+      </div>`;
+    }
   }else if(isAllApprovedSongs){
-    const start=approvedSongsPageIndex*APPROVED_SONGS_PER_PAGE;
-    visibleSongs=list.slice(start,start+APPROVED_SONGS_PER_PAGE);
-    paginationControls=`<div class="approved-songs-pagination" style="grid-column:1/-1;display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;padding:16px 0;">
-      <button type="button" class="btn btn-dark" onclick="changeApprovedSongsPage(-1)" ${approvedSongsPageIndex===0?"disabled":""}>‹ Previous</button>
-      <span style="color:#aaa;font-size:13px;">Page ${approvedSongsPageIndex+1}</span>
-      <button type="button" class="btn btn-dark" onclick="changeApprovedSongsPage(1)" ${!approvedSongsHasMore?"disabled":""}>Next ›</button>
-    </div>`;
+    const pageCount = Math.max(1, Math.ceil(list.length / APPROVED_SONGS_PER_PAGE));
+    approvedSongsPageIndex = Math.min(approvedSongsPageIndex, pageCount - 1);
+    const start = approvedSongsPageIndex * APPROVED_SONGS_PER_PAGE;
+    visibleSongs = list.slice(start, start + APPROVED_SONGS_PER_PAGE);
+    if(pageCount > 1){
+      paginationControls = `<div class="approved-songs-pagination" style="grid-column:1/-1;display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;padding:16px 0;">
+        <button type="button" class="btn btn-dark" onclick="changeApprovedSongsPage(-1)" ${approvedSongsPageIndex === 0 ? "disabled" : ""}>‹ Previous</button>
+        <span style="color:#aaa;font-size:13px;">Page ${approvedSongsPageIndex + 1} of ${pageCount}</span>
+        <button type="button" class="btn btn-dark" onclick="changeApprovedSongsPage(1)" ${approvedSongsPageIndex >= pageCount - 1 ? "disabled" : ""}>Next ›</button>
+      </div>`;
+    }
   }else{
     const expanded = expandedSongLists.has(containerId);
     visibleSongs = expanded ? list : list.slice(0,5);
@@ -6464,18 +6651,24 @@ function renderSongCards(songs, containerId, emptyTitle, emptyText){
   container.innerHTML = cards + ((isCharts || isAllApprovedSongs) ? paginationControls : moreButton);
 }
 
-async function changeTopChartsPage(direction){
+function changeTopChartsPage(direction){
+  const totalPages = Math.max(1, Math.ceil(Math.min((topChartSongs || []).length, 100) / TOP_CHARTS_PER_PAGE));
   const nextPage = topChartsPageIndex + Number(direction || 0);
-  if(nextPage < 0 || (direction > 0 && !topChartsHasMore)) return;
-  await loadTopCharts(nextPage * TOP_CHARTS_PER_PAGE);
-  const section=document.getElementById("topCharts"); if(section) section.scrollIntoView({behavior:"smooth",block:"start"});
+  if(nextPage < 0 || nextPage >= totalPages) return;
+  topChartsPageIndex = nextPage;
+  renderTopCharts(topChartSongs);
+  const section = document.getElementById("topCharts");
+  if(section) section.scrollIntoView({behavior:"smooth", block:"start"});
 }
 
-async function changeApprovedSongsPage(direction){
-  const nextPage=approvedSongsPageIndex+Number(direction||0);
-  if(nextPage<0 || (direction>0 && !approvedSongsHasMore)) return;
-  await loadSongs(nextPage*APPROVED_SONGS_PER_PAGE);
-  const heading=document.querySelector(".songs-all-heading"); if(heading) heading.scrollIntoView({behavior:"smooth",block:"start"});
+function changeApprovedSongsPage(direction){
+  const totalPages = Math.max(1, Math.ceil((currentSongs || []).slice(0,500).length / APPROVED_SONGS_PER_PAGE));
+  const nextPage = approvedSongsPageIndex + Number(direction || 0);
+  if(nextPage < 0 || nextPage >= totalPages) return;
+  approvedSongsPageIndex = nextPage;
+  renderSongCards(currentSongs, "songsPageContainer", "No approved songs yet", "New music will appear here after approval.");
+  const heading = document.querySelector(".songs-all-heading");
+  if(heading) heading.scrollIntoView({behavior:"smooth", block:"start"});
 }
 
 function toggleSongList(containerId){
@@ -6528,11 +6721,13 @@ function renderNewReleases(songs){
 }
 
 function changeNewReleasesPage(direction){
+  const totalPages = Math.max(1, Math.ceil((newReleaseSongs || []).length / NEW_RELEASES_PER_PAGE));
   const nextPage = newReleasesPageIndex + Number(direction || 0);
-  if(nextPage < 0) return;
-  loadNewReleases(nextPage * NEW_RELEASES_PER_PAGE);
+  if (nextPage < 0 || nextPage >= totalPages) return;
+  newReleasesPageIndex = nextPage;
+  renderNewReleases(newReleaseSongs);
   const section = document.getElementById("newReleases");
-  if(section) section.scrollIntoView({behavior:"smooth",block:"start"});
+  if (section) section.scrollIntoView({behavior:"smooth", block:"start"});
 }
 
 
@@ -8557,33 +8752,106 @@ document.addEventListener("visibilitychange", () => {
   if(!document.hidden && featuredArtistsList.length > FEATURED_ARTISTS_PER_PAGE) restartFeaturedArtistsRotation();
 });
 
-async function loadArtists(offset = 0){
-  const container=document.getElementById("artistsContainer");
-  if(!container)return;
-  container.innerHTML='<div class="loading">Loading artists...</div>';
-  try{
-    const artists=await loadPublicTable("artists",{limit:ARTISTS_PER_PAGE,offset,order:"total_plays.desc"});
-    artistsCurrentPage=Math.floor(offset/ARTISTS_PER_PAGE);
-    artistsHasMore=artists.length===ARTISTS_PER_PAGE;
-    window.__nileArtistRegistry=Object.fromEntries((artists||[]).map(artist=>[String(artist.id||artist.user_id),artist]));
-    featuredArtistsList=artists.filter(artist=>isArtistPremiumActive(artist)).sort((a,b)=>String(a.name||"").localeCompare(String(b.name||"")));
-    featuredArtistsPageIndex=0;renderFeaturedArtists();restartFeaturedArtistsRotation();
-    if(!artists.length){container.innerHTML='<div class="empty">No artists registered yet.</div>';return;}
-    const visibleArtists=artists;
-    container.innerHTML=visibleArtists.map(artist=>{
-      const avatar=artist.avatar_url?`<img src="${escapeAttribute(artist.avatar_url)}" alt="${escapeAttribute(artist.name||"Artist")}" loading="lazy">`:`<div class="artist-avatar-placeholder">${getInitials(artist.name)}</div>`;
-      return `<div class="artist-card" role="button" tabindex="0" onclick="openArtistProfile('${escapeAttribute(artist.id)}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openArtistProfile('${escapeAttribute(artist.id)}');}"><div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;"><div class="artist-avatar">${avatar}</div><div><h3>${escapeHtml(artist.name||"Artist")}</h3><p>${escapeHtml(artist.location||"")}</p></div></div><p>${formatNumber(artist.total_plays||0)} plays</p></div>`;
-    }).join("")+`<div class="artist-pagination" style="grid-column:1/-1;display:flex;justify-content:center;align-items:center;gap:14px;padding:16px 0;"><button class="btn btn-dark" onclick="changeArtistsPage(-1)" ${artistsCurrentPage===0?"disabled":""}>Previous</button><span class="artist-page-status">Page ${artistsCurrentPage+1}</span><button class="btn btn-orange" onclick="changeArtistsPage(1)" ${!artistsHasMore?"disabled":""}>Next</button></div>`;
-  }catch(error){
-    console.error("Artists load error:",error);
-    container.innerHTML=`<div class="empty"><h3>Could not load artists</h3><p>${escapeHtml(error.message||"Unknown error")}</p></div>`;
+async function loadArtists(){
+  const container = document.getElementById("artistsContainer");
+  if (!container) return;
+
+  container.innerHTML = `<div class="loading">Loading artists...</div>`;
+
+  try {
+    const [artists, songs] = await Promise.all([
+      loadPublicTable("artists", { limit: 500 }),
+      loadPublicTable("songs", { select: "artist_id,artist,plays,approved", limit: 500 })
+    ]);
+
+    window.__nileArtistRegistry = Object.fromEntries((artists || []).map(artist => [String(artist.id || artist.user_id), artist]));
+
+    const approvedSongs = songs.filter(song =>
+      Number(song.approved) === 1 ||
+      String(song.approved).toLowerCase() === "true"
+    );
+
+    // Keep Discover Artists independent of the paginated artist directory.
+    const featuredArtistSource = await loadPublicTable("artists", { limit: 500 });
+    featuredArtistsList = featuredArtistSource.filter(artist => isArtistPremiumActive(artist))
+      .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
+    featuredArtistsPageIndex = 0;
+    renderFeaturedArtists();
+    restartFeaturedArtistsRotation();
+
+    if (!artists.length) {
+      container.innerHTML = `<div class="empty">No artists registered yet.</div>`;
+      return;
+    }
+
+    const playsByArtistId = {};
+    const playsByName = {};
+
+    approvedSongs.forEach(song => {
+      const plays = Number(song.plays || 0);
+      if (song.artist_id) {
+        const id = String(song.artist_id);
+        playsByArtistId[id] = (playsByArtistId[id] || 0) + plays;
+      }
+      const name = normalizeSearchText(song.artist || "");
+      if (name) playsByName[name] = (playsByName[name] || 0) + plays;
+    });
+
+    const rankedArtists = artists.map(artist => ({
+      ...artist,
+      __artistPlays:
+        playsByArtistId[String(artist.user_id || artist.id)] ||
+        playsByName[normalizeSearchText(artist.name || "")] || 0
+    })).sort((a, b) =>
+      Number(b.__artistPlays || 0) - Number(a.__artistPlays || 0) ||
+      String(a.name || "").localeCompare(String(b.name || ""))
+    );
+
+    const totalPages = Math.max(1, Math.ceil(rankedArtists.length / ARTISTS_PER_PAGE));
+    artistsCurrentPage = Math.min(Math.max(artistsCurrentPage, 0), totalPages - 1);
+    const pageStart = artistsCurrentPage * ARTISTS_PER_PAGE;
+    const visibleArtists = rankedArtists.slice(pageStart, pageStart + ARTISTS_PER_PAGE);
+    container.innerHTML = visibleArtists.map((artist, index) => {
+      const avatar = artist.avatar_url
+        ? `<img src="${escapeAttribute(artist.avatar_url)}" alt="${escapeAttribute(artist.name || "Artist")}" loading="lazy">`
+        : `<div class="artist-avatar-placeholder">${getInitials(artist.name)}</div>`;
+
+      return `
+        <div class="artist-card" role="button" tabindex="0"
+          onclick="openArtistProfile('${escapeAttribute(artist.id)}')"
+          onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openArtistProfile('${escapeAttribute(artist.id)}');}">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+            <div class="artist-rank-number">#${pageStart + index + 1}</div>
+            <div style="font-size:12px;color:#aaa;font-weight:700;">${formatNumber(artist.__artistPlays || 0)} views</div>
+          </div>
+          <div class="artist-avatar">${avatar}</div>
+          <h3>${escapeHtml(artist.name || "Unknown Artist")}${isArtistVerified(artist) ? ' <span class="artist-verified-tick" role="img" aria-label="Verified artist" title="Verified artist">✓</span>' : ""}</h3>
+          ${isArtistPremiumActive(artist) ? '<div class="nilesoniq-premium-badge" aria-label="Active ' + escapeHtml(getArtistPackageBadgeLabel(artist)) + ' artist">★ ' + escapeHtml(getArtistPackageBadgeLabel(artist)) + ' ARTIST</div>' : ''}
+          <p>${escapeHtml(artist.location || "Uganda")}</p>
+        </div>`;
+    }).join("");
+    const controls = document.getElementById("artistsSeeMoreControls");
+    if(controls){
+      controls.innerHTML = totalPages > 1
+        ? `<button class="btn btn-dark" onclick="changeArtistsPage(-1)" ${artistsCurrentPage === 0 ? "disabled" : ""}>Previous</button><span class="artist-page-status">${artistsCurrentPage + 1} / ${totalPages}</span><button class="btn btn-orange" onclick="changeArtistsPage(1)" ${artistsCurrentPage >= totalPages - 1 ? "disabled" : ""}>Next</button>`
+        : "";
+    }
+  } catch (error) {
+    console.error("Artists load error:", error);
+    featuredArtistsList = [];
+    renderFeaturedArtists();
+    container.innerHTML = `
+      <div class="empty">
+        <h3>Could not load artists</h3>
+        <p style="margin-top:8px;">${escapeHtml(error.message || "Unknown error")}</p>
+      </div>
+    `;
   }
 }
 
 function changeArtistsPage(direction){
-  const next=artistsCurrentPage+Number(direction||0);
-  if(next<0 || (direction>0 && !artistsHasMore)) return;
-  loadArtists(next*ARTISTS_PER_PAGE);
+  artistsCurrentPage = Math.max(0, artistsCurrentPage + Number(direction || 0));
+  loadArtists();
 }
 
 /* =========================================================
