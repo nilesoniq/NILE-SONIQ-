@@ -388,6 +388,8 @@ async function paidSignupRoute(request, env) {
   const baseUrl = String(env.PESAJET_API_BASE_URL || "https://payments.pesajet.com/api/v1").replace(/\/+$/, "");
   if (!apiKey) return error("Payment service is not configured.", 503);
   const reference = `NILESONIQ-ARTIST-REGISTRATION-${paymentReferenceName(artistName)}-${crypto.randomUUID().replace(/-/g, "").slice(0, 16).toUpperCase()}`;
+  const riskCheck = await checkPesaJetCollectionRisk(request, env, phone, null, reference);
+  if (riskCheck.blocked) return error(riskCheck.message, 429);
   const description = `NileSoniQ Artist Registration - ${artistName}`.slice(0, 250);
   const id = crypto.randomUUID();
   const passwordHash = await bcrypt.hash(password, 10);
@@ -2924,6 +2926,114 @@ async function storageRoute(request, env, path) {
   return error("Method not allowed", 405);
 }
 
+// PesaJet collection-risk safeguard. It detects three distinct Ugandan
+// mobile numbers sharing the same first eight subscriber digits and having
+// sequential/near-sequential final digits within a rolling 24-hour window.
+// Repeating the same number does not count as another distinct number.
+let pesajetRiskTableReady = false;
+let pesajetRiskTablePromise = null;
+
+async function ensurePesaJetRiskTable(env) {
+  if (pesajetRiskTableReady) return;
+  if (!pesajetRiskTablePromise) {
+    pesajetRiskTablePromise = env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS pesajet_collection_risk_attempts (
+        id TEXT PRIMARY KEY,
+        reference TEXT NOT NULL,
+        actor_key TEXT NOT NULL,
+        phone_number TEXT NOT NULL,
+        phone_prefix TEXT NOT NULL,
+        phone_suffix INTEGER NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )
+    `).run().then(async () => {
+      await env.DB.prepare(`
+        CREATE INDEX IF NOT EXISTS idx_pesajet_risk_actor_time
+        ON pesajet_collection_risk_attempts(actor_key, created_at)
+      `).run();
+      pesajetRiskTableReady = true;
+    }).catch((err) => {
+      pesajetRiskTablePromise = null;
+      throw err;
+    });
+  }
+  await pesajetRiskTablePromise;
+}
+
+async function pesajetRiskHash(value) {
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(String(value))
+  );
+  return [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+async function checkPesaJetCollectionRisk(request, env, phone, userId, reference) {
+  await ensurePesaJetRiskTable(env);
+  const normalizedPhone = String(phone || "").replace(/\D/g, "");
+  if (!/^256\d{9}$/.test(normalizedPhone)) return { blocked: false };
+
+  const actorKeys = [];
+  if (userId !== undefined && userId !== null && String(userId).trim()) {
+    actorKeys.push(await pesajetRiskHash(`user:${String(userId).trim()}`));
+  }
+  const clientIp = String(request.headers.get("CF-Connecting-IP") || "").trim();
+  if (clientIp) actorKeys.push(await pesajetRiskHash(`ip:${clientIp}`));
+
+  // Fail open only if the request has neither an authenticated user nor an
+  // edge-provided client IP; never group unrelated customers under one key.
+  if (!actorKeys.length) return { blocked: false };
+
+  const prefix = normalizedPhone.slice(0, 8);
+  const suffix = Number(normalizedPhone.slice(-1));
+  const timestamp = new Date().toISOString();
+  await env.DB.batch(actorKeys.map((actorKey) =>
+    env.DB.prepare(`
+      INSERT INTO pesajet_collection_risk_attempts
+        (id, reference, actor_key, phone_number, phone_prefix, phone_suffix, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      crypto.randomUUID(), reference, actorKey, `+${normalizedPhone}`,
+      prefix, suffix, timestamp
+    )
+  ));
+
+  await env.DB.prepare(`
+    DELETE FROM pesajet_collection_risk_attempts
+    WHERE created_at < datetime('now', '-48 hours')
+  `).run();
+
+  const placeholders = actorKeys.map(() => "?").join(",");
+  const recent = await env.DB.prepare(`
+    SELECT DISTINCT phone_number, phone_suffix
+    FROM pesajet_collection_risk_attempts
+    WHERE actor_key IN (${placeholders})
+      AND phone_prefix = ?
+      AND datetime(created_at) >= datetime('now', '-24 hours')
+  `).bind(...actorKeys, prefix).all();
+
+  const suffixes = [...new Set(
+    (recent.results || []).map((row) => Number(row.phone_suffix))
+  )];
+  if (suffixes.length < 3) return { blocked: false };
+
+  const spread = Math.max(...suffixes) - Math.min(...suffixes);
+  const sequentialOrNearSequential = spread <= 2 || spread >= 8;
+  if (!sequentialOrNearSequential) return { blocked: false };
+
+  console.warn("PesaJet collection locally blocked by sequential-number safeguard", {
+    reference,
+    distinctNumbers: suffixes.length,
+    windowHours: 24
+  });
+  return {
+    blocked: true,
+    message: "For payment security, this request was paused because several similar mobile-money numbers were used within 24 hours. Please wait 24 hours or contact NileSoniQ support if this is a genuine payment."
+  };
+}
+
 function normalizeUgandanPhone(value) {
   const cleaned = String(value || "").replace(/[\s\-()]/g, "");
   if (cleaned.startsWith("+256")) return cleaned;
@@ -3315,6 +3425,8 @@ async function premiumSubscriptionRoute(request, env) {
   // Use a shorter unique reference for Airtel to reduce possible downstream
   // reference truncation/collision. Keep MTN's existing reference format unchanged.
   const reference = `NILESONIQ-PREMIUM-${paymentReferenceName(artist.name)}-${crypto.randomUUID().replace(/-/g, "").slice(0, 16).toUpperCase()}`;
+  const riskCheck = await checkPesaJetCollectionRisk(request, env, phone, user.id, reference);
+  if (riskCheck.blocked) return error(riskCheck.message, 429);
   const description = `NileSoniQ Premium Upgrade - ${artist.name || "Artist"}`.slice(0, 250);
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
@@ -4058,6 +4170,8 @@ async function featurePaymentRoute(request, env) {
   const description = (type === "boost"
     ? `NileSoniQ Song Boost - ${artist.name || "Artist"} - ${packageCode}`
     : `NileSoniQ Listener Subscription - ${artist.name || "Artist"} - 30 days`).slice(0, 250);
+  const riskCheck = await checkPesaJetCollectionRisk(request, env, phone, user.id, reference);
+  if (riskCheck.blocked) return error(riskCheck.message, 429);
   await env.DB.prepare(`INSERT INTO nilesoniq_feature_payments (id,reference,payment_type,payer_user_id,artist_id,amount,currency,provider,phone_number,status,package_code,duration_days,play_guarantee,download_guarantee,song_ids_json) VALUES (?,?, ?,?,?,?,'UGX',?,?,'pending',?,?,?,?,?)`).bind(id,reference,type,user.id,artist.id,amount,provider,phone,packageCode,days,plays,downloads,JSON.stringify(songIds)).run();
   if(type==='listener_subscription') await env.DB.prepare(`INSERT INTO listener_artist_subscriptions (id,payment_id,listener_user_id,artist_id,status) VALUES (?,?,?,?,'pending')`).bind(crypto.randomUUID(),id,user.id,artist.id).run();
   let response,result;
@@ -4187,6 +4301,10 @@ async function paymentRoute(request, env, type) {
     ? `NILESONIQ-PLATFORM-WALLET-DEPOSIT-${crypto.randomUUID().replace(/-/g, "").slice(0, 16).toUpperCase()}`
     : `NILESONIQ-PLATFORM-WALLET-WITHDRAWAL-${crypto.randomUUID().replace(/-/g, "").slice(0, 16).toUpperCase()}`;
   const reference = String(body.reference || generatedReference).trim().slice(0, 120);
+  if (type === "collection") {
+    const riskCheck = await checkPesaJetCollectionRisk(request, env, phone, user.id, reference);
+    if (riskCheck.blocked) return error(riskCheck.message, 429);
+  }
 
   if (!reference) {
     return error("A payment reference is required", 422);
