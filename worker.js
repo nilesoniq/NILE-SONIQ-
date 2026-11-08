@@ -1440,6 +1440,13 @@ async function dbRoute(request, env, path) {
                     AND status = 'posted'
                 ), 0)
                 + COALESCE((
+                  SELECT SUM(net_amount)
+                  FROM artist_earning_ledger
+                  WHERE artist_id IN (?, ?)
+                    AND source_type = 'qualified_download'
+                    AND status = 'posted'
+                ), 0)
+                + COALESCE((
                   SELECT SUM(amount)
                   FROM artist_test_adjustments
                   WHERE artist_id IN (?, ?)
@@ -1468,6 +1475,8 @@ async function dbRoute(request, env, path) {
               artistProfileId,
               ARTIST_FREE_NET_PER_PLAY,
               ARTIST_FREE_NET_PER_PLAY,
+              user.id,
+              artistProfileId,
               user.id,
               artistProfileId,
               user.id,
@@ -2261,13 +2270,20 @@ async function rpcRoute(request, env, name) {
               AND status = 'posted'
           ), 0)
           + COALESCE((
+            SELECT SUM(net_amount)
+            FROM artist_earning_ledger
+            WHERE artist_id = ?
+              AND source_type = 'qualified_download'
+              AND status = 'posted'
+          ), 0)
+          + COALESCE((
             SELECT SUM(amount)
             FROM artist_test_adjustments
             WHERE artist_id = ?
               AND status = 'active'
               AND (expires_at IS NULL OR datetime(expires_at) > datetime('now'))
           ), 0) AS adjustment
-      `).bind(ARTIST_FREE_NET_PER_PLAY, user.id, user.id).first();
+      `).bind(ARTIST_FREE_NET_PER_PLAY, user.id, user.id, user.id).first();
       return json({ data: Number(result?.adjustment || 0), error: null });
     }
 
@@ -2433,6 +2449,73 @@ async function rpcRoute(request, env, name) {
       ]);
 
       const recorded = Number(results?.[0]?.meta?.changes || 0) > 0;
+
+      // A download earns only when its log row was newly inserted. The same
+      // 24-hour song/IP guard above therefore protects both the download count
+      // and the artist earning. The unique event key makes ledger retries safe.
+      if (recorded) {
+        const downloadLogId = Number(results?.[0]?.meta?.last_row_id || 0);
+        if (downloadLogId > 0) {
+          const songOwner = await env.DB.prepare(
+            "SELECT artist_id FROM songs WHERE id = ? AND approved = 1 LIMIT 1"
+          ).bind(id).first();
+          const artistId = String(songOwner?.artist_id || "").trim();
+          if (artistId) {
+            const activePackage = await env.DB.prepare(`
+              SELECT package_name
+              FROM premium_subscriptions
+              WHERE user_id = ?
+                AND lower(status) = 'active'
+                AND expires_at IS NOT NULL
+                AND datetime(expires_at) > datetime('now')
+              ORDER BY datetime(COALESCE(paid_at, created_at)) DESC,
+                       datetime(created_at) DESC,
+                       datetime(expires_at) DESC
+              LIMIT 1
+            `).bind(artistId).first();
+            const packageCode = String(activePackage?.package_name || 'free')
+              .trim().toLowerCase().replace(/[ -]+/g, '_');
+            const earningRates = { free: 0.5, premium: 1, hustler: 1, hit_maker: 2, star: 3 };
+            let gross = earningRates[packageCode] ?? EARNINGS_PER_PLAY;
+
+            if (user?.id) {
+              const listenerSub = await env.DB.prepare(`
+                SELECT las.id FROM listener_artist_subscriptions las
+                JOIN artists a ON a.id = las.artist_id
+                WHERE las.listener_user_id = ?
+                  AND (a.id = ? OR a.user_id = ?)
+                  AND lower(las.status) = 'active'
+                  AND las.expires_at IS NOT NULL
+                  AND datetime(las.expires_at) > datetime('now')
+                ORDER BY datetime(las.expires_at) DESC LIMIT 1
+              `).bind(user.id, artistId, artistId).first();
+              if (listenerSub) gross *= 2;
+            }
+
+            const commission = Math.round(gross * ARTIST_COMMISSION_RATE * 1000) / 1000;
+            const tax = Math.round(gross * ARTIST_TAX_ALLOCATION_RATE * 1000) / 1000;
+            const net = Math.round((gross - commission - tax) * 1000) / 1000;
+            await env.DB.prepare(`
+              INSERT OR IGNORE INTO artist_earning_ledger
+                (event_key, artist_id, source_type, source_id, gross_amount,
+                 commission_amount, tax_amount, pesajet_fee_amount, net_amount,
+                 currency, status, note, occurred_at)
+              VALUES (?, ?, 'qualified_download', ?, ?, ?, ?, 0, ?, 'UGX',
+                      'posted', 'Package-rate gross per qualified download; 20% commission and 5% tax allocation',
+                      datetime('now'))
+            `).bind(
+              `song-download:${downloadLogId}`,
+              artistId,
+              String(downloadLogId),
+              gross,
+              commission,
+              tax,
+              net
+            ).run();
+          }
+        }
+      }
+
       const song = await env.DB.prepare(
         "SELECT COALESCE(downloads, 0) AS downloads FROM songs WHERE id = ? AND approved = 1 LIMIT 1"
       ).bind(id).first();
@@ -4729,13 +4812,20 @@ async function artistDashboardRoute(request, env) {
               AND status = 'posted'
           ), 0)
           + COALESCE((
+            SELECT SUM(net_amount)
+            FROM artist_earning_ledger
+            WHERE artist_id IN (?, ?)
+              AND source_type = 'qualified_download'
+              AND status = 'posted'
+          ), 0)
+          + COALESCE((
             SELECT SUM(amount)
             FROM artist_test_adjustments
             WHERE artist_id IN (?, ?)
               AND status = 'active'
               AND (expires_at IS NULL OR datetime(expires_at) > datetime('now'))
           ), 0) AS adjustment
-      `).bind(ARTIST_FREE_NET_PER_PLAY, ids[0], ids[1], ids[0], ids[1]).first(),
+      `).bind(ARTIST_FREE_NET_PER_PLAY, ids[0], ids[1], ids[0], ids[1], ids[0], ids[1]).first(),
       env.DB.prepare(`
         SELECT
           COALESCE(SUM(CASE WHEN lower(status) IN ('pending','processing','paid','completed','success','successful') THEN amount ELSE 0 END), 0) AS reserved,
