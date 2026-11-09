@@ -2418,114 +2418,95 @@ async function rpcRoute(request, env, name) {
         return error("song_id is required", 422);
       }
 
-      // Count only approved songs and use the edge-provided IP address.
-      // A repeat request for the same song from the same IP within 24 hours
-      // is ignored, and the counter changes only when a log row is inserted.
+      // Resolve the song owner and current package before recording the event.
+      // The actual log, counter update and earning-ledger insert are then committed
+      // together in one D1 batch, so a qualifying download cannot be counted
+      // without its corresponding earning entry.
       const ip = request.headers.get("CF-Connecting-IP");
       if (!ip) {
         return error("Unable to verify this download request. Please try again.", 400);
       }
 
+      const song = await env.DB.prepare(`
+        SELECT id, artist_id, COALESCE(downloads, 0) AS downloads
+        FROM songs WHERE id = ? AND approved = 1 LIMIT 1
+      `).bind(id).first();
+      if (!song) return error("Approved song not found", 404);
+
+      const artistId = String(song.artist_id || "").trim();
+      if (!artistId) return error("This song is not linked to an artist account", 409);
+
+      const activePackage = await env.DB.prepare(`
+        SELECT package_name
+        FROM premium_subscriptions
+        WHERE user_id = ?
+          AND lower(status) = 'active'
+          AND expires_at IS NOT NULL
+          AND datetime(expires_at) > datetime('now')
+        ORDER BY datetime(COALESCE(paid_at, created_at)) DESC,
+                 datetime(created_at) DESC,
+                 datetime(expires_at) DESC
+        LIMIT 1
+      `).bind(artistId).first();
+      const packageCode = String(activePackage?.package_name || 'free')
+        .trim().toLowerCase().replace(/[ -]+/g, '_');
+      const earningRates = { free: 0.5, premium: 1, hustler: 1, hit_maker: 2, star: 3 };
+      let gross = earningRates[packageCode] ?? EARNINGS_PER_PLAY;
+
+      if (user?.id) {
+        const listenerSub = await env.DB.prepare(`
+          SELECT las.id FROM listener_artist_subscriptions las
+          JOIN artists a ON a.id = las.artist_id
+          WHERE las.listener_user_id = ?
+            AND (a.id = ? OR a.user_id = ?)
+            AND lower(las.status) = 'active'
+            AND las.expires_at IS NOT NULL
+            AND datetime(las.expires_at) > datetime('now')
+          ORDER BY datetime(las.expires_at) DESC LIMIT 1
+        `).bind(user.id, artistId, artistId).first();
+        if (listenerSub) gross *= 2;
+      }
+
+      const commission = Math.round(gross * ARTIST_COMMISSION_RATE * 1000) / 1000;
+      const tax = Math.round(gross * ARTIST_TAX_ALLOCATION_RATE * 1000) / 1000;
+      const net = Math.round((gross - commission - tax) * 1000) / 1000;
+
       const results = await env.DB.batch([
         env.DB.prepare(`
           INSERT INTO song_download_log (song_id, ip_address, downloaded_at)
           SELECT ?, ?, datetime('now')
-          WHERE EXISTS (
-            SELECT 1 FROM songs WHERE id = ? AND approved = 1
-          )
-          AND NOT EXISTS (
-            SELECT 1
-            FROM song_download_log
-            WHERE song_id = ?
-              AND ip_address = ?
+          WHERE NOT EXISTS (
+            SELECT 1 FROM song_download_log
+            WHERE song_id = ? AND ip_address = ?
               AND datetime(downloaded_at) >= datetime('now', '-24 hours')
           )
-        `).bind(id, ip, id, id, ip),
+        `).bind(id, ip, id, ip),
         env.DB.prepare(`
           UPDATE songs
           SET downloads = COALESCE(downloads, 0) + 1
           WHERE id = ? AND approved = 1 AND changes() > 0
-        `).bind(id)
+        `).bind(id),
+        env.DB.prepare(`
+          INSERT OR IGNORE INTO artist_earning_ledger
+            (event_key, artist_id, source_type, source_id, gross_amount,
+             commission_amount, tax_amount, pesajet_fee_amount, net_amount,
+             currency, status, note, occurred_at)
+          SELECT
+            'song-download:' || last_insert_rowid(), ?, 'qualified_download',
+            CAST(last_insert_rowid() AS TEXT), ?, ?, ?, 0, ?, 'UGX', 'posted',
+            'Package-rate gross per qualified download; 20% commission and 5% tax allocation',
+            datetime('now')
+          WHERE changes() > 0
+        `).bind(artistId, gross, commission, tax, net)
       ]);
 
       const recorded = Number(results?.[0]?.meta?.changes || 0) > 0;
-
-      // A download earns only when its log row was newly inserted. The same
-      // 24-hour song/IP guard above therefore protects both the download count
-      // and the artist earning. The unique event key makes ledger retries safe.
-      if (recorded) {
-        const downloadLogId = Number(results?.[0]?.meta?.last_row_id || 0);
-        if (downloadLogId > 0) {
-          const songOwner = await env.DB.prepare(
-            "SELECT artist_id FROM songs WHERE id = ? AND approved = 1 LIMIT 1"
-          ).bind(id).first();
-          const artistId = String(songOwner?.artist_id || "").trim();
-          if (artistId) {
-            const activePackage = await env.DB.prepare(`
-              SELECT package_name
-              FROM premium_subscriptions
-              WHERE user_id = ?
-                AND lower(status) = 'active'
-                AND expires_at IS NOT NULL
-                AND datetime(expires_at) > datetime('now')
-              ORDER BY datetime(COALESCE(paid_at, created_at)) DESC,
-                       datetime(created_at) DESC,
-                       datetime(expires_at) DESC
-              LIMIT 1
-            `).bind(artistId).first();
-            const packageCode = String(activePackage?.package_name || 'free')
-              .trim().toLowerCase().replace(/[ -]+/g, '_');
-            const earningRates = { free: 0.5, premium: 1, hustler: 1, hit_maker: 2, star: 3 };
-            let gross = earningRates[packageCode] ?? EARNINGS_PER_PLAY;
-
-            if (user?.id) {
-              const listenerSub = await env.DB.prepare(`
-                SELECT las.id FROM listener_artist_subscriptions las
-                JOIN artists a ON a.id = las.artist_id
-                WHERE las.listener_user_id = ?
-                  AND (a.id = ? OR a.user_id = ?)
-                  AND lower(las.status) = 'active'
-                  AND las.expires_at IS NOT NULL
-                  AND datetime(las.expires_at) > datetime('now')
-                ORDER BY datetime(las.expires_at) DESC LIMIT 1
-              `).bind(user.id, artistId, artistId).first();
-              if (listenerSub) gross *= 2;
-            }
-
-            const commission = Math.round(gross * ARTIST_COMMISSION_RATE * 1000) / 1000;
-            const tax = Math.round(gross * ARTIST_TAX_ALLOCATION_RATE * 1000) / 1000;
-            const net = Math.round((gross - commission - tax) * 1000) / 1000;
-            await env.DB.prepare(`
-              INSERT OR IGNORE INTO artist_earning_ledger
-                (event_key, artist_id, source_type, source_id, gross_amount,
-                 commission_amount, tax_amount, pesajet_fee_amount, net_amount,
-                 currency, status, note, occurred_at)
-              VALUES (?, ?, 'qualified_download', ?, ?, ?, ?, 0, ?, 'UGX',
-                      'posted', 'Package-rate gross per qualified download; 20% commission and 5% tax allocation',
-                      datetime('now'))
-            `).bind(
-              `song-download:${downloadLogId}`,
-              artistId,
-              String(downloadLogId),
-              gross,
-              commission,
-              tax,
-              net
-            ).run();
-          }
-        }
-      }
-
-      const song = await env.DB.prepare(
+      const updatedSong = await env.DB.prepare(
         "SELECT COALESCE(downloads, 0) AS downloads FROM songs WHERE id = ? AND approved = 1 LIMIT 1"
       ).bind(id).first();
 
-      if (!song) {
-        return error("Approved song not found", 404);
-      }
-
       return json({
-        data: { recorded, downloads: Number(song.downloads || 0) },
+        data: { recorded, downloads: Number(updatedSong?.downloads ?? song.downloads ?? 0) },
         error: null
       });
     }
