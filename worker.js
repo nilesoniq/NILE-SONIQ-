@@ -2249,6 +2249,118 @@ async function adminRoute(request, env, path) {
   return error("Admin endpoint not found", 404);
 }
 
+
+// Additive, idempotent migrations for download identity and shared-IP fraud
+// protection. Existing download history is retained; old rows remain anonymous.
+async function ensureSongActivityTrackingSchema(env) {
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS song_download_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      song_id TEXT NOT NULL,
+      ip_address TEXT NOT NULL,
+      downloaded_at TEXT NOT NULL DEFAULT (datetime('now')),
+      listener_user_id TEXT
+    )
+  `).run();
+
+  const columnsResult = await env.DB.prepare("PRAGMA table_info(song_download_log)").all();
+  const columns = new Set((columnsResult.results || []).map(column => String(column.name).toLowerCase()));
+  if (!columns.has("listener_user_id")) {
+    try {
+      await env.DB.prepare("ALTER TABLE song_download_log ADD COLUMN listener_user_id TEXT").run();
+    } catch (e) {
+      const refreshed = await env.DB.prepare("PRAGMA table_info(song_download_log)").all();
+      const refreshedColumns = new Set((refreshed.results || []).map(column => String(column.name).toLowerCase()));
+      if (!refreshedColumns.has("listener_user_id")) throw e;
+    }
+  }
+
+  await env.DB.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_song_download_listener_song_time
+    ON song_download_log(listener_user_id, song_id, downloaded_at)
+  `).run();
+  await env.DB.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_song_download_ip_song_time
+    ON song_download_log(ip_address, song_id, downloaded_at)
+  `).run();
+
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS song_ip_activity_guard (
+      ip_address TEXT PRIMARY KEY,
+      last_activity_at TEXT NOT NULL,
+      rapid_count INTEGER NOT NULL DEFAULT 1,
+      blocked_until TEXT,
+      decision_request_id TEXT,
+      last_decision INTEGER NOT NULL DEFAULT 1,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `).run();
+  await env.DB.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_song_ip_activity_blocked
+    ON song_ip_activity_guard(blocked_until)
+  `).run();
+}
+
+// This SQL is deliberately shared by download and play recording. Five rapid
+// qualifying events from one IP are allowed; the sixth starts a 24-hour block.
+// An accepted event after at least one quiet hour starts a fresh rapid window.
+function songIpActivityGuardStatement(ip, requestId, songId, duplicateSql, duplicateBinds) {
+  return {
+    statement: `
+      INSERT INTO song_ip_activity_guard
+        (ip_address, last_activity_at, rapid_count, blocked_until,
+         decision_request_id, last_decision, updated_at)
+      SELECT ?, datetime('now'), 1, NULL, ?, 1, datetime('now')
+      WHERE EXISTS (SELECT 1 FROM songs WHERE id = ? AND approved = 1)
+        AND NOT EXISTS (${duplicateSql})
+      ON CONFLICT(ip_address) DO UPDATE SET
+        rapid_count = CASE
+          WHEN song_ip_activity_guard.blocked_until IS NOT NULL
+            AND datetime(song_ip_activity_guard.blocked_until) > datetime('now')
+            THEN song_ip_activity_guard.rapid_count
+          WHEN datetime(song_ip_activity_guard.last_activity_at) <= datetime('now', '-1 hour')
+            THEN 1
+          WHEN song_ip_activity_guard.rapid_count < 5
+            THEN song_ip_activity_guard.rapid_count + 1
+          ELSE song_ip_activity_guard.rapid_count
+        END,
+        blocked_until = CASE
+          WHEN song_ip_activity_guard.blocked_until IS NOT NULL
+            AND datetime(song_ip_activity_guard.blocked_until) > datetime('now')
+            THEN song_ip_activity_guard.blocked_until
+          WHEN datetime(song_ip_activity_guard.last_activity_at) <= datetime('now', '-1 hour')
+            THEN NULL
+          WHEN song_ip_activity_guard.rapid_count < 5
+            THEN NULL
+          ELSE datetime('now', '+24 hours')
+        END,
+        last_activity_at = CASE
+          WHEN song_ip_activity_guard.blocked_until IS NOT NULL
+            AND datetime(song_ip_activity_guard.blocked_until) > datetime('now')
+            THEN song_ip_activity_guard.last_activity_at
+          WHEN datetime(song_ip_activity_guard.last_activity_at) <= datetime('now', '-1 hour')
+            THEN datetime('now')
+          WHEN song_ip_activity_guard.rapid_count < 5
+            THEN datetime('now')
+          ELSE song_ip_activity_guard.last_activity_at
+        END,
+        decision_request_id = excluded.decision_request_id,
+        last_decision = CASE
+          WHEN song_ip_activity_guard.blocked_until IS NOT NULL
+            AND datetime(song_ip_activity_guard.blocked_until) > datetime('now')
+            THEN 0
+          WHEN datetime(song_ip_activity_guard.last_activity_at) <= datetime('now', '-1 hour')
+            THEN 1
+          WHEN song_ip_activity_guard.rapid_count < 5
+            THEN 1
+          ELSE 0
+        END,
+        updated_at = datetime('now')
+    `,
+    binds: [ip, requestId, songId, ...duplicateBinds]
+  };
+}
+
 async function rpcRoute(request, env, name) {
   const body = await readBody(request);
   const user = await currentUser(request, env);
@@ -2413,34 +2525,43 @@ async function rpcRoute(request, env, name) {
 
     if (name === "record_song_download") {
       const id = String(body.song_id || "").trim();
+      if (!id) return error("song_id is required", 422);
 
-      if (!id) {
-        return error("song_id is required", 422);
-      }
+      const ip = String(request.headers.get("CF-Connecting-IP") || "").trim();
+      if (!ip) return error("Unable to verify this download request. Please try again.", 400);
 
-      // Count only approved songs and use the edge-provided IP address.
-      // A repeat request for the same song from the same IP within 24 hours
-      // is ignored, and the counter changes only when a log row is inserted.
-      const ip = request.headers.get("CF-Connecting-IP");
-      if (!ip) {
-        return error("Unable to verify this download request. Please try again.", 400);
-      }
+      await ensureSongActivityTrackingSchema(env);
+      const listenerUserId = user?.id ? String(user.id) : null;
+      const requestId = crypto.randomUUID();
+      const duplicateSql = `
+        SELECT 1
+        FROM song_download_log
+        WHERE song_id = ?
+          AND datetime(downloaded_at) >= datetime('now', '-24 hours')
+          AND (
+            (? IS NOT NULL AND listener_user_id = ?)
+            OR
+            (? IS NULL AND listener_user_id IS NULL AND ip_address = ?)
+          )
+      `;
+      const guard = songIpActivityGuardStatement(
+        ip, requestId, id, duplicateSql,
+        [id, listenerUserId, listenerUserId, listenerUserId, ip]
+      );
 
       const results = await env.DB.batch([
+        env.DB.prepare(guard.statement).bind(...guard.binds),
         env.DB.prepare(`
-          INSERT INTO song_download_log (song_id, ip_address, downloaded_at)
-          SELECT ?, ?, datetime('now')
+          INSERT INTO song_download_log
+            (song_id, ip_address, downloaded_at, listener_user_id)
+          SELECT ?, ?, datetime('now'), ?
           WHERE EXISTS (
-            SELECT 1 FROM songs WHERE id = ? AND approved = 1
+            SELECT 1 FROM song_ip_activity_guard
+            WHERE ip_address = ?
+              AND decision_request_id = ?
+              AND last_decision = 1
           )
-          AND NOT EXISTS (
-            SELECT 1
-            FROM song_download_log
-            WHERE song_id = ?
-              AND ip_address = ?
-              AND datetime(downloaded_at) >= datetime('now', '-24 hours')
-          )
-        `).bind(id, ip, id, id, ip),
+        `).bind(id, ip, listenerUserId, ip, requestId),
         env.DB.prepare(`
           UPDATE songs
           SET downloads = COALESCE(downloads, 0) + 1
@@ -2448,13 +2569,12 @@ async function rpcRoute(request, env, name) {
         `).bind(id)
       ]);
 
-      const recorded = Number(results?.[0]?.meta?.changes || 0) > 0;
+      const recorded = Number(results?.[1]?.meta?.changes || 0) > 0;
 
-      // A download earns only when its log row was newly inserted. The same
-      // 24-hour song/IP guard above therefore protects both the download count
-      // and the artist earning. The unique event key makes ledger retries safe.
+      // Only a newly inserted, fraud-qualified log row can create earnings.
+      // The unique ledger event key makes retries safe.
       if (recorded) {
-        const downloadLogId = Number(results?.[0]?.meta?.last_row_id || 0);
+        const downloadLogId = Number(results?.[1]?.meta?.last_row_id || 0);
         if (downloadLogId > 0) {
           const songOwner = await env.DB.prepare(
             "SELECT artist_id FROM songs WHERE id = ? AND approved = 1 LIMIT 1"
@@ -2473,12 +2593,12 @@ async function rpcRoute(request, env, name) {
                        datetime(expires_at) DESC
               LIMIT 1
             `).bind(artistId).first();
-            const packageCode = String(activePackage?.package_name || 'free')
-              .trim().toLowerCase().replace(/[ -]+/g, '_');
+            const packageCode = String(activePackage?.package_name || "free")
+              .trim().toLowerCase().replace(/[ -]+/g, "_");
             const earningRates = { free: 0.5, premium: 1, hustler: 1, hit_maker: 2, star: 3 };
             let gross = earningRates[packageCode] ?? EARNINGS_PER_PLAY;
 
-            if (user?.id) {
+            if (listenerUserId) {
               const listenerSub = await env.DB.prepare(`
                 SELECT las.id FROM listener_artist_subscriptions las
                 JOIN artists a ON a.id = las.artist_id
@@ -2488,7 +2608,7 @@ async function rpcRoute(request, env, name) {
                   AND las.expires_at IS NOT NULL
                   AND datetime(las.expires_at) > datetime('now')
                 ORDER BY datetime(las.expires_at) DESC LIMIT 1
-              `).bind(user.id, artistId, artistId).first();
+              `).bind(listenerUserId, artistId, artistId).first();
               if (listenerSub) gross *= 2;
             }
 
@@ -2519,52 +2639,58 @@ async function rpcRoute(request, env, name) {
       const song = await env.DB.prepare(
         "SELECT COALESCE(downloads, 0) AS downloads FROM songs WHERE id = ? AND approved = 1 LIMIT 1"
       ).bind(id).first();
-
-      if (!song) {
-        return error("Approved song not found", 404);
-      }
+      if (!song) return error("Approved song not found", 404);
 
       return json({
-        data: { recorded, downloads: Number(song.downloads || 0) },
+        data: {
+          recorded,
+          downloads: Number(song.downloads || 0),
+          reason: recorded ? "qualified" : "duplicate_or_shared_ip_fraud_limit"
+        },
         error: null
       });
     }
 
     if (name === "record_song_play") {
+      await ensureSongActivityTrackingSchema(env);
       const id = String(body.song_id || "").trim();
+      if (!id) return error("song_id is required", 422);
 
-      if (!id) {
-        return error("song_id is required", 422);
-      }
+      const ip = String(request.headers.get("CF-Connecting-IP") || "").trim();
+      if (!ip) return error("Unable to verify this play request. Please try again.", 400);
 
-      // Use Cloudflare's client IP header for a basic repeat-play guard.
-      // Never trust a client-supplied IP in the JSON body.
-      const ip = request.headers.get("CF-Connecting-IP");
+      const listenerUserId = user?.id ? String(user.id) : null;
+      const requestId = crypto.randomUUID();
+      const duplicateSql = `
+        SELECT 1
+        FROM song_play_log
+        WHERE song_id = ?
+          AND datetime(played_at) >= datetime('now', '-24 hours')
+          AND (
+            (? IS NOT NULL AND user_id = ?)
+            OR
+            (? IS NULL AND user_id IS NULL AND ip_address = ?)
+          )
+      `;
+      const guard = songIpActivityGuardStatement(
+        ip, requestId, id, duplicateSql,
+        [id, listenerUserId, listenerUserId, listenerUserId, ip]
+      );
 
-      if (!ip) {
-        return error(
-          "Unable to verify this play request. Please try again.",
-          400
-        );
-      }
-
-      // Insert the play log and increment the song in one D1 batch. The
-      // second statement runs only when the first statement inserted a row.
+      // The shared IP guard is combined across downloads and qualified plays.
+      // Duplicate song events do not consume the shared-IP allowance.
       const results = await env.DB.batch([
+        env.DB.prepare(guard.statement).bind(...guard.binds),
         env.DB.prepare(`
           INSERT INTO song_play_log (song_id, ip_address, played_at, user_id)
           SELECT ?, ?, datetime('now'), ?
           WHERE EXISTS (
-            SELECT 1 FROM songs WHERE id = ? AND approved = 1
+            SELECT 1 FROM song_ip_activity_guard
+            WHERE ip_address = ?
+              AND decision_request_id = ?
+              AND last_decision = 1
           )
-          AND NOT EXISTS (
-            SELECT 1
-            FROM song_play_log
-            WHERE song_id = ?
-              AND ip_address = ?
-              AND datetime(played_at) >= datetime('now', '-24 hours')
-          )
-        `).bind(id, ip, user?.id || null, id, id, ip),
+        `).bind(id, ip, listenerUserId, ip, requestId),
         env.DB.prepare(`
           UPDATE songs
           SET plays = COALESCE(plays, 0) + 1
@@ -2572,15 +2698,12 @@ async function rpcRoute(request, env, name) {
         `).bind(id)
       ]);
 
-      const inserted = Number(results?.[0]?.meta?.changes || 0) > 0;
-      const incremented = Number(results?.[1]?.meta?.changes || 0) > 0;
+      const inserted = Number(results?.[1]?.meta?.changes || 0) > 0;
+      const incremented = Number(results?.[2]?.meta?.changes || 0) > 0;
 
-      // Keep a per-qualified-play artist earnings audit trail. The unique event
-      // key makes retries safe. The package rate is read from the latest active,
-      // unexpired subscription, so an expired package automatically falls back
-      // to Free for new plays. Existing historical plays are not rewritten.
+      // A newly inserted play log is the sole trigger for the earnings ledger.
       if (inserted && incremented) {
-        const playLogId = Number(results?.[0]?.meta?.last_row_id || 0);
+        const playLogId = Number(results?.[1]?.meta?.last_row_id || 0);
         if (playLogId > 0) {
           const song = await env.DB.prepare(
             "SELECT artist_id FROM songs WHERE id = ? AND approved = 1 LIMIT 1"
@@ -2599,11 +2722,12 @@ async function rpcRoute(request, env, name) {
                        datetime(expires_at) DESC
               LIMIT 1
             `).bind(artistId).first();
-            const packageCode = String(activePackage?.package_name || 'free')
-              .trim().toLowerCase().replace(/[ -]+/g, '_');
+            const packageCode = String(activePackage?.package_name || "free")
+              .trim().toLowerCase().replace(/[ -]+/g, "_");
             const earningRates = { free: 0.5, premium: 1, hustler: 1, hit_maker: 2, star: 3 };
             let gross = earningRates[packageCode] ?? EARNINGS_PER_PLAY;
-            if (user?.id) {
+
+            if (listenerUserId) {
               const listenerSub = await env.DB.prepare(`
                 SELECT las.id FROM listener_artist_subscriptions las
                 JOIN artists a ON a.id = las.artist_id
@@ -2613,9 +2737,10 @@ async function rpcRoute(request, env, name) {
                   AND las.expires_at IS NOT NULL
                   AND datetime(las.expires_at) > datetime('now')
                 ORDER BY datetime(las.expires_at) DESC LIMIT 1
-              `).bind(user.id, artistId, artistId).first();
+              `).bind(listenerUserId, artistId, artistId).first();
               if (listenerSub) gross *= 2;
             }
+
             // Keep mill-UGX precision so Free net earnings remain 0.375 rather
             // than rounding each play down to 0.37 before the balance is summed.
             const commission = Math.round(gross * ARTIST_COMMISSION_RATE * 1000) / 1000;
