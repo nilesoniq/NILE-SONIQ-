@@ -8442,7 +8442,7 @@ async function recordSongDownload(songId){
   try{
     const response = await fetch("https://nile-soniq-auth.nilesoniq.workers.dev/api/rpc/record_song_download", {
       method:"POST",
-      credentials:"omit",
+      credentials:"include",
       headers:{
         "Content-Type":"application/json",
         "Accept":"application/json"
