@@ -477,37 +477,44 @@ nav button.active{
   cursor:not-allowed;
 }
 
- /* Artist-package styling for song controls */
+ /* Package-specific Play and Download controls */
 .song-card .play-circle,
 .song-card .download-btn,
 .artist-profile-song-actions .package-play-btn,
 .artist-profile-song-actions .package-download-btn{
+  position:static;
+  display:inline-flex;
+  flex:0 0 auto;
+  align-items:center;
+  justify-content:center;
+  gap:5px;
+  min-height:38px;
+  padding:8px 11px;
   border:1px solid var(--package-accent,#777);
   background:var(--package-bg,#252525);
   color:var(--package-text,#fff);
   box-shadow:inset 0 0 0 1px rgba(255,255,255,.035);
+  font-size:11px;
+  font-weight:900;
+  white-space:nowrap;
+  cursor:pointer;
+  transition:filter .2s,transform .2s;
 }
-.song-card .play-circle{font-weight:900;}
-.song-card .download-btn{min-width:100px;}
-.package-free{--package-accent:#8b949e;--package-bg:#252b33;--package-text:#f0f3f6;}
-.package-premium{--package-accent:#e0ad35;--package-bg:#3b2d0d;--package-text:#ffe6a0;}
-.package-hustler{--package-accent:#a78bfa;--package-bg:#30204b;--package-text:#e9ddff;}
-.package-hit-maker{--package-accent:#f472b6;--package-bg:#4b1f38;--package-text:#ffd6eb;}
-.package-star{--package-accent:#55b8ff;--package-bg:#102f4b;--package-text:#d5efff;}
-.song-card .play-circle:hover,
-.song-card .download-btn:hover,
-.artist-profile-song-actions .package-play-btn:hover,
-.artist-profile-song-actions .package-download-btn:hover{
-  filter:brightness(1.2);
-  border-color:var(--package-accent);
-}
-.artist-profile-song-actions .package-play-btn,
-.artist-profile-song-actions .package-download-btn{
-  border-radius:10px;
-  font-weight:800;
-  padding:8px 12px;
-}
-.package-control-label{font-size:10px;letter-spacing:.45px;font-weight:900;text-transform:uppercase;opacity:.9;margin-left:4px;}
+.song-card .play-circle{width:auto;height:38px;min-width:76px;border-radius:10px;font-size:11px;}
+.song-card .download-btn{width:auto;min-width:96px;border-radius:10px;}
+.package-free{--package-accent:#9aa4af;--package-bg:#29313a;--package-text:#f0f3f6;}
+.package-premium{--package-accent:#e0ad35;--package-bg:linear-gradient(135deg,#60450c,#332407);--package-text:#ffe6a0;}
+.package-hustler{--package-accent:#a78bfa;--package-bg:linear-gradient(135deg,#49306c,#25163d);--package-text:#eee4ff;}
+.package-hit-maker{--package-accent:#f472b6;--package-bg:linear-gradient(135deg,#632749,#351329);--package-text:#ffe0ef;}
+.package-star{--package-accent:#55b8ff;--package-bg:linear-gradient(135deg,#174c72,#102b43);--package-text:#dff3ff;}
+.package-free .play-circle,.package-free .download-btn,.package-free .package-play-btn,.package-free .package-download-btn{border-radius:6px;border-style:solid;}
+.package-premium .play-circle,.package-premium .download-btn,.package-premium .package-play-btn,.package-premium .package-download-btn{border-radius:18px;border-width:2px;}
+.package-hustler .play-circle,.package-hustler .download-btn,.package-hustler .package-play-btn,.package-hustler .package-download-btn{border-radius:7px 14px 7px 14px;border-style:dashed;}
+.package-hit-maker .play-circle,.package-hit-maker .download-btn,.package-hit-maker .package-play-btn,.package-hit-maker .package-download-btn{border-radius:5px;border-width:2px;letter-spacing:.25px;}
+.package-star .play-circle,.package-star .download-btn,.package-star .package-play-btn,.package-star .package-download-btn{border-radius:999px;box-shadow:0 0 10px rgba(85,184,255,.14);}
+.song-card .play-circle:hover,.song-card .download-btn:hover,
+.artist-profile-song-actions .package-play-btn:hover,.artist-profile-song-actions .package-download-btn:hover{filter:brightness(1.2);transform:translateY(-1px);border-color:var(--package-accent);}
+.package-control-label{display:none;}
 
 
 /* ARTISTS */
@@ -1565,11 +1572,17 @@ footer{
     gap:10px;
   }
 
-  .download-btn{
-    min-width:auto;
-    padding:7px 8px;
+  .song-card .play-circle,.song-card .download-btn{
+    min-width:0;
+    min-height:34px;
+    height:34px;
+    padding:6px 8px;
     font-size:10px;
   }
+  .song-card .play-circle{width:auto;}
+  .song-card{gap:7px;}
+  .song-card .song-info{flex:1 1 100px;}
+
 
   .hero{
     padding-top:25px;
@@ -6638,11 +6651,11 @@ function publicSongDisplayTitle(song){
 
 
 const NILE_PACKAGE_CONTROL_STYLES = Object.freeze({
-  free: {className:"package-free", playLabel:"▶ PLAY", downloadLabel:"↓ FREE MP3"},
-  premium: {className:"package-premium", playLabel:"▶ PREMIUM", downloadLabel:"↓ PREMIUM MP3"},
-  hustler: {className:"package-hustler", playLabel:"▶ HUSTLER", downloadLabel:"↓ HUSTLER MP3"},
-  hit_maker: {className:"package-hit-maker", playLabel:"▶ HIT MAKER", downloadLabel:"↓ HIT MAKER MP3"},
-  star: {className:"package-star", playLabel:"▶ STAR", downloadLabel:"↓ STAR MP3"}
+  free: {className:"package-free", playLabel:"▶ Play", downloadLabel:"↓ Download"},
+  premium: {className:"package-premium", playLabel:"▶ Play", downloadLabel:"↓ Download"},
+  hustler: {className:"package-hustler", playLabel:"▶ Play", downloadLabel:"↓ Download"},
+  hit_maker: {className:"package-hit-maker", playLabel:"▶ Play", downloadLabel:"↓ Download"},
+  star: {className:"package-star", playLabel:"▶ Play", downloadLabel:"↓ Download"}
 });
 let nileArtistPackageRows = [];
 
@@ -6714,7 +6727,7 @@ function renderSongCards(songs, containerId, emptyTitle, emptyText){
     const songId = escapeAttribute(song.id);
     const packageStyle = getNilePackageControlStyle(song);
     const cover = song.cover_url ? `<img src="${escapeAttribute(song.cover_url)}" alt="Open ${escapeAttribute(song.title || "song")}" loading="lazy">` : `<div class="cover-placeholder">♪</div>`;
-    return `<div class="song-card ${isPlaying ? "playing" : ""} ${packageStyle.className}" data-artist-package="${packageStyle.packageCode}"><div class="cover" style="position:relative;cursor:pointer;" role="link" tabindex="0" aria-label="Open song: ${escapeAttribute(song.title || "Untitled")}" onclick="openSongLink(window.__nileSongRegistry['${songId}'])" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openSongLink(window.__nileSongRegistry['${songId}']);}">${Number(song.__rank) > 0 ? `<div class="chart-rank-badge">#${song.__rank}</div>` : ""}${cover}</div><button class="play-circle" aria-label="${packageStyle.playLabel}" title="${packageStyle.playLabel}" onclick="event.stopPropagation();playSong('${songId}')">${isPlaying && !document.getElementById("audioPlayer")?.paused ? "❚❚" : "▶"}</button><div class="song-info"><a class="song-title" style="cursor:pointer;" href="${escapeAttribute(songPublicUrl(song))}" onclick="event.preventDefault();openSongLink(window.__nileSongRegistry['${songId}'])">${escapeHtml(publicSongDisplayTitle(song))}</a><a class="artist-name" href="#" onclick="event.preventDefault();openSongArtistProfile('${songId}')">${escapeHtml(song.artist || "Unknown Artist")}</a><div class="song-meta"><span>${formatNumber(song.plays || 0)} plays</span><span>${formatNumber(song.downloads || 0)} downloads</span><span class="package-control-label">${packageStyle.packageCode.replace(/_/g," ")}</span></div></div><button class="download-btn" aria-label="${packageStyle.downloadLabel}" title="${packageStyle.downloadLabel}" onclick="event.stopPropagation();downloadSong('${songId}')">${packageStyle.downloadLabel}</button></div>`;
+    return `<div class="song-card ${isPlaying ? "playing" : ""} ${packageStyle.className}" data-artist-package="${packageStyle.packageCode}"><div class="cover" style="position:relative;cursor:pointer;" role="link" tabindex="0" aria-label="Open song: ${escapeAttribute(song.title || "Untitled")}" onclick="openSongLink(window.__nileSongRegistry['${songId}'])" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openSongLink(window.__nileSongRegistry['${songId}']);}">${Number(song.__rank) > 0 ? `<div class="chart-rank-badge">#${song.__rank}</div>` : ""}${cover}</div><button class="play-circle" aria-label="${packageStyle.playLabel}" title="${packageStyle.playLabel}" onclick="event.stopPropagation();playSong('${songId}')">${isPlaying && !document.getElementById("audioPlayer")?.paused ? "❚❚ Pause" : "▶ Play"}</button><div class="song-info"><a class="song-title" style="cursor:pointer;" href="${escapeAttribute(songPublicUrl(song))}" onclick="event.preventDefault();openSongLink(window.__nileSongRegistry['${songId}'])">${escapeHtml(publicSongDisplayTitle(song))}</a><a class="artist-name" href="#" onclick="event.preventDefault();openSongArtistProfile('${songId}')">${escapeHtml(song.artist || "Unknown Artist")}</a><div class="song-meta"><span>${formatNumber(song.plays || 0)} plays</span><span>${formatNumber(song.downloads || 0)} downloads</span></div></div><button class="download-btn" aria-label="${packageStyle.downloadLabel}" title="${packageStyle.downloadLabel}" onclick="event.stopPropagation();downloadSong('${songId}')">${packageStyle.downloadLabel}</button></div>`;
   }).join("");
   const canExpand = !isCharts && !isAllApprovedSongs && list.length > 5;
   const expanded = expandedSongLists.has(containerId);
@@ -8193,20 +8206,20 @@ async function openArtistProfile(artistId, fromPublicRoute=false){
 
                       <button
                         class="btn package-play-btn"
-                        aria-label="${packageStyle.playLabel}"
-                        title="${packageStyle.playLabel}"
+                        aria-label="Play"
+                        title="Play"
                         onclick="playArtistProfileSong('${escapeAttribute(song.id)}')"
                       >
-                        ${packageStyle.playLabel}
+                        ▶ Play
                       </button>
 
                       <button
                         class="btn package-download-btn"
-                        aria-label="${packageStyle.downloadLabel}"
-                        title="${packageStyle.downloadLabel}"
+                        aria-label="Download"
+                        title="Download"
                         onclick="downloadArtistProfileSong('${escapeAttribute(song.id)}')"
                       >
-                        ${packageStyle.downloadLabel}
+                        ↓ Download
                       </button>
 
                     </div>
