@@ -159,6 +159,7 @@ async function ensureAdminReferralSchema(env) {
   await addColumn('artists', 'referring_admin_id', 'TEXT');
   await addColumn('premium_subscriptions', 'referring_admin_id', 'TEXT');
   await addColumn('premium_subscriptions', 'initiated_by_admin_id', 'TEXT');
+  await addColumn('pending_artist_signups', 'referral_code', 'TEXT');
   await env.DB.prepare(`CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_referral_code ON admins(referral_code) WHERE referral_code IS NOT NULL`).run();
   const admins = await env.DB.prepare(`SELECT id, role, rank, referral_code FROM admins`).all();
   for (const row of admins.results || []) {
@@ -195,6 +196,20 @@ async function adminReferralRoute(request, env, path) {
   await ensureAdminReferralSchema(env);
   const superAdmin = admin.role === 'super_admin';
   const url = new URL(request.url);
+  if (request.method === 'GET' && path === '/api/admin/referrals/artists') {
+    const term = String(url.searchParams.get('q') || '').trim().replace(/[\\%_]/g, '');
+    if (term.length < 2) return json({ data: [] });
+    const like = `%${term}%`;
+    const matches = await env.DB.prepare(`
+      SELECT id, name, location, package_name
+      FROM artists
+      WHERE name IS NOT NULL AND trim(name) <> ''
+        AND lower(name) LIKE lower(?)
+      ORDER BY CASE WHEN lower(name)=lower(?) THEN 0 ELSE 1 END, name COLLATE NOCASE
+      LIMIT 20
+    `).bind(like, term).all();
+    return json({ data: matches.results || [] });
+  }
   if (request.method === 'GET' && path === '/api/admin/referrals') {
     await ensureAdminWallet(env,admin.id);
     const wallet = await env.DB.prepare(`SELECT balance FROM admin_wallets WHERE admin_id=?`).bind(admin.id).first();
