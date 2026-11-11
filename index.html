@@ -10976,7 +10976,7 @@ async function loadAdministrators(){
                 isMe
                 ? `<span style="color:#777;">Your account</span>`
                 : `
-                    <button class="btn btn-orange" onclick="saveAdministratorRank('${escapeAttribute(admin.id)}')">Save type</button>
+                    <button class="btn btn-orange" onclick="saveAdministratorRank('${escapeAttribute(admin.id)}','${escapeAttribute(admin.user_id||'')}','${escapeAttribute(admin.email||'')}')">Save type</button>
                     <button class="btn ${activeNow ? "btn-danger" : "btn-success"}" onclick="toggleAdministrator('${escapeAttribute(admin.id)}',${activeNow})">${activeNow ? "Deactivate" : "Activate"}</button>
                   `
               }
@@ -11121,11 +11121,11 @@ async function addAdministrator(){
    TOGGLE ADMIN
 ========================================================= */
 
-async function saveAdministratorRank(id){
+async function saveAdministratorRank(id,userId,email){
   if(!isCurrentUserSuperAdmin()){alert("Only Super Admin can change administrator types.");return;}
   try{
     const rank=document.getElementById(`admin-management-rank-${id}`).value;
-    await adminReferralPost('/api/admin/referrals/rank',{admin_id:id,rank});
+    await adminReferralPost('/api/admin/referrals/rank',{admin_id:id,user_id:userId||'',email:email||'',rank});
     showMessage("adminManagementMessage","Administrator type updated to "+rank.replaceAll("_"," ")+".","success");
     await loadAdministrators();
   }catch(error){showMessage("adminManagementMessage",error.message||"Could not update administrator type.","error");}
@@ -11837,7 +11837,7 @@ async function loadAdminReferralDashboard(){
     document.getElementById('adminReferralWithdrawals').innerHTML=(x.withdrawals||[]).map(w=>`<tr><td>${new Date(w.created_at).toLocaleString()}</td><td>${money(w.amount)}</td><td>${escapeHtml(w.provider)}</td><td>${escapeHtml(w.status)}</td><td>${escapeHtml(w.review_note||'—')}</td></tr>`).join('')||'<tr><td colspan="5">No withdrawal requests.</td></tr>';
     const superPanel=document.getElementById('adminReferralSuperPanel');
     if(x.all_admins){superPanel.classList.remove('hidden');
-      document.getElementById('adminReferralAllAdmins').innerHTML=x.all_admins.map(a=>`<tr><td>${escapeHtml(a.email||a.id)}</td><td><select id="rank-${a.id}">${['junior_admin','admin','senior_admin','admin_manager','super_admin'].map(v=>`<option value="${v}" ${a.rank===v?'selected':''}>${v.replaceAll('_',' ')}</option>`).join('')}</select></td><td>${escapeHtml(a.referral_code||'')}</td><td>${a.referred_artists||0}</td><td>${money(a.total_commission)}</td><td>${money(a.balance)}</td><td><button class="btn" onclick="saveAdminRank('${a.id}')">Save rank</button> <button class="btn" onclick="toggleAdminSuspension('${a.id}',${a.active?1:0})">${a.active?'Suspend':'Reactivate'}</button></td></tr>`).join('');
+      document.getElementById('adminReferralAllAdmins').innerHTML=x.all_admins.map(a=>`<tr><td>${escapeHtml(a.email||a.id)}</td><td><select id="rank-${a.id}">${['junior_admin','admin','senior_admin','admin_manager','super_admin'].map(v=>`<option value="${v}" ${a.rank===v?'selected':''}>${v.replaceAll('_',' ')}</option>`).join('')}</select></td><td>${escapeHtml(a.referral_code||'')}</td><td>${a.referred_artists||0}</td><td>${money(a.total_commission)}</td><td>${money(a.balance)}</td><td><button class="btn" onclick="saveAdminRank('${a.id}','${a.user_id||''}','${a.email||''}')">Save rank</button> <button class="btn" onclick="toggleAdminSuspension('${a.id}',${a.active?1:0})">${a.active?'Suspend':'Reactivate'}</button></td></tr>`).join('');
       document.getElementById('adminReferralPendingWithdrawals').innerHTML=(x.pending_withdrawals||[]).map(w=>`<tr><td>${escapeHtml(w.admin_email||w.admin_id)}</td><td>${money(w.amount)}</td><td>${escapeHtml(w.phone_number)}</td><td>${escapeHtml(w.provider)}</td><td><button class="btn btn-orange" onclick="reviewAdminReferralWithdrawal('${w.id}','approve')">Approve</button> <button class="btn" onclick="reviewAdminReferralWithdrawal('${w.id}','reject')">Reject</button></td></tr>`).join('')||'<tr><td colspan="5">No pending admin withdrawals.</td></tr>';
     } else superPanel.classList.add('hidden');
     if(msg) msg.textContent='Admin earnings loaded.';
@@ -11846,12 +11846,15 @@ async function loadAdminReferralDashboard(){
 async function adminReferralPost(path,body){const r=await fetch(path,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Request failed');return d;}
 async function requestAdminReferralWithdrawal(){try{await adminReferralPost('/api/admin/referrals/withdrawals',{amount:Number(document.getElementById('adminReferralWithdrawAmount').value),phone_number:document.getElementById('adminReferralWithdrawPhone').value,provider:document.getElementById('adminReferralWithdrawProvider').value});alert('Withdrawal request submitted. Only Super Admin can approve it.');await loadAdminReferralDashboard();}catch(e){alert(e.message);}}
 async function reviewAdminReferralWithdrawal(id,action){const note=prompt('Optional review note:')||'';if(!confirm(`${action==='approve'?'Approve':'Reject'} this admin withdrawal?`))return;try{await adminReferralPost(`/api/admin/referrals/withdrawals/${encodeURIComponent(id)}/review`,{action,note});await loadAdminReferralDashboard();}catch(e){alert(e.message);}}
-async function saveAdminRank(id){try{const rank=document.getElementById(`rank-${id}`).value;const result=await adminReferralPost('/api/admin/referrals/rank',{admin_id:id,rank});if(!result.success)throw new Error(result.error||'Rank was not saved.');await loadAdminReferralDashboard();alert('Administrator type updated to '+rank.replaceAll('_',' ')+'.');}catch(e){alert(e.message||'Could not update administrator type.');}}
+async function saveAdminRank(id,userId,email){try{const rank=document.getElementById(`rank-${id}`).value;const result=await adminReferralPost('/api/admin/referrals/rank',{admin_id:id,user_id:userId||'',email:email||'',rank});if(!result.success)throw new Error(result.error||'Rank was not saved.');await loadAdminReferralDashboard();alert('Administrator type updated to '+rank.replaceAll('_',' ')+'.');}catch(e){alert(e.message||'Could not update administrator type.');}}
 async function toggleAdminSuspension(id,active){if(!confirm(active?'Suspend this administrator?':'Reactivate this administrator?'))return;try{await adminReferralPost('/api/admin/referrals/suspend',{admin_id:id,suspended:!!active});await loadAdminReferralDashboard();}catch(e){alert(e.message);}}
 let adminAssistedSearchTimer=null;
 let adminAssistedSearchSequence=0;
 async function searchAdminAssistedArtists(){
-  const input=document.getElementById('adminAssistedArtistSearch'), box=document.getElementById('adminAssistedArtistResults'), hidden=document.getElementById('adminAssistedArtistId'), selected=document.getElementById('adminAssistedArtistSelected');
+  const input=document.getElementById('adminAssistedArtistSearch');
+  const box=document.getElementById('adminAssistedArtistResults');
+  const hidden=document.getElementById('adminAssistedArtistId');
+  const selected=document.getElementById('adminAssistedArtistSelected');
   if(!input||!box)return;
   const term=String(input.value||'').trim();
   const sequence=++adminAssistedSearchSequence;
@@ -11876,15 +11879,15 @@ async function searchAdminAssistedArtists(){
         return `<button type="button" class="admin-assisted-artist-option" data-id="${escapeHtml(id)}" data-name="${escapeHtml(name)}" style="display:block;width:100%;text-align:left;padding:11px;background:transparent;color:#fff;border:0;border-bottom:1px solid #333;cursor:pointer"><strong>${escapeHtml(name)}</strong><small style="display:block;color:#aaa">${escapeHtml(a.location||'Location not set')} · ${escapeHtml(a.package_name||'free')} package</small></button>`;
       }).join('');
       box.querySelectorAll('.admin-assisted-artist-option').forEach(button=>button.addEventListener('click',()=>{
-        hidden.value=button.dataset.id;
+        if(hidden)hidden.value=button.dataset.id;
         input.value=button.dataset.name;
-        selected.textContent='Selected: '+button.dataset.name;
+        if(selected)selected.textContent='Selected: '+button.dataset.name;
         box.classList.add('hidden');
       }));
     }catch(error){
       if(sequence===adminAssistedSearchSequence)box.innerHTML='<div style="padding:10px;color:#ff9b9b">'+escapeHtml(error.message||'Could not load artists.')+'</div>';
     }
-  },180);
+  },160);
 }
 async function startAdminAssistedUpgrade(){try{const artistId=document.getElementById('adminAssistedArtistId').value;if(!artistId)throw new Error('Search for an artist and select them from the results first.');const d=await adminReferralPost('/api/admin/referrals/upgrade',{artist_id:artistId,package_code:document.getElementById('adminAssistedPackage').value,phone_number:document.getElementById('adminAssistedPhone').value,provider:document.getElementById('adminAssistedProvider').value});alert(d.message||'Payment prompt sent.');}catch(e){alert(e.message);}}
 async function assignAdminReferralOwner(){try{await adminReferralPost('/api/admin/referrals/assign',{artist_id:document.getElementById('adminAssignArtistId').value,admin_id:document.getElementById('adminAssignAdminId').value});alert('Referral owner assigned.');await loadAdminReferralDashboard();}catch(e){alert(e.message);}}
