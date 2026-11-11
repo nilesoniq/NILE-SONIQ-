@@ -209,34 +209,37 @@ async function adminReferralRoute(request, env, path) {
   if (request.method === 'GET' && path === '/api/admin/referrals/artists') {
     // Keep the response deliberately simple and provide aliases for older UI builds.
     // instr() avoids LIKE wildcard escaping problems with artist names.
-    const term = String(url.searchParams.get('q') || url.searchParams.get('search') || url.searchParams.get('name') || '').trim();
-    let matches;
-    if (term) {
-      matches = await env.DB.prepare(`
-        SELECT id, name, location, package_name
+    const term = String(url.searchParams.get('q') || url.searchParams.get('search') || url.searchParams.get('name') || '').trim().slice(0, 100);
+    try {
+      // Optional artist columns differ between production database versions.
+      const artistColumns = await env.DB.prepare('PRAGMA table_info(artists)').all();
+      const available = new Set((artistColumns.results || []).map(column => String(column.name)));
+      if (!available.has('id') || !available.has('name')) {
+        console.error('Artist search unavailable: artists.id/name columns missing');
+        return error('Artist search is not configured correctly. Please contact support.', 500);
+      }
+      const locationExpr = available.has('location') ? "COALESCE(location, '')" : "''";
+      const packageExpr = available.has('package_name') ? "COALESCE(package_name, 'free')" : "'free'";
+      const where = term ? "AND instr(lower(COALESCE(name,'')), lower(?)) > 0" : '';
+      const sql = `
+        SELECT CAST(id AS TEXT) AS id, COALESCE(name, 'Unnamed artist') AS name,
+               ${locationExpr} AS location, ${packageExpr} AS package_name
         FROM artists
-        WHERE COALESCE(trim(name), '') <> ''
-          AND instr(lower(name), lower(?)) > 0
-        ORDER BY CASE WHEN lower(name)=lower(?) THEN 0 ELSE 1 END,
+        WHERE COALESCE(trim(name), '') <> '' ${where}
+        ORDER BY ${term ? "CASE WHEN lower(name)=lower(?) THEN 0 ELSE 1 END," : ''}
                  name COLLATE NOCASE
         LIMIT 100
-      `).bind(term, term).all();
-    } else {
-      matches = await env.DB.prepare(`
-        SELECT id, name, location, package_name
-        FROM artists
-        WHERE COALESCE(trim(name), '') <> ''
-        ORDER BY name COLLATE NOCASE
-        LIMIT 100
-      `).all();
+      `;
+      const matches = term ? await env.DB.prepare(sql).bind(term, term).all() : await env.DB.prepare(sql).all();
+      const artists = (matches.results || []).map(row => ({
+        id: String(row.id), name: String(row.name || 'Unnamed artist'),
+        location: row.location || '', package_name: row.package_name || 'free'
+      }));
+      return json({ success: true, data: artists, artists, results: artists, count: artists.length });
+    } catch (e) {
+      console.error('Admin artist search failed:', e?.stack || e?.message || e);
+      return error('Could not search artists. Please try again.', 500);
     }
-    const artists = (matches.results || []).map(row => ({
-      id: String(row.id),
-      name: String(row.name || 'Unnamed artist'),
-      location: row.location || '',
-      package_name: row.package_name || 'free'
-    }));
-    return json({ success: true, data: artists, artists, results: artists, count: artists.length });
   }
   if (request.method === 'GET' && path === '/api/admin/referrals') {
     await ensureAdminWallet(env,admin.id);
@@ -298,44 +301,35 @@ async function adminReferralRoute(request, env, path) {
     return json({success:true});
   }
   if (request.method === 'POST' && path === '/api/admin/referrals/rank') {
-    if (!superAdmin) return error('Only Super Admin can change administrator ranks.', 403);
+    // Re-check the actor's current Super Admin privileges directly in D1.
+    const actor = await env.DB.prepare('SELECT id, user_id, role, rank, active FROM admins WHERE id = ? LIMIT 1').bind(admin.id).first();
+    const actorIsSuper = Boolean(actor && (actor.active === 1 || actor.active === true || actor.active === '1') &&
+      (String(actor.role || '').toLowerCase() === 'super_admin' || String(actor.rank || '').toLowerCase() === 'super_admin'));
+    if (!actorIsSuper) return error('Only Super Admin can change administrator ranks.', 403);
+
     const body = await readBody(request);
     const adminId = String(body.admin_id || '').trim();
     const userId = String(body.user_id || '').trim();
     const email = String(body.email || '').trim().toLowerCase();
-    const rank = String(body.rank || '').trim().toLowerCase();
+    const rank = String(body.rank || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
     if (!adminId && !userId && !email) return error('Choose an administrator first.', 422);
     if (!ADMIN_RANKS.includes(rank)) return error('Invalid administrator type.', 422);
 
-    // Resolve using every identifier supplied by the current and older dashboards.
-    const target = await env.DB.prepare(`
-      SELECT id, user_id, email, role, rank
-      FROM admins
-      WHERE (? <> '' AND CAST(id AS TEXT) = ?)
-         OR (? <> '' AND CAST(user_id AS TEXT) = ?)
-         OR (? <> '' AND lower(trim(email)) = ?)
-      LIMIT 1
-    `).bind(adminId, adminId, userId, userId, email, email).first();
+    let target = null;
+    if (adminId) target = await env.DB.prepare('SELECT id, user_id, email, role, rank FROM admins WHERE CAST(id AS TEXT) = ? LIMIT 1').bind(adminId).first();
+    if (!target && userId) target = await env.DB.prepare('SELECT id, user_id, email, role, rank FROM admins WHERE CAST(user_id AS TEXT) = ? LIMIT 1').bind(userId).first();
+    if (!target && email) target = await env.DB.prepare('SELECT id, user_id, email, role, rank FROM admins WHERE lower(trim(email)) = ? LIMIT 1').bind(email).first();
     if (!target) return error('Administrator not found. Refresh the administrator list and try again.', 404);
-    if (String(target.user_id) === String(user.id) || String(target.id) === String(admin.id)) {
-      return error('You cannot change your own administrator rank.', 403);
-    }
+    if (String(target.user_id) === String(user.id) || String(target.id) === String(admin.id)) return error('You cannot change your own administrator rank.', 403);
 
-    const previousRank = target.rank || (target.role === 'super_admin' ? 'super_admin' : 'admin');
+    const previousRank = String(target.rank || (target.role === 'super_admin' ? 'super_admin' : 'admin'));
     const role = rank === 'super_admin' ? 'super_admin' : 'admin';
     await env.DB.prepare('UPDATE admins SET rank = ?, role = ? WHERE id = ?').bind(rank, role, target.id).run();
     const saved = await env.DB.prepare('SELECT id, user_id, email, role, rank FROM admins WHERE id = ? LIMIT 1').bind(target.id).first();
-    if (!saved || saved.rank !== rank || saved.role !== role) {
-      return error('The database did not save the new administrator rank. Please try again.', 409);
-    }
-    await env.DB.prepare(`
-      INSERT INTO admin_audit_log(id, actor_admin_id, target_admin_id, action, details_json)
-      VALUES(?,?,?,'rank_changed',?)
-    `).bind(crypto.randomUUID(), admin.id, target.id, JSON.stringify({
-      from: previousRank, to: rank, role, admin_id: adminId || null,
-      user_id: userId || null, email: email || null
-    })).run();
-    return json({ success: true, admin_id: saved.id, user_id: saved.user_id, email: saved.email, rank: saved.rank, role: saved.role });
+    if (!saved || String(saved.rank || '').toLowerCase() !== rank || String(saved.role || '').toLowerCase() !== role) return error('The database did not save the new administrator rank. Please try again.', 409);
+    await env.DB.prepare(`INSERT INTO admin_audit_log(id, actor_admin_id, target_admin_id, action, details_json) VALUES(?,?,?,'rank_changed',?)`)
+      .bind(crypto.randomUUID(), admin.id, target.id, JSON.stringify({from:previousRank,to:rank,role})).run();
+    return json({success:true,admin_id:saved.id,user_id:saved.user_id,email:saved.email,rank:saved.rank,role:saved.role,message:'Administrator rank updated.'});
   }
   if(request.method==='POST' && path==='/api/admin/referrals/assign'){
     if(!superAdmin) return error('Only Super Admin can assign referral ownership.',403);
