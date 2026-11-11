@@ -194,7 +194,7 @@ async function adminReferralRoute(request, env, path) {
   const admin = await getAdmin(env,user);
   if (!admin) return error('Admin access required',403);
   await ensureAdminReferralSchema(env);
-  const superAdmin = admin.role === 'super_admin';
+  const superAdmin = admin.role === 'super_admin' || admin.rank === 'super_admin';
   const url = new URL(request.url);
   if (request.method === 'GET' && path === '/api/admin/referrals/artists') {
     // Keep the response deliberately simple and provide aliases for older UI builds.
@@ -237,7 +237,7 @@ async function adminReferralRoute(request, env, path) {
     const withdrawals = await env.DB.prepare(`SELECT * FROM admin_withdrawal_requests WHERE admin_id=? ORDER BY datetime(created_at) DESC LIMIT 100`).bind(admin.id).all();
     const result = { admin: {...admin, referral_code: (await env.DB.prepare('SELECT referral_code,rank FROM admins WHERE id=?').bind(admin.id).first())?.referral_code}, balance:Number(wallet?.balance||0), referred_artists:Number(totals?.artists||0), total_earnings:Number(totals?.earnings||0), commissions:commissions.results||[], referrals:referrals.results||[], withdrawals:withdrawals.results||[] };
     if (superAdmin) {
-      const all = await env.DB.prepare(`SELECT ad.id,ad.email,ad.role,ad.rank,ad.active,ad.referral_code,COALESCE(w.balance,0) balance,COUNT(DISTINCT c.artist_id) referred_artists,COALESCE(SUM(c.amount),0) total_commission FROM admins ad LEFT JOIN admin_wallets w ON w.admin_id=ad.id LEFT JOIN admin_referral_commissions c ON c.admin_id=ad.id AND c.status='posted' GROUP BY ad.id ORDER BY ad.created_at`).all();
+      const all = await env.DB.prepare(`SELECT ad.id,ad.user_id,ad.email,ad.role,ad.rank,ad.active,ad.referral_code,COALESCE(w.balance,0) balance,COUNT(DISTINCT c.artist_id) referred_artists,COALESCE(SUM(c.amount),0) total_commission FROM admins ad LEFT JOIN admin_wallets w ON w.admin_id=ad.id LEFT JOIN admin_referral_commissions c ON c.admin_id=ad.id AND c.status='posted' GROUP BY ad.id ORDER BY ad.created_at`).all();
       const pending = await env.DB.prepare(`SELECT r.*,a.email admin_email FROM admin_withdrawal_requests r JOIN admins a ON a.id=r.admin_id WHERE r.status='pending' ORDER BY r.created_at`).all();
       result.all_admins=all.results||[]; result.pending_withdrawals=pending.results||[];
       result.rank_policy=(await env.DB.prepare('SELECT * FROM admin_rank_policy ORDER BY CASE rank WHEN 'junior_admin' THEN 1 WHEN 'admin' THEN 2 WHEN 'senior_admin' THEN 3 WHEN 'admin_manager' THEN 4 ELSE 5 END').all()).results||[];
@@ -314,7 +314,9 @@ async function adminReferralRoute(request, env, path) {
     const target=await env.DB.prepare(`
       SELECT id,user_id,email,role,rank
       FROM admins
-      WHERE id=? OR user_id=? OR lower(email)=lower(?)
+      WHERE CAST(id AS TEXT)=?
+         OR CAST(user_id AS TEXT)=?
+         OR lower(trim(email))=lower(trim(?))
       LIMIT 1
     `).bind(targetKey,targetKey,targetKey).first();
     if(!target) return error('Administrator not found. Refresh the administrator list and try again.',404);
@@ -2018,7 +2020,7 @@ async function adminRoute(request, env, path) {
     return error("Admin access required", 403);
   }
 
-  const superAdmin = admin.role === "super_admin";
+  const superAdmin = admin.role === "super_admin" || admin.rank === "super_admin";
   const url = new URL(request.url);
 
   if (path === "/api/admin/ads") {
