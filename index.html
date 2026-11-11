@@ -3329,16 +3329,14 @@ placeholder="artist@example.com">
 
 <div class="field">
 
-<label>Role</label>
+<label>Administrator Type / Rank</label>
 
 <select id="newAdminRole">
-
-<option value="admin">Admin</option>
-
-<option value="super_admin">
-Super Admin
-</option>
-
+<option value="junior_admin">Junior Admin</option>
+<option value="admin" selected>Admin</option>
+<option value="senior_admin">Senior Admin</option>
+<option value="admin_manager">Admin Manager</option>
+<option value="super_admin">Super Admin</option>
 </select>
 
 </div>
@@ -3359,7 +3357,7 @@ class="table-wrap">
 
 <tr>
 <th>Email</th>
-<th>Role</th>
+<th>Administrator Type</th>
 <th>Status</th>
 <th>Action</th>
 </tr>
@@ -3399,7 +3397,7 @@ class="table-wrap">
     <div class="form-grid">
       <div class="field" style="position:relative">
         <label for="adminAssistedArtistSearch">Search artist by name</label>
-        <input id="adminAssistedArtistSearch" type="search" autocomplete="off" placeholder="Type at least 2 letters of the artist name" oninput="searchAdminAssistedArtists()" onfocus="searchAdminAssistedArtists()">
+        <input id="adminAssistedArtistSearch" type="search" autocomplete="off" placeholder="Open to browse artists or type a name to search" oninput="searchAdminAssistedArtists()" onfocus="searchAdminAssistedArtists()">
         <input id="adminAssistedArtistId" type="hidden">
         <div id="adminAssistedArtistResults" class="hidden" style="position:absolute;z-index:50;left:0;right:0;top:100%;max-height:240px;overflow:auto;background:#171717;border:1px solid #555;border-radius:8px"></div>
         <small id="adminAssistedArtistSelected" style="display:block;margin-top:6px;color:#8fd18f">No artist selected</small>
@@ -10949,14 +10947,9 @@ async function loadAdministrators(){
             </td>
 
             <td>
-
-              <span class="admin-badge">
-                ${escapeHtml(
-                  admin.role ||
-                  "admin"
-                )}
-              </span>
-
+              <select id="admin-management-rank-${escapeAttribute(admin.id)}" style="min-width:145px;padding:8px;border-radius:7px;">
+                ${['junior_admin','admin','senior_admin','admin_manager','super_admin'].map(rank => `<option value="${rank}" ${(admin.rank || (admin.role === 'super_admin' ? 'super_admin' : 'admin')) === rank ? 'selected' : ''}>${rank.replaceAll('_',' ')}</option>`).join('')}
+              </select>
             </td>
 
             <td>
@@ -10982,21 +10975,9 @@ async function loadAdministrators(){
               ${
                 isMe
                 ? `<span style="color:#777;">Your account</span>`
-                : normalizeAdminRole(admin.role) === "super_admin"
-                  ? `<span style="color:#777;">Protected Super Admin</span>`
-                  : `
-                    <button
-                      class="btn ${
-                        activeNow
-                        ? "btn-danger"
-                        : "btn-success"
-                      }"
-                      onclick="toggleAdministrator(
-                        '${escapeAttribute(admin.id)}',
-                        ${activeNow}
-                      )">
-                      ${activeNow ? "Deactivate" : "Activate"}
-                    </button>
+                : `
+                    <button class="btn btn-orange" onclick="saveAdministratorRank('${escapeAttribute(admin.id)}')">Save type</button>
+                    <button class="btn ${activeNow ? "btn-danger" : "btn-success"}" onclick="toggleAdministrator('${escapeAttribute(admin.id)}',${activeNow})">${activeNow ? "Deactivate" : "Activate"}</button>
                   `
               }
 
@@ -11059,12 +11040,8 @@ async function addAdministrator(){
       .trim();
 
 
-  const role =
-    document
-      .getElementById(
-        "newAdminRole"
-      )
-      .value;
+  const rank = document.getElementById("newAdminRole").value;
+  const role = rank === "super_admin" ? "super_admin" : "admin";
 
 
   if(!email){
@@ -11099,9 +11076,20 @@ async function addAdministrator(){
     }
 
 
+    // The existing signup RPC creates the administrator account. The rank
+    // endpoint then records the selected administrator type.
+    if (rank !== "admin" && rank !== "super_admin") {
+      const listResponse = await fetch("/api/admins", {credentials:"include",cache:"no-store"});
+      const listData = await listResponse.json().catch(()=>({}));
+      if (!listResponse.ok) throw new Error(listData.error || "Administrator was added, but its rank could not be set.");
+      const created = (Array.isArray(listData.data) ? listData.data : []).find(a => String(a.email||"").toLowerCase() === email.toLowerCase());
+      if (!created) throw new Error("Administrator was added, but could not be found to apply the selected rank.");
+      await adminReferralPost('/api/admin/referrals/rank',{admin_id:created.id,rank});
+    }
+
     showMessage(
       "adminManagementMessage",
-      "Administrator added successfully.",
+      "Administrator added successfully as " + rank.replaceAll("_", " ") + ".",
       "success"
     );
 
@@ -11132,6 +11120,16 @@ async function addAdministrator(){
 /* =========================================================
    TOGGLE ADMIN
 ========================================================= */
+
+async function saveAdministratorRank(id){
+  if(!isCurrentUserSuperAdmin()){alert("Only Super Admin can change administrator types.");return;}
+  try{
+    const rank=document.getElementById(`admin-management-rank-${id}`).value;
+    await adminReferralPost('/api/admin/referrals/rank',{admin_id:id,rank});
+    showMessage("adminManagementMessage","Administrator type updated to "+rank.replaceAll("_"," ")+".","success");
+    await loadAdministrators();
+  }catch(error){showMessage("adminManagementMessage",error.message||"Could not update administrator type.","error");}
+}
 
 async function toggleAdministrator(
   adminId,
@@ -11851,17 +11849,20 @@ async function reviewAdminReferralWithdrawal(id,action){const note=prompt('Optio
 async function saveAdminRank(id){try{const rank=document.getElementById(`rank-${id}`).value;await adminReferralPost('/api/admin/referrals/rank',{admin_id:id,rank});await loadAdminReferralDashboard();}catch(e){alert(e.message);}}
 async function toggleAdminSuspension(id,active){if(!confirm(active?'Suspend this administrator?':'Reactivate this administrator?'))return;try{await adminReferralPost('/api/admin/referrals/suspend',{admin_id:id,suspended:!!active});await loadAdminReferralDashboard();}catch(e){alert(e.message);}}
 let adminAssistedSearchTimer=null;
+let adminAssistedSearchSequence=0;
 async function searchAdminAssistedArtists(){
   const input=document.getElementById('adminAssistedArtistSearch'), box=document.getElementById('adminAssistedArtistResults'), hidden=document.getElementById('adminAssistedArtistId'), selected=document.getElementById('adminAssistedArtistSelected');
   const term=String(input?.value||'').trim();
+  const sequence=++adminAssistedSearchSequence;
   if(hidden)hidden.value=''; if(selected)selected.textContent='Select an artist from the search results';
   if(!box)return; box.classList.remove('hidden');
-  if(term.length<2){box.innerHTML='<div style="padding:10px;color:#aaa">Type at least 2 letters to search.</div>';return;}
-  box.innerHTML='<div style="padding:10px;color:#aaa">Searching artists…</div>';
+  if(term.length===1){box.innerHTML='<div style="padding:10px;color:#aaa">Type one more letter to narrow the artist list.</div>';return;}
+  box.innerHTML='<div style="padding:10px;color:#aaa">Loading artists…</div>';
   if(adminAssistedSearchTimer)clearTimeout(adminAssistedSearchTimer);
   adminAssistedSearchTimer=setTimeout(async()=>{
     try{
       const r=await fetch('/api/admin/referrals/artists?q='+encodeURIComponent(term),{credentials:'include',cache:'no-store'}),d=await r.json();
+      if(sequence!==adminAssistedSearchSequence)return;
       if(!r.ok)throw new Error(d.error||'Could not search artists');
       const rows=Array.isArray(d.data)?d.data:[];
       if(!rows.length){box.innerHTML='<div style="padding:10px;color:#aaa">No matching artists found.</div>';return;}
@@ -11869,7 +11870,7 @@ async function searchAdminAssistedArtists(){
       box.querySelectorAll('.admin-assisted-artist-option').forEach(button=>button.addEventListener('click',()=>{
         hidden.value=button.dataset.id;input.value=button.dataset.name;selected.textContent='Selected: '+button.dataset.name;box.classList.add('hidden');
       }));
-    }catch(e){box.innerHTML='<div style="padding:10px;color:#ff9b9b">'+escapeHtml(e.message)+'</div>';}
+    }catch(e){if(sequence===adminAssistedSearchSequence)box.innerHTML='<div style="padding:10px;color:#ff9b9b">'+escapeHtml(e.message)+'</div>';}
   },250);
 }
 async function startAdminAssistedUpgrade(){try{const artistId=document.getElementById('adminAssistedArtistId').value;if(!artistId)throw new Error('Search for an artist and select them from the results first.');const d=await adminReferralPost('/api/admin/referrals/upgrade',{artist_id:artistId,package_code:document.getElementById('adminAssistedPackage').value,phone_number:document.getElementById('adminAssistedPhone').value,provider:document.getElementById('adminAssistedProvider').value});alert(d.message||'Payment prompt sent.');}catch(e){alert(e.message);}}
