@@ -4498,6 +4498,16 @@ function isCurrentUserSuperAdmin(){
     (normalizeAdminRole(currentAdmin.role) === "super_admin" || normalizeAdminRole(currentAdmin.rank) === "super_admin")
   );
 }
+const ADMIN_DASHBOARD_RANKS = Object.freeze({junior_admin:1,admin:2,senior_admin:3,admin_manager:4,super_admin:5});
+function currentAdminRank(){
+  const rank=normalizeAdminRole(currentAdmin?.rank || currentAdmin?.role || "junior_admin");
+  return ADMIN_DASHBOARD_RANKS[rank] ? rank : "junior_admin";
+}
+function currentAdminHasRank(minimum){
+  return !!currentAdmin && isAdminActiveValue(currentAdmin.active) &&
+    (ADMIN_DASHBOARD_RANKS[currentAdminRank()]||0) >= (ADMIN_DASHBOARD_RANKS[minimum]||99);
+}
+
 
 
 /* =========================================================
@@ -4737,7 +4747,7 @@ async function showPage(page, updateUrl=true){
 
       updateAdminTabs();
 
-      await showAdminTab("songs");
+      await showAdminTab(currentAdminHasRank("admin") ? "songs" : "referrals");
 
     }else{
 
@@ -4766,27 +4776,20 @@ function toggleMenu(){
 ========================================================= */
 
 function updateAdminTabs(){
-
-  const superAdmin = isCurrentUserSuperAdmin();
-  const analyticsTab = document.getElementById("adminTabAnalytics");
-  const adminTab = document.getElementById("adminTabAdmins");
-  const copyrightTab = document.getElementById("adminTabCopyright");
-  const adsTab = document.getElementById("adminTabAds");
-  const referralsTab = document.getElementById("adminTabReferrals");
-  const newsTab = document.getElementById("adminTabNews");
-  const walletTab = document.getElementById("adminTabWallet");
-  const platformWithdrawPanel = document.getElementById("platformWithdrawPanel");
-
-  // Regular admins may manage artist songs and artist withdrawals only.
-  if(analyticsTab) analyticsTab.classList.toggle("hidden", !superAdmin);
-  if(adminTab) adminTab.classList.toggle("hidden", !superAdmin);
-  if(copyrightTab) copyrightTab.classList.toggle("hidden", !superAdmin);
-  if(adsTab) adsTab.classList.toggle("hidden", !superAdmin);
-  if(walletTab) walletTab.classList.toggle("hidden", !superAdmin);
-  if(platformWithdrawPanel) platformWithdrawPanel.classList.toggle("hidden", !superAdmin);
-
+  const level=ADMIN_DASHBOARD_RANKS[currentAdminRank()]||0;
+  const show=(id,minimum)=>{const el=document.getElementById(id);if(el)el.classList.toggle("hidden",level<ADMIN_DASHBOARD_RANKS[minimum]);};
+  show("adminTabAnalytics","admin_manager");
+  show("adminTabSongs","admin");
+  show("adminTabNews","senior_admin");
+  show("adminTabWithdrawals","admin_manager");
+  show("adminTabWallet","super_admin");
+  show("adminTabAdmins","super_admin");
+  show("adminTabCopyright","senior_admin");
+  show("adminTabAds","admin_manager");
+  show("adminTabReferrals","junior_admin");
+  const platformWithdrawPanel=document.getElementById("platformWithdrawPanel");
+  if(platformWithdrawPanel)platformWithdrawPanel.classList.toggle("hidden",level<ADMIN_DASHBOARD_RANKS.super_admin);
 }
-
 
 async function showAdminTab(tab){
 
@@ -4815,7 +4818,7 @@ async function showAdminTab(tab){
   [analyticsPanel,songsPanel,newsPanel,withdrawalsPanel,walletPanel,managementPanel,copyrightPanel,adsPanel,referralsPanel].forEach(el=>{if(el)el.classList.add("hidden")});
 
   if(tab === "analytics"){
-    if(!isCurrentUserSuperAdmin()){
+    if(!currentAdminHasRank("admin_manager")){
       await showAdminTab("songs");
       return;
     }
@@ -4836,9 +4839,8 @@ async function showAdminTab(tab){
 
 
   if(tab === "news"){
-
-    if(!await isCurrentUserAdmin()){
-      alert("Only active administrators can manage News.");
+    if(!currentAdminHasRank("senior_admin")){
+      alert("Senior Admin rank or higher is required to manage News.");
       return;
     }
 
@@ -4854,7 +4856,7 @@ async function showAdminTab(tab){
 
 
   if(tab === "withdrawals"){
-
+    if(!currentAdminHasRank("admin_manager")){await showAdminTab("referrals");return;}
     withdrawalsPanel.classList.remove("hidden");
 
     withdrawalTab.classList.add("active");
@@ -4865,7 +4867,7 @@ async function showAdminTab(tab){
 
 
   if(tab === "wallet"){
-    if(!isCurrentUserSuperAdmin()){
+    if(!currentAdminHasRank("super_admin")){
       alert("Only the Super Admin can access the Platform Wallet.");
       return;
     }
@@ -4882,15 +4884,15 @@ async function showAdminTab(tab){
   }
 
   if(tab === "ads") {
-    if(!isCurrentUserSuperAdmin()){ alert("Only the Super Admin can manage banner advertisements."); return; }
+    if(!currentAdminHasRank("admin_manager")){ alert("Admin Manager rank or higher is required to manage banner advertisements."); return; }
     if(adsPanel) adsPanel.classList.remove("hidden");
     if(adsTab) adsTab.classList.add("active");
     await loadHomepageAds();
   }
 
   if(tab === "copyright"){
-    if(!isCurrentUserSuperAdmin()){
-      alert("Only the Super Admin can access Copyright Removal.");
+    if(!currentAdminHasRank("senior_admin")){
+      alert("Senior Admin rank or higher is required for Copyright Removal.");
       return;
     }
     if(copyrightPanel) copyrightPanel.classList.remove("hidden");
@@ -4903,7 +4905,7 @@ async function showAdminTab(tab){
 
   if(tab === "admins"){
 
-    if(!isCurrentUserSuperAdmin()){
+    if(!currentAdminHasRank("super_admin")){
 
       alert(
         "Only the Super Admin can manage administrators."
@@ -11851,52 +11853,39 @@ async function saveAdminRank(id,userId,email){try{const rank=document.getElement
 async function toggleAdminSuspension(id,active){if(!confirm(active?'Suspend this administrator?':'Reactivate this administrator?'))return;try{await adminReferralPost('/api/admin/referrals/suspend',{admin_id:id,suspended:!!active});await loadAdminReferralDashboard();}catch(e){alert(e.message);}}
 let adminAssistedSearchTimer=null;
 let adminAssistedSearchSequence=0;
-function searchAdminAssistedArtists(){
+async function searchAdminAssistedArtists(){
   const input=document.getElementById('adminAssistedArtistSearch');
   const box=document.getElementById('adminAssistedArtistResults');
   const hidden=document.getElementById('adminAssistedArtistId');
   const selected=document.getElementById('adminAssistedArtistSelected');
   if(!input||!box)return;
-  const term=normalizeSearchText(input.value||'');
+  const term=String(input.value||'').trim();
   const sequence=++adminAssistedSearchSequence;
   if(hidden)hidden.value='';
   if(selected)selected.textContent='Select an artist from the results';
   box.classList.remove('hidden');
   box.innerHTML='<div style="padding:10px;color:#aaa">Searching artists…</div>';
   if(adminAssistedSearchTimer)clearTimeout(adminAssistedSearchTimer);
-  adminAssistedSearchTimer=setTimeout(()=>{
-    if(sequence!==adminAssistedSearchSequence)return;
-    const registry=window.__nileArtistRegistry||{};
-    const allArtists=Object.values(registry);
-    if(!allArtists.length){
-      box.innerHTML='<div style="padding:10px;color:#ffcc88">The artist directory is still loading. Please try again in a moment.</div>';
-      return;
-    }
-    const rows=allArtists.filter(a=>{
-      const name=normalizeSearchText(a.name||a.artist_name||'');
-      return !term||name.includes(term);
-    }).sort((a,b)=>{
-      const an=normalizeSearchText(a.name||a.artist_name||'');
-      const bn=normalizeSearchText(b.name||b.artist_name||'');
-      return (an===term?0:1)-(bn===term?0:1)||an.localeCompare(bn);
-    }).slice(0,100);
-    if(!rows.length){box.innerHTML='<div style="padding:10px;color:#aaa">No artists match that name.</div>';return;}
-    box.innerHTML=rows.map(a=>{
-      const id=String(a.id||'');
-      const name=String(a.name||a.artist_name||'Unnamed artist');
-      const location=String(a.location||'Location not set');
-      const packageName=String(a.package_name||a.artist_package||'free');
-      return `<button type="button" class="admin-assisted-artist-option" data-id="${escapeHtml(id)}" data-name="${escapeHtml(name)}" style="display:block;width:100%;text-align:left;padding:11px;background:transparent;color:#fff;border:0;border-bottom:1px solid #333;cursor:pointer"><strong>${escapeHtml(name)}</strong><small style="display:block;color:#aaa">${escapeHtml(location)} · ${escapeHtml(packageName)} package</small></button>`;
-    }).join('');
-    box.querySelectorAll('.admin-assisted-artist-option').forEach(button=>button.addEventListener('click',()=>{
-      if(hidden)hidden.value=button.dataset.id;
-      input.value=button.dataset.name;
-      if(selected)selected.textContent='Selected: '+button.dataset.name;
-      box.classList.add('hidden');
-    }));
-  },120);
+  adminAssistedSearchTimer=setTimeout(async()=>{
+    try{
+      const url='/api/admin/referrals/artists'+(term?'?q='+encodeURIComponent(term):'');
+      const response=await fetch(url,{credentials:'include',cache:'no-store'});
+      const data=await response.json().catch(()=>({}));
+      if(sequence!==adminAssistedSearchSequence)return;
+      if(!response.ok)throw new Error(data.error||'Could not search artists.');
+      const rows=Array.isArray(data.artists)?data.artists:[];
+      if(!rows.length){box.innerHTML='<div style="padding:10px;color:#aaa">No artists match that name.</div>';return;}
+      box.innerHTML=rows.map(a=>`<button type="button" class="admin-assisted-artist-option" data-id="${escapeHtml(String(a.id||''))}" data-name="${escapeHtml(String(a.name||'Unnamed artist'))}" style="display:block;width:100%;text-align:left;padding:11px;background:transparent;color:#fff;border:0;border-bottom:1px solid #333;cursor:pointer"><strong>${escapeHtml(a.name||'Unnamed artist')}</strong><small style="display:block;color:#aaa">${escapeHtml(a.location||'Location not set')} · ${escapeHtml(a.package_name||'free')} package</small></button>`).join('');
+      box.querySelectorAll('.admin-assisted-artist-option').forEach(button=>button.addEventListener('click',()=>{
+        if(hidden)hidden.value=button.dataset.id;
+        input.value=button.dataset.name;
+        if(selected)selected.textContent='Selected: '+button.dataset.name;
+        box.classList.add('hidden');
+      }));
+    }catch(error){if(sequence===adminAssistedSearchSequence)box.innerHTML=`<div style="padding:10px;color:#ff9999">${escapeHtml(error.message)}</div>`;}
+  },180);
 }
-async function startAdminAssistedUpgrade(){try{const artistId=document.getElementById('adminAssistedArtistId').value;if(!artistId)throw new Error('Search for an artist and select them from the results first.');const d=await adminReferralPost('/api/admin/referrals/upgrade',{artist_id:artistId,package_code:document.getElementById('adminAssistedPackage').value,phone_number:document.getElementById('adminAssistedPhone').value,provider:document.getElementById('adminAssistedProvider').value});alert(d.message||'Payment prompt sent.');}catch(e){alert(e.message);}}
+async function startAdminAssistedUpgrade(){try{const artistId=document.getElementById('adminAssistedArtistId').value;if(!artistId)throw new Error('Search for an artist and select them from the results first.');const d=await adminReferralPost('/api/admin/referrals/upgrade',{artist_id:artistId,package_code:document.getElementById('adminAssistedPackage').value,phone_number:document.getElementById('adminAssistedPhone').value,provider:document.getElementById('adminAssistedProvider').value});const message=document.getElementById('adminReferralMessage');if(message)message.textContent=(d.message||'Payment request submitted.')+(d.reference?' Reference: '+d.reference:'');alert((d.message||'Payment prompt sent.')+(d.reference?'\\nReference: '+d.reference:''));}catch(e){alert(e.message);}}
 async function assignAdminReferralOwner(){try{await adminReferralPost('/api/admin/referrals/assign',{artist_id:document.getElementById('adminAssignArtistId').value,admin_id:document.getElementById('adminAssignAdminId').value});alert('Referral owner assigned.');await loadAdminReferralDashboard();}catch(e){alert(e.message);}}
 
 </script>
