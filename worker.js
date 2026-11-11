@@ -245,31 +245,77 @@ async function adminReferralRoute(request, env, path) {
     return json({data:result,error:null});
   }
   if (request.method === 'POST' && path === '/api/admin/referrals/upgrade') {
-    const body=await readBody(request);
-    const artistId=String(body.artist_id||'').trim();
-    const packageCode=String(body.package_code||'').trim().toLowerCase();
-    const packagePrices={premium:5000,hustler:10000,hit_maker:20000,star:30000};
-    const amount=packagePrices[packageCode];
-    const artist=await env.DB.prepare(`SELECT id,user_id,name FROM artists WHERE id=? LIMIT 1`).bind(artistId).first();
-    if(!artist||!amount) return error('Choose an existing artist and a valid paid package.',422);
-    const phone=normalizeUgandanPhone(body.phone_number||body.phoneNumber);
-    const provider=String(body.provider||'').toLowerCase();
-    if(!/^\+256\d{9}$/.test(phone)||!['mtn','airtel'].includes(provider)) return error('Enter the artist’s valid MTN or Airtel mobile-money number.',422);
-    const apiKey=env.PESAJET_API_KEY||env.PESAJET_TOKEN;
-    const baseUrl=String(env.PESAJET_API_BASE_URL||'https://payments.pesajet.com/api/v1').replace(/\/+$/,'');
-    if(!apiKey) return error('Payment service is not configured.',503);
-    const reference=`NILESONIQ-PREMIUM-ASSISTED-${crypto.randomUUID().replace(/-/g,'').slice(0,16).toUpperCase()}`;
-    const risk=await checkPesaJetCollectionRisk(request,env,phone,artist.user_id,reference);
-    if(risk.blocked) return error(risk.message,429);
-    const id=crypto.randomUUID(), now=new Date().toISOString();
-    await env.DB.prepare(`INSERT INTO premium_subscriptions(id,user_id,artist_id,amount,currency,provider,phone_number,reference,status,created_at,package_name,initiated_by_admin_id,referring_admin_id) VALUES(?,?,?,?,'UGX',?,?,?,'pending',?,?,?,(SELECT referring_admin_id FROM artists WHERE id=?))`)
-      .bind(id,artist.user_id,artist.id,amount,provider,phone,reference,now,packageCode,admin.id,artist.id).run();
-    let response,result;
-    try { response=await fetch(`${baseUrl}/payments`,{method:'POST',headers:{'Content-Type':'application/json','X-API-Key':apiKey},body:JSON.stringify({type:'COLLECTION',amount,currency:'UGX',phoneNumber:phone,provider,reference,description:`NileSoniQ artist package upgrade - ${artist.name||'Artist'} - initiated by admin`,idempotencyKey:`nilesoniq-${reference}`})}); result=await response.json().catch(()=>({})); }
-    catch(e){ console.error('Admin-assisted package request uncertain:',e.message); return error('Payment request outcome is uncertain; it remains pending.',502); }
-    if(!response.ok||result?.success===false||result?.error){const msg=String(result?.message||result?.error?.message||'PesaJet rejected the payment request');await env.DB.prepare("UPDATE premium_subscriptions SET status='failed',failure_message=? WHERE id=? AND status='pending'").bind(msg,id).run();return error(msg,response.status>=400&&response.status<500?response.status:502);}
-    await env.DB.prepare(`INSERT INTO admin_audit_log(id,actor_admin_id,target_admin_id,action,details_json) VALUES(?,?,?,'assisted_upgrade_started',?)`).bind(crypto.randomUUID(),admin.id,admin.id,JSON.stringify({artist_id:artist.id,package_code:packageCode,reference})).run();
-    return json({success:true,status:'pending',reference,message:`A UGX ${amount.toLocaleString('en-US')} payment prompt has been sent to the artist’s phone. The upgrade and 20% admin commission activate only after PesaJet confirms payment.`},202);
+    const body = await readBody(request);
+    const artistId = String(body.artist_id || '').trim();
+    const packageCode = String(body.package_code || '').trim().toLowerCase();
+    const packagePrices = { premium: 5000, hustler: 10000, hit_maker: 20000, star: 30000 };
+    const amount = packagePrices[packageCode];
+    const artist = await env.DB.prepare(`SELECT id,user_id,name,referring_admin_id FROM artists WHERE id=? LIMIT 1`).bind(artistId).first();
+    if (!artist || !amount) return error('Choose an existing artist and a valid paid package.', 422);
+    const phone = normalizeUgandanPhone(body.phone_number || body.phoneNumber);
+    const provider = String(body.provider || '').trim().toLowerCase();
+    if (!/^\+256\d{9}$/.test(phone) || !['mtn','airtel'].includes(provider)) return error('Enter the artist’s valid MTN or Airtel mobile-money number.', 422);
+    const apiKey = env.PESAJET_API_KEY || env.PESAJET_TOKEN;
+    const baseUrl = String(env.PESAJET_API_BASE_URL || 'https://payments.pesajet.com/api/v1').replace(/\/+$/, '');
+    if (!apiKey) return error('Payment service is not configured.', 503);
+    const reference = `NILESONIQ-PREMIUM-${paymentReferenceName(artist.name)}-${crypto.randomUUID().replace(/-/g,'').slice(0,16).toUpperCase()}`;
+    const risk = await checkPesaJetCollectionRisk(request, env, phone, artist.user_id, reference);
+    if (risk.blocked) return error(risk.message, 429);
+    const id = crypto.randomUUID(), now = new Date().toISOString();
+    // Store the artist's existing referral owner. The assisting admin is tracked separately
+    // and must not receive the referral commission merely for initiating the prompt.
+    await env.DB.prepare(`
+      INSERT INTO premium_subscriptions
+        (id,user_id,artist_id,amount,currency,provider,phone_number,reference,status,created_at,package_name,initiated_by_admin_id,referring_admin_id)
+      SELECT ?,?,?,?,'UGX',?,?,?,'pending',?,?,?,referring_admin_id FROM artists WHERE id=?
+    `).bind(id, artist.user_id, artist.id, amount, provider, phone, reference, now, packageCode, admin.id, artist.id).run();
+
+    let response, result;
+    try {
+      response = await fetch(`${baseUrl}/payments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey },
+        body: JSON.stringify({ type: 'COLLECTION', amount, currency: 'UGX', phoneNumber: phone, provider, reference,
+          description: `NileSoniQ artist package upgrade - ${artist.name || 'Artist'} - initiated by admin`.slice(0,250),
+          idempotencyKey: `nilesoniq-${reference}` })
+      });
+      result = await response.json().catch(() => ({}));
+    } catch (e) {
+      console.error('Admin-assisted package request outcome uncertain:', e.message);
+      return error('PesaJet did not return a response. The request is kept pending; check its status before trying again.', 502);
+    }
+    const data = result?.data && typeof result.data === 'object' ? result.data : {};
+    const transaction = result?.transaction && typeof result.transaction === 'object' ? result.transaction : (data?.transaction && typeof data.transaction === 'object' ? data.transaction : data);
+    const statusCandidates = [transaction?.status, transaction?.transactionStatus, transaction?.paymentStatus, transaction?.state,
+      data?.status, data?.transactionStatus, data?.paymentStatus, data?.state, result?.status, result?.transactionStatus, result?.paymentStatus, result?.state]
+      .filter(Boolean).map(v => String(v).trim().toUpperCase().replace(/[\s-]+/g, '_'));
+    const providerId = String(transaction?.transactionId || transaction?.transaction_id || data?.transactionId || data?.transaction_id || result?.transactionId || result?.transaction_id || '');
+    const messages = [result?.message, result?.description, result?.detail, result?.reason,
+      typeof result?.error === 'string' ? result.error : result?.error?.message || result?.error?.description,
+      data?.message, data?.description, data?.detail, data?.reason,
+      typeof data?.error === 'string' ? data.error : data?.error?.message,
+      transaction?.message, transaction?.description, transaction?.detail, transaction?.reason, ...statusCandidates]
+      .filter(v => v !== undefined && v !== null && String(v).trim()).map(v => String(v).trim());
+    const providerMessage = messages.join(' | ');
+    const failureStatuses = ['FAILED','FAILURE','ERROR','EXPIRED','REJECTED','DECLINED','CANCELLED','CANCELED','TIMED_OUT','TIMEOUT','TIME_OUT','INSUFFICIENT_BALANCE','INSUFFICIENT_FUNDS','AUTHORIZATION_FAILED','LIMIT_EXCEEDED'];
+    const failureText = /insufficient[ _-]*(balance|funds)|not enough (money|funds|balance)|low balance|balance too low|transaction limit|daily limit|limit exceeded|payment failed|payment declined|request rejected|authorization failed/i.test(providerMessage);
+    const explicitError = result?.success === false || data?.success === false || !!result?.error || !!data?.error || !!transaction?.error;
+    const rejected = !response.ok || explicitError || statusCandidates.some(s => failureStatuses.includes(s)) || failureText;
+    if (rejected) {
+      const message = premiumPaymentFailureMessage(providerMessage || 'PesaJet rejected the payment request');
+      const definitive = (response.status >= 400 && response.status < 500) || explicitError || statusCandidates.some(s => failureStatuses.includes(s)) || failureText;
+      if (definitive) await env.DB.prepare("UPDATE premium_subscriptions SET status='failed',provider_transaction_id=?,failure_message=? WHERE reference=? AND lower(status)='pending'").bind(providerId, message, reference).run();
+      return error(message, response.status >= 400 && response.status < 500 ? response.status : 502);
+    }
+    if (statusCandidates.length && !statusCandidates.some(s => ['PENDING','PROCESSING','INITIATED','ACCEPTED','IN_PROGRESS'].includes(s)) && !isSuccessfulPaymentStatus(statusCandidates[0])) {
+      const message = premiumPaymentFailureMessage(providerMessage || statusCandidates[0]);
+      await env.DB.prepare("UPDATE premium_subscriptions SET status='failed',provider_transaction_id=?,failure_message=? WHERE reference=? AND lower(status)='pending'").bind(providerId,message,reference).run();
+      return error(message, 502);
+    }
+    await env.DB.prepare("UPDATE premium_subscriptions SET provider_transaction_id=? WHERE reference=? AND status='pending'").bind(providerId, reference).run();
+    await env.DB.prepare(`INSERT INTO admin_audit_log(id,actor_admin_id,target_admin_id,action,details_json) VALUES(?,?,?,'assisted_upgrade_started',?)`)
+      .bind(crypto.randomUUID(), admin.id, admin.id, JSON.stringify({artist_id:artist.id,package_code:packageCode,reference,amount,provider})).run();
+    return json({success:true,status:'PENDING',reference,message:`PesaJet accepted the UGX ${amount.toLocaleString('en-US')} ${packageCode.replace('_',' ')} payment request for ${artist.name || 'the artist'}. Approve the mobile-money prompt; the package and the referring admin’s 20% commission update only after verified provider confirmation.`});
   }
   if (request.method === 'POST' && path === '/api/admin/referrals/withdrawals') {
     const body=await readBody(request), amount=Number(body.amount), phone=normalizeUgandanPhone(body.phone_number||body.phoneNumber), provider=String(body.provider||'').toLowerCase();
@@ -304,33 +350,34 @@ async function adminReferralRoute(request, env, path) {
   if(request.method==='POST' && path==='/api/admin/referrals/rank'){
     if(!superAdmin) return error('Only Super Admin can change admin ranks.',403);
     const body=await readBody(request);
-    const adminId=String(body.admin_id||'').trim();
-    const userId=String(body.user_id||'').trim();
-    const email=String(body.email||'').trim().toLowerCase();
-    const rank=String(body.rank||'').trim().toLowerCase();
-    if(!adminId&&!userId&&!email) return error('Choose an administrator first.',422);
+    const targetKey=String(body.admin_id || body.user_id || body.email || '').trim();
+    const rank=String(body.rank || '').trim().toLowerCase();
+    if(!targetKey) return error('Choose an administrator first.',422);
     if(!ADMIN_RANKS.includes(rank)) return error('Invalid administrator type.',422);
+
+    // Accept the admin record ID, linked auth user ID, or email. The UI has
+    // existed in two versions and they did not always pass the same identifier.
     const target=await env.DB.prepare(`
       SELECT id,user_id,email,role,rank
       FROM admins
-      WHERE (?<>'' AND CAST(id AS TEXT)=?)
-         OR (?<>'' AND CAST(user_id AS TEXT)=?)
-         OR (?<>'' AND lower(trim(email))=?)
+      WHERE CAST(id AS TEXT)=?
+         OR CAST(user_id AS TEXT)=?
+         OR lower(trim(email))=lower(trim(?))
       LIMIT 1
-    `).bind(adminId,adminId,userId,userId,email,email).first();
+    `).bind(targetKey,targetKey,targetKey).first();
     if(!target) return error('Administrator not found. Refresh the administrator list and try again.',404);
-    if(String(target.user_id)===String(user.id)||String(target.id)===String(admin.id)){
+    if(String(target.user_id)===String(user.id) || String(target.id)===String(admin.id)) {
       return error('You cannot change your own administrator rank.',403);
     }
-    const previousRank=target.rank||(target.role==='super_admin'?'super_admin':'admin');
+    const previousRank=target.rank || (target.role==='super_admin'?'super_admin':'admin');
     const role=rank==='super_admin'?'super_admin':'admin';
     const update=await env.DB.prepare('UPDATE admins SET rank=?,role=? WHERE id=?').bind(rank,role,target.id).run();
-    if(Number(update?.meta?.changes||0)!==1) return error('The administrator rank and role were not changed. Please refresh and try again.',409);
+    if(Number(update?.meta?.changes || 0)!==1) return error('The administrator rank was not changed. Please refresh and try again.',409);
     await env.DB.prepare(`
       INSERT INTO admin_audit_log(id,actor_admin_id,target_admin_id,action,details_json)
       VALUES(?,?,?,'rank_changed',?)
-    `).bind(crypto.randomUUID(),admin.id,target.id,JSON.stringify({from:previousRank,to:rank,role,admin_id:adminId||null,user_id:userId||null,email:email||null})).run();
-    return json({success:true,admin_id:target.id,user_id:target.user_id,email:target.email,rank,role});
+    `).bind(crypto.randomUUID(),admin.id,target.id,JSON.stringify({from:previousRank,to:rank,identifier:targetKey})).run();
+    return json({success:true,admin_id:target.id,user_id:target.user_id,rank,role});
   }
   if(request.method==='POST' && path==='/api/admin/referrals/assign'){
     if(!superAdmin) return error('Only Super Admin can assign referral ownership.',403);
@@ -2233,24 +2280,26 @@ async function adminRoute(request, env, path) {
       if (existing) {
         await env.DB.prepare(`
           UPDATE admins
-          SET email = ?, role = ?, active = 1
+          SET email = ?, role = ?, rank = ?, active = 1
           WHERE user_id = ?
         `).bind(
           target.email,
           role,
+          role === "super_admin" ? "super_admin" : "admin",
           target.id
         ).run();
       } else {
         await env.DB.prepare(`
           INSERT INTO admins (
-            id, user_id, email, role, active, created_at
+            id, user_id, email, role, rank, active, created_at
           )
-          VALUES (?, ?, ?, ?, 1, datetime('now'))
+          VALUES (?, ?, ?, ?, ?, 1, datetime('now'))
         `).bind(
           crypto.randomUUID(),
           target.id,
           target.email,
-          role
+          role,
+          role === "super_admin" ? "super_admin" : "admin"
         ).run();
       }
 
@@ -3053,7 +3102,7 @@ async function rpcRoute(request, env, name) {
       if (existing) {
         await env.DB.prepare(`
           UPDATE admins
-          SET email = ?, role = ?, active = 1
+          SET email = ?, role = ?, rank = ?, active = 1
           WHERE user_id = ?
         `).bind(
           targetUser.email,
@@ -3063,9 +3112,9 @@ async function rpcRoute(request, env, name) {
       } else {
         await env.DB.prepare(`
           INSERT INTO admins (
-            id, user_id, email, role, active, created_at
+            id, user_id, email, role, rank, active, created_at
           )
-          VALUES (?, ?, ?, ?, 1, datetime('now'))
+          VALUES (?, ?, ?, ?, ?, 1, datetime('now'))
         `).bind(
           crypto.randomUUID(),
           targetUser.id,
@@ -4135,7 +4184,7 @@ async function applyPremiumPaymentStatus(
             AND changes() > 0
         `).bind(amount, feeSupplied ? feeValue : 0)
       ]);
-      const packageReferrer = String(payment.initiated_by_admin_id || payment.referring_admin_id || '').trim();
+      const packageReferrer = String(payment.referring_admin_id || '').trim();
       if (packageReferrer) await creditAdminCommission(env,{eventKey:`package-payment:${payment.id}`,adminId:packageReferrer,artistId,sourceType:'artist_package',sourceId:payment.id,gross:expectedAmount,rate:ADMIN_PACKAGE_COMMISSION_RATE,note:'20% of confirmed paid artist package transaction'});
     }
     // The artist entitlement mirrors the verified subscription expiry. Re-sync
