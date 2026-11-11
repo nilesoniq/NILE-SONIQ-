@@ -11851,59 +11851,52 @@ async function saveAdminRank(id,userId,email){try{const rank=document.getElement
 async function toggleAdminSuspension(id,active){if(!confirm(active?'Suspend this administrator?':'Reactivate this administrator?'))return;try{await adminReferralPost('/api/admin/referrals/suspend',{admin_id:id,suspended:!!active});await loadAdminReferralDashboard();}catch(e){alert(e.message);}}
 let adminAssistedSearchTimer=null;
 let adminAssistedSearchSequence=0;
-async function searchAdminAssistedArtists(){
+function searchAdminAssistedArtists(){
   const input=document.getElementById('adminAssistedArtistSearch');
   const box=document.getElementById('adminAssistedArtistResults');
   const hidden=document.getElementById('adminAssistedArtistId');
   const selected=document.getElementById('adminAssistedArtistSelected');
   if(!input||!box)return;
-  const term=String(input.value||'').trim();
+  const term=normalizeSearchText(input.value||'');
   const sequence=++adminAssistedSearchSequence;
   if(hidden)hidden.value='';
   if(selected)selected.textContent='Select an artist from the results';
   box.classList.remove('hidden');
-  box.innerHTML='<div style="padding:10px;color:#aaa">Loading artists…</div>';
+  box.innerHTML='<div style="padding:10px;color:#aaa">Searching artists…</div>';
   if(adminAssistedSearchTimer)clearTimeout(adminAssistedSearchTimer);
-  adminAssistedSearchTimer=setTimeout(async()=>{
-    try{
-      const response=await fetch('/api/admin/referrals/artists?q='+encodeURIComponent(term),{
-        method:'GET',credentials:'include',cache:'no-store',headers:{'Accept':'application/json'}
-      });
-      const payload=await response.json().catch(()=>({}));
-      if(sequence!==adminAssistedSearchSequence)return;
-      if(!response.ok)throw new Error(payload.error||payload.message||('Artist search failed (HTTP '+response.status+').'));
-      const rows=Array.isArray(payload.data)?payload.data:(Array.isArray(payload.artists)?payload.artists:(Array.isArray(payload.results)?payload.results:[]));
-      if(!rows.length){box.innerHTML='<div style="padding:10px;color:#aaa">'+(term?'No artists match that name.':'No artists were returned by the database.')+'</div>';return;}
-      box.innerHTML=rows.map(a=>{
-        const id=String(a.id||'');
-        const name=String(a.name||a.artist_name||'Unnamed artist');
-        return `<button type="button" class="admin-assisted-artist-option" data-id="${escapeHtml(id)}" data-name="${escapeHtml(name)}" style="display:block;width:100%;text-align:left;padding:11px;background:transparent;color:#fff;border:0;border-bottom:1px solid #333;cursor:pointer"><strong>${escapeHtml(name)}</strong><small style="display:block;color:#aaa">${escapeHtml(a.location||'Location not set')} · ${escapeHtml(a.package_name||'free')} package</small></button>`;
-      }).join('');
-      box.querySelectorAll('.admin-assisted-artist-option').forEach(button=>button.addEventListener('click',()=>{
-        if(hidden)hidden.value=button.dataset.id;
-        input.value=button.dataset.name;
-        if(selected)selected.textContent='Selected: '+button.dataset.name;
-        box.classList.add('hidden');
-      }));
-    }catch(error){
-      if(sequence===adminAssistedSearchSequence)box.innerHTML='<div style="padding:10px;color:#ff9b9b">'+escapeHtml(error.message||'Could not load artists.')+'</div>';
+  adminAssistedSearchTimer=setTimeout(()=>{
+    if(sequence!==adminAssistedSearchSequence)return;
+    const registry=window.__nileArtistRegistry||{};
+    const allArtists=Object.values(registry);
+    if(!allArtists.length){
+      box.innerHTML='<div style="padding:10px;color:#ffcc88">The artist directory is still loading. Please try again in a moment.</div>';
+      return;
     }
-  },160);
+    const rows=allArtists.filter(a=>{
+      const name=normalizeSearchText(a.name||a.artist_name||'');
+      return !term||name.includes(term);
+    }).sort((a,b)=>{
+      const an=normalizeSearchText(a.name||a.artist_name||'');
+      const bn=normalizeSearchText(b.name||b.artist_name||'');
+      return (an===term?0:1)-(bn===term?0:1)||an.localeCompare(bn);
+    }).slice(0,100);
+    if(!rows.length){box.innerHTML='<div style="padding:10px;color:#aaa">No artists match that name.</div>';return;}
+    box.innerHTML=rows.map(a=>{
+      const id=String(a.id||'');
+      const name=String(a.name||a.artist_name||'Unnamed artist');
+      const location=String(a.location||'Location not set');
+      const packageName=String(a.package_name||a.artist_package||'free');
+      return `<button type="button" class="admin-assisted-artist-option" data-id="${escapeHtml(id)}" data-name="${escapeHtml(name)}" style="display:block;width:100%;text-align:left;padding:11px;background:transparent;color:#fff;border:0;border-bottom:1px solid #333;cursor:pointer"><strong>${escapeHtml(name)}</strong><small style="display:block;color:#aaa">${escapeHtml(location)} · ${escapeHtml(packageName)} package</small></button>`;
+    }).join('');
+    box.querySelectorAll('.admin-assisted-artist-option').forEach(button=>button.addEventListener('click',()=>{
+      if(hidden)hidden.value=button.dataset.id;
+      input.value=button.dataset.name;
+      if(selected)selected.textContent='Selected: '+button.dataset.name;
+      box.classList.add('hidden');
+    }));
+  },120);
 }
-async function startAdminAssistedUpgrade(){
-  const button=document.querySelector('#adminReferralsPanel button[onclick="startAdminAssistedUpgrade()"]');
-  try{
-    const artistId=document.getElementById('adminAssistedArtistId').value;
-    if(!artistId)throw new Error('Search for an artist and select them from the results first.');
-    const phone=document.getElementById('adminAssistedPhone').value;
-    if(!phone.trim())throw new Error('Enter the artist mobile-money number.');
-    if(button){button.disabled=true;button.dataset.originalText=button.textContent;button.textContent='Sending payment request…';}
-    const d=await adminReferralPost('/api/admin/referrals/upgrade',{artist_id:artistId,package_code:document.getElementById('adminAssistedPackage').value,phone_number:phone,provider:document.getElementById('adminAssistedProvider').value});
-    alert(d.message||'PesaJet accepted the payment request. The artist must approve the prompt.');
-    await loadAdminReferralDashboard();
-  }catch(e){alert(e.message||'Could not start the artist payment.');}
-  finally{if(button){button.disabled=false;button.textContent=button.dataset.originalText||'Send Artist Payment Prompt';}}
-}
+async function startAdminAssistedUpgrade(){try{const artistId=document.getElementById('adminAssistedArtistId').value;if(!artistId)throw new Error('Search for an artist and select them from the results first.');const d=await adminReferralPost('/api/admin/referrals/upgrade',{artist_id:artistId,package_code:document.getElementById('adminAssistedPackage').value,phone_number:document.getElementById('adminAssistedPhone').value,provider:document.getElementById('adminAssistedProvider').value});alert(d.message||'Payment prompt sent.');}catch(e){alert(e.message);}}
 async function assignAdminReferralOwner(){try{await adminReferralPost('/api/admin/referrals/assign',{artist_id:document.getElementById('adminAssignArtistId').value,admin_id:document.getElementById('adminAssignAdminId').value});alert('Referral owner assigned.');await loadAdminReferralDashboard();}catch(e){alert(e.message);}}
 
 </script>
