@@ -110,6 +110,197 @@ async function ensureArtistTestAdjustmentsTable(env) {
   `).run();
 }
 
+
+// Referral commissions, admin wallets, ranks and payout controls.
+const ADMIN_RANKS = ["junior_admin", "admin", "senior_admin", "admin_manager", "super_admin"];
+const ADMIN_PACKAGE_COMMISSION_RATE = 0.20;
+const ADMIN_STREAM_COMMISSION_RATE = 0.05;
+const ARTIST_STREAM_PLATFORM_RATE = 0.15;
+
+async function ensureAdminReferralSchema(env) {
+  const addColumn = async (table, column, definition) => {
+    const info = await env.DB.prepare(`PRAGMA table_info(${table})`).all();
+    if (!(info.results || []).some(row => row.name === column)) {
+      await env.DB.prepare(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`).run();
+    }
+  };
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS admin_referral_commissions (
+    id TEXT PRIMARY KEY, event_key TEXT NOT NULL UNIQUE, admin_id TEXT NOT NULL,
+    artist_id TEXT NOT NULL, source_type TEXT NOT NULL, source_id TEXT NOT NULL,
+    gross_amount REAL NOT NULL, commission_rate REAL NOT NULL, amount REAL NOT NULL,
+    currency TEXT NOT NULL DEFAULT 'UGX', status TEXT NOT NULL DEFAULT 'posted',
+    reversal_of TEXT, note TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+  await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_admin_referral_commissions_admin ON admin_referral_commissions(admin_id, status, created_at)`).run();
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS admin_wallets (
+    id TEXT PRIMARY KEY, admin_id TEXT NOT NULL UNIQUE, balance REAL NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS admin_withdrawal_requests (
+    id TEXT PRIMARY KEY, admin_id TEXT NOT NULL, amount REAL NOT NULL CHECK(amount > 0),
+    phone_number TEXT NOT NULL, provider TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending',
+    reviewed_by TEXT, review_note TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    reviewed_at TEXT, paid_at TEXT
+  )`).run();
+  await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_admin_withdrawals_status ON admin_withdrawal_requests(status, created_at)`).run();
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS admin_audit_log (
+    id TEXT PRIMARY KEY, actor_admin_id TEXT NOT NULL, target_admin_id TEXT,
+    action TEXT NOT NULL, details_json TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS admin_rank_policy (
+    rank TEXT PRIMARY KEY, referrals_required INTEGER NOT NULL DEFAULT 0,
+    package_sales_required INTEGER NOT NULL DEFAULT 0, streams_required INTEGER NOT NULL DEFAULT 0,
+    commission_required REAL NOT NULL DEFAULT 0, service_days_required INTEGER NOT NULL DEFAULT 0
+  )`).run();
+  await env.DB.prepare(`INSERT OR IGNORE INTO admin_rank_policy(rank) VALUES ('junior_admin'),('admin'),('senior_admin'),('admin_manager'),('super_admin')`).run();
+  await addColumn('admins', 'rank', "TEXT NOT NULL DEFAULT 'admin'");
+  await addColumn('admins', 'referral_code', 'TEXT');
+  await addColumn('admins', 'suspended_at', 'TEXT');
+  await addColumn('artists', 'referring_admin_id', 'TEXT');
+  await addColumn('premium_subscriptions', 'referring_admin_id', 'TEXT');
+  await addColumn('premium_subscriptions', 'initiated_by_admin_id', 'TEXT');
+  await env.DB.prepare(`CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_referral_code ON admins(referral_code) WHERE referral_code IS NOT NULL`).run();
+  const admins = await env.DB.prepare(`SELECT id, role, rank, referral_code FROM admins`).all();
+  for (const row of admins.results || []) {
+    const rank = row.role === 'super_admin' ? 'super_admin' : (ADMIN_RANKS.includes(row.rank) ? row.rank : 'admin');
+    const code = row.referral_code || `NSQ-${String(row.id).replace(/-/g,'').slice(0,10).toUpperCase()}`;
+    await env.DB.prepare(`UPDATE admins SET rank=?, referral_code=? WHERE id=?`).bind(rank, code, row.id).run();
+  }
+}
+
+async function ensureAdminWallet(env, adminId) {
+  await env.DB.prepare(`INSERT OR IGNORE INTO admin_wallets(id,admin_id,balance) VALUES(?,?,0)`).bind(crypto.randomUUID(), adminId).run();
+}
+
+async function creditAdminCommission(env, { eventKey, adminId, artistId, sourceType, sourceId, gross, rate, note }) {
+  const amount = Math.round(Number(gross) * Number(rate) * 1000) / 1000;
+  if (!adminId || !artistId || !eventKey || !Number.isFinite(amount) || amount <= 0) return false;
+  await ensureAdminReferralSchema(env);
+  await ensureAdminWallet(env, adminId);
+  const results = await env.DB.batch([
+    env.DB.prepare(`INSERT OR IGNORE INTO admin_referral_commissions
+      (id,event_key,admin_id,artist_id,source_type,source_id,gross_amount,commission_rate,amount,currency,status,note)
+      SELECT ?,?,?,?,?,?,?,?,?, 'UGX','posted',? WHERE EXISTS (SELECT 1 FROM admins WHERE id=? AND active=1 AND suspended_at IS NULL)`)
+      .bind(crypto.randomUUID(),eventKey,adminId,artistId,sourceType,sourceId,Number(gross),Number(rate),amount,note||null,adminId),
+    env.DB.prepare(`UPDATE admin_wallets SET balance=balance+?,updated_at=datetime('now') WHERE admin_id=? AND changes()>0`).bind(amount,adminId)
+  ]);
+  return Number(results?.[0]?.meta?.changes || 0) > 0;
+}
+
+async function adminReferralRoute(request, env, path) {
+  const user = await currentUser(request, env);
+  if (!user) return error('Authentication required',401);
+  const admin = await getAdmin(env,user);
+  if (!admin) return error('Admin access required',403);
+  await ensureAdminReferralSchema(env);
+  const superAdmin = admin.role === 'super_admin';
+  const url = new URL(request.url);
+  if (request.method === 'GET' && path === '/api/admin/referrals') {
+    await ensureAdminWallet(env,admin.id);
+    const wallet = await env.DB.prepare(`SELECT balance FROM admin_wallets WHERE admin_id=?`).bind(admin.id).first();
+    const totals = await env.DB.prepare(`SELECT COUNT(DISTINCT artist_id) artists, COALESCE(SUM(amount),0) earnings FROM admin_referral_commissions WHERE admin_id=? AND status='posted'`).bind(admin.id).first();
+    const commissions = await env.DB.prepare(`SELECT c.*,a.name artist_name FROM admin_referral_commissions c LEFT JOIN artists a ON a.id=c.artist_id WHERE c.admin_id=? ORDER BY datetime(c.created_at) DESC LIMIT 200`).bind(admin.id).all();
+    const referrals = await env.DB.prepare(`SELECT a.id,a.name,a.created_at FROM artists a WHERE a.referring_admin_id=? ORDER BY datetime(a.created_at) DESC LIMIT 500`).bind(admin.id).all();
+    const withdrawals = await env.DB.prepare(`SELECT * FROM admin_withdrawal_requests WHERE admin_id=? ORDER BY datetime(created_at) DESC LIMIT 100`).bind(admin.id).all();
+    const result = { admin: {...admin, referral_code: (await env.DB.prepare('SELECT referral_code,rank FROM admins WHERE id=?').bind(admin.id).first())?.referral_code}, balance:Number(wallet?.balance||0), referred_artists:Number(totals?.artists||0), total_earnings:Number(totals?.earnings||0), commissions:commissions.results||[], referrals:referrals.results||[], withdrawals:withdrawals.results||[] };
+    if (superAdmin) {
+      const all = await env.DB.prepare(`SELECT ad.id,ad.email,ad.role,ad.rank,ad.active,ad.referral_code,COALESCE(w.balance,0) balance,COUNT(DISTINCT c.artist_id) referred_artists,COALESCE(SUM(c.amount),0) total_commission FROM admins ad LEFT JOIN admin_wallets w ON w.admin_id=ad.id LEFT JOIN admin_referral_commissions c ON c.admin_id=ad.id AND c.status='posted' GROUP BY ad.id ORDER BY ad.created_at`).all();
+      const pending = await env.DB.prepare(`SELECT r.*,a.email admin_email FROM admin_withdrawal_requests r JOIN admins a ON a.id=r.admin_id WHERE r.status='pending' ORDER BY r.created_at`).all();
+      result.all_admins=all.results||[]; result.pending_withdrawals=pending.results||[];
+      result.rank_policy=(await env.DB.prepare('SELECT * FROM admin_rank_policy ORDER BY CASE rank WHEN 'junior_admin' THEN 1 WHEN 'admin' THEN 2 WHEN 'senior_admin' THEN 3 WHEN 'admin_manager' THEN 4 ELSE 5 END').all()).results||[];
+    }
+    return json({data:result,error:null});
+  }
+  if (request.method === 'POST' && path === '/api/admin/referrals/upgrade') {
+    const body=await readBody(request);
+    const artistId=String(body.artist_id||'').trim();
+    const packageCode=String(body.package_code||'').trim().toLowerCase();
+    const packagePrices={premium:5000,hustler:10000,hit_maker:20000,star:30000};
+    const amount=packagePrices[packageCode];
+    const artist=await env.DB.prepare(`SELECT id,user_id,name FROM artists WHERE id=? LIMIT 1`).bind(artistId).first();
+    if(!artist||!amount) return error('Choose an existing artist and a valid paid package.',422);
+    const phone=normalizeUgandanPhone(body.phone_number||body.phoneNumber);
+    const provider=String(body.provider||'').toLowerCase();
+    if(!/^\+256\d{9}$/.test(phone)||!['mtn','airtel'].includes(provider)) return error('Enter the artist’s valid MTN or Airtel mobile-money number.',422);
+    const apiKey=env.PESAJET_API_KEY||env.PESAJET_TOKEN;
+    const baseUrl=String(env.PESAJET_API_BASE_URL||'https://payments.pesajet.com/api/v1').replace(/\/+$/,'');
+    if(!apiKey) return error('Payment service is not configured.',503);
+    const reference=`NILESONIQ-PREMIUM-ASSISTED-${crypto.randomUUID().replace(/-/g,'').slice(0,16).toUpperCase()}`;
+    const risk=await checkPesaJetCollectionRisk(request,env,phone,artist.user_id,reference);
+    if(risk.blocked) return error(risk.message,429);
+    const id=crypto.randomUUID(), now=new Date().toISOString();
+    await env.DB.prepare(`INSERT INTO premium_subscriptions(id,user_id,artist_id,amount,currency,provider,phone_number,reference,status,created_at,package_name,initiated_by_admin_id,referring_admin_id) VALUES(?,?,?,?,'UGX',?,?,?,'pending',?,?,?,(SELECT referring_admin_id FROM artists WHERE id=?))`)
+      .bind(id,artist.user_id,artist.id,amount,provider,phone,reference,now,packageCode,admin.id,artist.id).run();
+    let response,result;
+    try { response=await fetch(`${baseUrl}/payments`,{method:'POST',headers:{'Content-Type':'application/json','X-API-Key':apiKey},body:JSON.stringify({type:'COLLECTION',amount,currency:'UGX',phoneNumber:phone,provider,reference,description:`NileSoniQ artist package upgrade - ${artist.name||'Artist'} - initiated by admin`,idempotencyKey:`nilesoniq-${reference}`})}); result=await response.json().catch(()=>({})); }
+    catch(e){ console.error('Admin-assisted package request uncertain:',e.message); return error('Payment request outcome is uncertain; it remains pending.',502); }
+    if(!response.ok||result?.success===false||result?.error){const msg=String(result?.message||result?.error?.message||'PesaJet rejected the payment request');await env.DB.prepare("UPDATE premium_subscriptions SET status='failed',failure_message=? WHERE id=? AND status='pending'").bind(msg,id).run();return error(msg,response.status>=400&&response.status<500?response.status:502);}
+    await env.DB.prepare(`INSERT INTO admin_audit_log(id,actor_admin_id,target_admin_id,action,details_json) VALUES(?,?,?,'assisted_upgrade_started',?)`).bind(crypto.randomUUID(),admin.id,admin.id,JSON.stringify({artist_id:artist.id,package_code:packageCode,reference})).run();
+    return json({success:true,status:'pending',reference,message:`A UGX ${amount.toLocaleString('en-US')} payment prompt has been sent to the artist’s phone. The upgrade and 20% admin commission activate only after PesaJet confirms payment.`},202);
+  }
+  if (request.method === 'POST' && path === '/api/admin/referrals/withdrawals') {
+    const body=await readBody(request), amount=Number(body.amount), phone=normalizeUgandanPhone(body.phone_number||body.phoneNumber), provider=String(body.provider||'').toLowerCase();
+    const wallet=await env.DB.prepare('SELECT balance FROM admin_wallets WHERE admin_id=?').bind(admin.id).first();
+    if(!Number.isFinite(amount)||amount<10000||amount>Number(wallet?.balance||0)||!/^\+256\d{9}$/.test(phone)||!['mtn','airtel'].includes(provider)) return error('Enter a valid withdrawal of at least UGX 10,000, within your available balance, with a valid MTN or Airtel number.',422);
+    const pending=await env.DB.prepare("SELECT id FROM admin_withdrawal_requests WHERE admin_id=? AND status='pending' LIMIT 1").bind(admin.id).first();
+    if(pending) return error('You already have a pending admin withdrawal request.',409);
+    const id=crypto.randomUUID();
+    await env.DB.prepare(`INSERT INTO admin_withdrawal_requests(id,admin_id,amount,phone_number,provider,status) VALUES(?,?,?,?,?,'pending')`).bind(id,admin.id,amount,phone,provider).run();
+    await env.DB.prepare(`INSERT INTO admin_audit_log(id,actor_admin_id,target_admin_id,action,details_json) VALUES(?,?,?,'withdrawal_requested',?)`).bind(crypto.randomUUID(),admin.id,admin.id,JSON.stringify({request_id:id,amount})).run();
+    return json({success:true,id});
+  }
+  const reviewMatch=path.match(/^\/api\/admin\/referrals\/withdrawals\/([^/]+)\/review$/);
+  if(request.method==='POST' && reviewMatch){
+    if(!superAdmin) return error('Only Super Admin can approve or reject admin withdrawals.',403);
+    const body=await readBody(request), action=String(body.action||'').toLowerCase(), id=reviewMatch[1];
+    if(!['approve','reject'].includes(action)) return error('Choose approve or reject.',422);
+    const req=await env.DB.prepare("SELECT * FROM admin_withdrawal_requests WHERE id=? AND status='pending'").bind(id).first();
+    if(!req) return error('Pending withdrawal request not found.',404);
+    if(req.admin_id===admin.id) return error('You cannot approve your own withdrawal.',403);
+    if(action==='approve'){
+      const wallet=await env.DB.prepare('SELECT balance FROM admin_wallets WHERE admin_id=?').bind(req.admin_id).first();
+      if(Number(wallet?.balance||0)<Number(req.amount)) return error('Insufficient available admin wallet balance.',409);
+      await env.DB.batch([
+        env.DB.prepare("UPDATE admin_withdrawal_requests SET status='approved',reviewed_by=?,review_note=?,reviewed_at=datetime('now') WHERE id=? AND status='pending'").bind(admin.id,String(body.note||'').slice(0,500),id),
+        env.DB.prepare('UPDATE admin_wallets SET balance=balance-?,updated_at=datetime('now') WHERE admin_id=? AND balance>=?').bind(req.amount,req.admin_id,req.amount)
+      ]);
+    } else await env.DB.prepare("UPDATE admin_withdrawal_requests SET status='rejected',reviewed_by=?,review_note=?,reviewed_at=datetime('now') WHERE id=? AND status='pending'").bind(admin.id,String(body.note||'').slice(0,500),id).run();
+    await env.DB.prepare('INSERT INTO admin_audit_log(id,actor_admin_id,target_admin_id,action,details_json) VALUES(?,?,?,?,?)').bind(crypto.randomUUID(),admin.id,req.admin_id,`withdrawal_${action}`,JSON.stringify({request_id:id,amount:req.amount})).run();
+    return json({success:true});
+  }
+  if(request.method==='POST' && path==='/api/admin/referrals/rank'){
+    if(!superAdmin) return error('Only Super Admin can change admin ranks.',403);
+    const body=await readBody(request), targetId=String(body.admin_id||''), rank=String(body.rank||'');
+    if(!ADMIN_RANKS.includes(rank)) return error('Invalid admin rank.',422);
+    const target=await env.DB.prepare('SELECT id,role,rank FROM admins WHERE id=?').bind(targetId).first();
+    if(!target) return error('Administrator not found.',404);
+    if(target.role==='super_admin' && target.id!==admin.id) return error('Super Admin rank can only be changed by that Super Admin.',403);
+    const role=rank==='super_admin'?'super_admin':'admin';
+    await env.DB.prepare('UPDATE admins SET rank=?,role=? WHERE id=?').bind(rank,role,targetId).run();
+    await env.DB.prepare('INSERT INTO admin_audit_log(id,actor_admin_id,target_admin_id,action,details_json) VALUES(?,?,? ,'rank_changed',?)').bind(crypto.randomUUID(),admin.id,targetId,JSON.stringify({from:target.rank,to:rank})).run();
+    return json({success:true});
+  }
+  if(request.method==='POST' && path==='/api/admin/referrals/assign'){
+    if(!superAdmin) return error('Only Super Admin can assign referral ownership.',403);
+    const body=await readBody(request), artistId=String(body.artist_id||''), adminId=String(body.admin_id||'');
+    const owner=await env.DB.prepare('SELECT id FROM admins WHERE id=? AND active=1 AND suspended_at IS NULL').bind(adminId).first();
+    if(!owner||!artistId) return error('Choose an active admin and artist.',422);
+    const previous=await env.DB.prepare('SELECT referring_admin_id FROM artists WHERE id=?').bind(artistId).first();
+    await env.DB.prepare('UPDATE artists SET referring_admin_id=? WHERE id=?').bind(adminId,artistId).run();
+    await env.DB.prepare(`INSERT INTO admin_audit_log(id,actor_admin_id,target_admin_id,action,details_json) VALUES(?,?,?,'referral_owner_assigned',?)`).bind(crypto.randomUUID(),admin.id,adminId,JSON.stringify({artist_id:artistId,previous_admin_id:previous?.referring_admin_id||null,new_admin_id:adminId})).run();
+    return json({success:true});
+  }
+  if(request.method==='POST' && path==='/api/admin/referrals/suspend'){
+    if(!superAdmin) return error('Only Super Admin can suspend administrators.',403);
+    const body=await readBody(request), targetId=String(body.admin_id||''), suspend=body.suspended!==false;
+    if(targetId===admin.id) return error('You cannot suspend your own Super Admin account.',403);
+    await env.DB.prepare('UPDATE admins SET active=?,suspended_at=? WHERE id=? AND role<>'super_admin'').bind(suspend?0:1,suspend?new Date().toISOString():null,targetId).run();
+    await env.DB.prepare('INSERT INTO admin_audit_log(id,actor_admin_id,target_admin_id,action,details_json) VALUES(?,?,?,?,?)').bind(crypto.randomUUID(),admin.id,targetId,suspend?'admin_suspended':'admin_reactivated','{}').run();
+    return json({success:true});
+  }
+  return error('Admin referral route not found',404);
+}
+
 function makeCookie(token, maxAge) {
   return `${COOKIE_NAME}=${encodeURIComponent(token)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`;
 }
@@ -337,6 +528,7 @@ function paymentReferenceName(value, fallback = "ARTIST") {
 }
 
 async function ensurePendingArtistSignups(env) {
+  await ensureAdminReferralSchema(env);
   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS pending_artist_signups (
     id TEXT PRIMARY KEY,
     reference TEXT NOT NULL UNIQUE,
@@ -353,8 +545,11 @@ async function ensurePendingArtistSignups(env) {
     failure_message TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     completed_at TEXT,
-    user_id TEXT
+    user_id TEXT,
+    referral_code TEXT
   )`).run();
+  const columns = await env.DB.prepare(`PRAGMA table_info(pending_artist_signups)`).all();
+  if (!(columns.results || []).some(row => row.name === 'referral_code')) await env.DB.prepare(`ALTER TABLE pending_artist_signups ADD COLUMN referral_code TEXT`).run();
 }
 
 async function paidSignupRoute(request, env) {
@@ -393,8 +588,11 @@ async function paidSignupRoute(request, env) {
   const description = `NileSoniQ Artist Registration - ${artistName}`.slice(0, 250);
   const id = crypto.randomUUID();
   const passwordHash = await bcrypt.hash(password, 10);
-  await env.DB.prepare(`INSERT INTO pending_artist_signups (id,reference,email,password_hash,artist_name,phone_number,provider,package_code,amount,currency,status) VALUES (?,?,?,?,?,?,?,?,?,'UGX','pending')`)
-    .bind(id,reference,email,passwordHash,artistName,phone,provider,packageCode,amount).run();
+  const referralCode = String(body.referral_code || body.ref || '').trim().toUpperCase().slice(0,40);
+  const referralAdmin = referralCode ? await env.DB.prepare(`SELECT id FROM admins WHERE upper(referral_code)=? AND active=1 AND suspended_at IS NULL LIMIT 1`).bind(referralCode).first() : null;
+  const safeReferralCode = referralAdmin ? referralCode : null;
+  await env.DB.prepare(`INSERT INTO pending_artist_signups (id,reference,email,password_hash,artist_name,phone_number,provider,package_code,amount,currency,status,referral_code) VALUES (?,?,?,?,?,?,?,?,?,'UGX','pending',?)`)
+    .bind(id,reference,email,passwordHash,artistName,phone,provider,packageCode,amount,safeReferralCode).run();
   let response, result;
   try {
     response = await fetch(`${baseUrl}/payments`, {method:"POST",headers:{"Content-Type":"application/json","X-API-Key":apiKey},body:JSON.stringify({type:"COLLECTION",amount,currency:"UGX",phoneNumber:phone,provider,reference,description,idempotencyKey:`nilesoniq-${reference}`})});
@@ -454,8 +652,8 @@ async function completePaidArtistSignup(env, reference, status, transactionId, a
     try {
       await env.DB.batch([
         env.DB.prepare(`INSERT INTO auth_users (id,email,encrypted_password,phone,raw_user_meta_data,confirmation_token,confirmation_sent_at,created_at,updated_at,is_anonymous,is_sso_user) VALUES (?,?,?,?,?,?,datetime('now'),datetime('now'),datetime('now'),0,0)`).bind(userId,row.email,row.password_hash,row.phone_number,metadata,token),
-        env.DB.prepare("INSERT INTO artists (id,user_id,name) VALUES (?,?,?)").bind(artistId,userId,row.artist_name),
-        env.DB.prepare(`INSERT INTO premium_subscriptions (id,user_id,artist_id,amount,currency,provider,phone_number,reference,status,created_at,paid_at,expires_at,provider_transaction_id,package_name) VALUES (?,?,?,?,'UGX',?,?,?,'active',datetime('now'),datetime('now'),?,?,?)`).bind(subscriptionId,userId,artistId,row.amount,row.provider,row.phone_number,subscriptionReference,expiry,incomingTx,row.package_code),
+        env.DB.prepare("INSERT INTO artists (id,user_id,name,referring_admin_id) VALUES (?,?,?,(SELECT id FROM admins WHERE upper(referral_code)=? AND active=1 AND suspended_at IS NULL LIMIT 1))").bind(artistId,userId,row.artist_name,String(row.referral_code||'')),
+        env.DB.prepare(`INSERT INTO premium_subscriptions (id,user_id,artist_id,amount,currency,provider,phone_number,reference,status,created_at,paid_at,expires_at,provider_transaction_id,package_name,referring_admin_id) VALUES (?,?,?,?,'UGX',?,?,?,'active',datetime('now'),datetime('now'),?,?,?,(SELECT id FROM admins WHERE upper(referral_code)=? AND active=1 AND suspended_at IS NULL LIMIT 1))`).bind(subscriptionId,userId,artistId,row.amount,row.provider,row.phone_number,subscriptionReference,expiry,incomingTx,row.package_code,String(row.referral_code||'')),
         env.DB.prepare("UPDATE pending_artist_signups SET status='completed',provider_transaction_id=COALESCE(NULLIF(?,''),provider_transaction_id),completed_at=datetime('now'),user_id=? WHERE reference=? AND status='processing'").bind(incomingTx,userId,reference)
       ]);
     } catch (e) {
@@ -470,7 +668,9 @@ async function completePaidArtistSignup(env, reference, status, transactionId, a
     } catch (e) { console.error("Paid signup verification email could not be sent:",e.message); }
     try {
       await syncArtistPremiumEntitlement(env,userId,artistId);
-    } catch (e) { console.error("Paid signup subscription was saved, but artist entitlement sync failed:",e.message); }
+      const referredBy = row.referral_code ? await env.DB.prepare(`SELECT id FROM admins WHERE upper(referral_code)=? AND active=1 AND suspended_at IS NULL LIMIT 1`).bind(String(row.referral_code)).first() : null;
+      if (referredBy) await creditAdminCommission(env,{eventKey:`package-signup:${subscriptionId}`,adminId:referredBy.id,artistId,sourceType:'artist_package',sourceId:subscriptionId,gross:Number(row.amount),rate:ADMIN_PACKAGE_COMMISSION_RATE,note:'20% of confirmed initial artist package signup'});
+    } catch (e) { console.error("Paid signup referral or entitlement processing failed:",e.message); }
     return {matched:true,changed:true,reason:"verified_success"};
   }
   if (["FAILED","FAILURE","ERROR","EXPIRED","REJECTED","DECLINED","CANCELLED","CANCELED","TIMED_OUT","TIMEOUT","TIME_OUT","INSUFFICIENT_BALANCE","INSUFFICIENT_FUNDS","AUTHORIZATION_FAILED","LIMIT_EXCEEDED"].includes(String(status||"").toUpperCase())) {
@@ -2623,15 +2823,7 @@ async function rpcRoute(request, env, name) {
               VALUES (?, ?, 'qualified_download', ?, ?, ?, ?, 0, ?, 'UGX',
                       'posted', 'Package-rate gross per qualified download; 20% commission and 5% tax allocation',
                       datetime('now'))
-            `).bind(
-              `song-download:${downloadLogId}`,
-              artistId,
-              String(downloadLogId),
-              gross,
-              commission,
-              tax,
-              net
-            ).run();
+            `).bind(`song-download:${downloadLogId}`,artistId,String(downloadLogId),gross,commission,tax,net).run();
           }
         }
       }
@@ -2745,24 +2937,22 @@ async function rpcRoute(request, env, name) {
             // than rounding each play down to 0.37 before the balance is summed.
             const commission = Math.round(gross * ARTIST_COMMISSION_RATE * 1000) / 1000;
             const tax = Math.round(gross * ARTIST_TAX_ALLOCATION_RATE * 1000) / 1000;
-            const net = Math.round((gross - commission - tax) * 1000) / 1000;
+            const artistNet = Math.round((gross - commission - tax) * 1000) / 1000;
+            const artist = await env.DB.prepare('SELECT referring_admin_id FROM artists WHERE id=? LIMIT 1').bind(artistId).first();
+            const referralAdminId = String(artist?.referring_admin_id || '').trim();
+            const adminShare = referralAdminId ? Math.round(gross * ADMIN_STREAM_COMMISSION_RATE * 1000) / 1000 : 0;
+            const platformShare = Math.round((gross * (referralAdminId ? ARTIST_STREAM_PLATFORM_RATE : ARTIST_COMMISSION_RATE)) * 1000) / 1000;
+            const net = Math.round((gross - platformShare - tax - adminShare) * 1000) / 1000;
             await env.DB.prepare(`
               INSERT OR IGNORE INTO artist_earning_ledger
                 (event_key, artist_id, source_type, source_id, gross_amount,
                  commission_amount, tax_amount, pesajet_fee_amount, net_amount,
                  currency, status, note, occurred_at)
               VALUES (?, ?, 'qualified_play', ?, ?, ?, ?, 0, ?, 'UGX',
-                      'posted', 'Package-rate gross per qualified play; 20% commission and 5% tax allocation',
+                      'posted', 'Qualified play: 75% artist, 15% platform, 5% referring admin where assigned, 5% tax',
                       datetime('now'))
-            `).bind(
-              `song-play:${playLogId}`,
-              artistId,
-              String(playLogId),
-              gross,
-              commission,
-              tax,
-              net
-            ).run();
+            `).bind(`song-play:${playLogId}`,artistId,String(playLogId),gross,platformShare,tax,net).run();
+            if (referralAdminId) await creditAdminCommission(env,{eventKey:`stream-play:${playLogId}`,adminId:referralAdminId,artistId,sourceType:'qualified_play',sourceId:String(playLogId),gross,rate:ADMIN_STREAM_COMMISSION_RATE,note:'5% of gross qualified streaming earnings'});
           }
         }
       }
@@ -3567,6 +3757,7 @@ async function syncArtistPremiumEntitlement(env, userId, preferredArtistId = nul
 }
 
 async function premiumSubscriptionRoute(request, env) {
+  await ensureAdminReferralSchema(env);
   const user = await currentUser(request, env);
   if (!user) return error("Authentication required", 401);
 
@@ -3664,9 +3855,9 @@ async function premiumSubscriptionRoute(request, env) {
   const now = new Date().toISOString();
   await env.DB.prepare(`
     INSERT INTO premium_subscriptions
-      (id,user_id,artist_id,amount,currency,provider,phone_number,reference,status,created_at,package_name)
-    VALUES (?,?,?,?,'UGX',?,?,?,'pending',?,?)
-  `).bind(id,user.id,artist.id,packageAmount,provider,phone,reference,now,packageCode).run();
+      (id,user_id,artist_id,amount,currency,provider,phone_number,reference,status,created_at,package_name,referring_admin_id)
+    SELECT ?,?,?,?,'UGX',?,?,?,'pending',?,?,referring_admin_id FROM artists WHERE id=?
+  `).bind(id,user.id,artist.id,packageAmount,provider,phone,reference,now,packageCode,artist.id).run();
 
   let response, result;
   try {
@@ -3755,7 +3946,8 @@ async function applyPremiumPaymentStatus(
   if (!ref) return { matched: false, reason: "missing_reference" };
 
   const payment = await env.DB.prepare(`
-    SELECT id, user_id, artist_id, amount, currency, status, provider_transaction_id
+    SELECT id, user_id, artist_id, amount, currency, status, provider_transaction_id,
+           referring_admin_id, initiated_by_admin_id
     FROM premium_subscriptions WHERE reference = ? LIMIT 1
   `).bind(ref).first();
   if (!payment) return { matched: false, reason: "unknown_reference" };
@@ -3891,6 +4083,8 @@ async function applyPremiumPaymentStatus(
             AND changes() > 0
         `).bind(amount, feeSupplied ? feeValue : 0)
       ]);
+      const packageReferrer = String(payment.initiated_by_admin_id || payment.referring_admin_id || '').trim();
+      if (packageReferrer) await creditAdminCommission(env,{eventKey:`package-payment:${payment.id}`,adminId:packageReferrer,artistId,sourceType:'artist_package',sourceId:payment.id,gross:expectedAmount,rate:ADMIN_PACKAGE_COMMISSION_RATE,note:'20% of confirmed paid artist package transaction'});
     }
     // The artist entitlement mirrors the verified subscription expiry. Re-sync
     // even on a concurrent duplicate callback; activation itself remains idempotent.
@@ -5273,6 +5467,8 @@ export default {
         response = await authRoute(request, env, path);
       } else if (path.startsWith("/api/db/")) {
         response = await dbRoute(request, env, path);
+      } else if (path === "/api/admin/referrals" || path.startsWith("/api/admin/referrals/")) {
+        response = await adminReferralRoute(request, env, path);
       } else if (
         path === "/api/admins" ||
         path.startsWith("/api/admins/") ||
