@@ -113,6 +113,16 @@ async function ensureArtistTestAdjustmentsTable(env) {
 
 // Referral commissions, admin wallets, ranks and payout controls.
 const ADMIN_RANKS = ["junior_admin", "admin", "senior_admin", "admin_manager", "super_admin"];
+const ADMIN_RANK_LEVEL = Object.freeze({ junior_admin: 1, admin: 2, senior_admin: 3, admin_manager: 4, super_admin: 5 });
+function adminRankOf(admin) {
+  const rank = String(admin?.rank || "").trim().toLowerCase();
+  if (ADMIN_RANK_LEVEL[rank]) return rank;
+  return admin?.role === "super_admin" ? "super_admin" : "admin";
+}
+function adminHasRank(admin, minimum) {
+  return (ADMIN_RANK_LEVEL[adminRankOf(admin)] || 0) >= (ADMIN_RANK_LEVEL[minimum] || 99);
+}
+
 const ADMIN_PACKAGE_COMMISSION_RATE = 0.20;
 const ADMIN_STREAM_COMMISSION_RATE = 0.05;
 const ARTIST_STREAM_PLATFORM_RATE = 0.15;
@@ -244,78 +254,18 @@ async function adminReferralRoute(request, env, path) {
     }
     return json({data:result,error:null});
   }
-  if (request.method === 'POST' && path === '/api/admin/referrals/upgrade') {
+  if (request.method === "POST" && path === "/api/admin/referrals/upgrade") {
+    // Reuse the exact artist-dashboard collection flow and webhook activation.
     const body = await readBody(request);
-    const artistId = String(body.artist_id || '').trim();
-    const packageCode = String(body.package_code || '').trim().toLowerCase();
-    const packagePrices = { premium: 5000, hustler: 10000, hit_maker: 20000, star: 30000 };
-    const amount = packagePrices[packageCode];
-    const artist = await env.DB.prepare(`SELECT id,user_id,name,referring_admin_id FROM artists WHERE id=? LIMIT 1`).bind(artistId).first();
-    if (!artist || !amount) return error('Choose an existing artist and a valid paid package.', 422);
-    const phone = normalizeUgandanPhone(body.phone_number || body.phoneNumber);
-    const provider = String(body.provider || '').trim().toLowerCase();
-    if (!/^\+256\d{9}$/.test(phone) || !['mtn','airtel'].includes(provider)) return error('Enter the artist’s valid MTN or Airtel mobile-money number.', 422);
-    const apiKey = env.PESAJET_API_KEY || env.PESAJET_TOKEN;
-    const baseUrl = String(env.PESAJET_API_BASE_URL || 'https://payments.pesajet.com/api/v1').replace(/\/+$/, '');
-    if (!apiKey) return error('Payment service is not configured.', 503);
-    const reference = `NILESONIQ-PREMIUM-${paymentReferenceName(artist.name)}-${crypto.randomUUID().replace(/-/g,'').slice(0,16).toUpperCase()}`;
-    const risk = await checkPesaJetCollectionRisk(request, env, phone, artist.user_id, reference);
-    if (risk.blocked) return error(risk.message, 429);
-    const id = crypto.randomUUID(), now = new Date().toISOString();
-    // Store the artist's existing referral owner. The assisting admin is tracked separately
-    // and must not receive the referral commission merely for initiating the prompt.
-    await env.DB.prepare(`
-      INSERT INTO premium_subscriptions
-        (id,user_id,artist_id,amount,currency,provider,phone_number,reference,status,created_at,package_name,initiated_by_admin_id,referring_admin_id)
-      SELECT ?,?,?,?,'UGX',?,?,?,'pending',?,?,?,referring_admin_id FROM artists WHERE id=?
-    `).bind(id, artist.user_id, artist.id, amount, provider, phone, reference, now, packageCode, admin.id, artist.id).run();
-
-    let response, result;
-    try {
-      response = await fetch(`${baseUrl}/payments`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey },
-        body: JSON.stringify({ type: 'COLLECTION', amount, currency: 'UGX', phoneNumber: phone, provider, reference,
-          description: `NileSoniQ artist package upgrade - ${artist.name || 'Artist'} - initiated by admin`.slice(0,250),
-          idempotencyKey: `nilesoniq-${reference}` })
-      });
-      result = await response.json().catch(() => ({}));
-    } catch (e) {
-      console.error('Admin-assisted package request outcome uncertain:', e.message);
-      return error('PesaJet did not return a response. The request is kept pending; check its status before trying again.', 502);
-    }
-    const data = result?.data && typeof result.data === 'object' ? result.data : {};
-    const transaction = result?.transaction && typeof result.transaction === 'object' ? result.transaction : (data?.transaction && typeof data.transaction === 'object' ? data.transaction : data);
-    const statusCandidates = [transaction?.status, transaction?.transactionStatus, transaction?.paymentStatus, transaction?.state,
-      data?.status, data?.transactionStatus, data?.paymentStatus, data?.state, result?.status, result?.transactionStatus, result?.paymentStatus, result?.state]
-      .filter(Boolean).map(v => String(v).trim().toUpperCase().replace(/[\s-]+/g, '_'));
-    const providerId = String(transaction?.transactionId || transaction?.transaction_id || data?.transactionId || data?.transaction_id || result?.transactionId || result?.transaction_id || '');
-    const messages = [result?.message, result?.description, result?.detail, result?.reason,
-      typeof result?.error === 'string' ? result.error : result?.error?.message || result?.error?.description,
-      data?.message, data?.description, data?.detail, data?.reason,
-      typeof data?.error === 'string' ? data.error : data?.error?.message,
-      transaction?.message, transaction?.description, transaction?.detail, transaction?.reason, ...statusCandidates]
-      .filter(v => v !== undefined && v !== null && String(v).trim()).map(v => String(v).trim());
-    const providerMessage = messages.join(' | ');
-    const failureStatuses = ['FAILED','FAILURE','ERROR','EXPIRED','REJECTED','DECLINED','CANCELLED','CANCELED','TIMED_OUT','TIMEOUT','TIME_OUT','INSUFFICIENT_BALANCE','INSUFFICIENT_FUNDS','AUTHORIZATION_FAILED','LIMIT_EXCEEDED'];
-    const failureText = /insufficient[ _-]*(balance|funds)|not enough (money|funds|balance)|low balance|balance too low|transaction limit|daily limit|limit exceeded|payment failed|payment declined|request rejected|authorization failed/i.test(providerMessage);
-    const explicitError = result?.success === false || data?.success === false || !!result?.error || !!data?.error || !!transaction?.error;
-    const rejected = !response.ok || explicitError || statusCandidates.some(s => failureStatuses.includes(s)) || failureText;
-    if (rejected) {
-      const message = premiumPaymentFailureMessage(providerMessage || 'PesaJet rejected the payment request');
-      const definitive = (response.status >= 400 && response.status < 500) || explicitError || statusCandidates.some(s => failureStatuses.includes(s)) || failureText;
-      if (definitive) await env.DB.prepare("UPDATE premium_subscriptions SET status='failed',provider_transaction_id=?,failure_message=? WHERE reference=? AND lower(status)='pending'").bind(providerId, message, reference).run();
-      return error(message, response.status >= 400 && response.status < 500 ? response.status : 502);
-    }
-    if (statusCandidates.length && !statusCandidates.some(s => ['PENDING','PROCESSING','INITIATED','ACCEPTED','IN_PROGRESS'].includes(s)) && !isSuccessfulPaymentStatus(statusCandidates[0])) {
-      const message = premiumPaymentFailureMessage(providerMessage || statusCandidates[0]);
-      await env.DB.prepare("UPDATE premium_subscriptions SET status='failed',provider_transaction_id=?,failure_message=? WHERE reference=? AND lower(status)='pending'").bind(providerId,message,reference).run();
-      return error(message, 502);
-    }
-    await env.DB.prepare("UPDATE premium_subscriptions SET provider_transaction_id=? WHERE reference=? AND status='pending'").bind(providerId, reference).run();
-    await env.DB.prepare(`INSERT INTO admin_audit_log(id,actor_admin_id,target_admin_id,action,details_json) VALUES(?,?,?,'assisted_upgrade_started',?)`)
-      .bind(crypto.randomUUID(), admin.id, admin.id, JSON.stringify({artist_id:artist.id,package_code:packageCode,reference,amount,provider})).run();
-    return json({success:true,status:'PENDING',reference,message:`PesaJet accepted the UGX ${amount.toLocaleString('en-US')} ${packageCode.replace('_',' ')} payment request for ${artist.name || 'the artist'}. Approve the mobile-money prompt; the package and the referring admin’s 20% commission update only after verified provider confirmation.`});
+    const assistedHeaders = new Headers(request.headers);
+    assistedHeaders.delete("content-length");
+    assistedHeaders.set("content-type", "application/json");
+    const assistedRequest = new Request(request.url, {
+      method: "POST",
+      headers: assistedHeaders,
+      body: JSON.stringify({ ...body, assisted_admin_id: admin.id })
+    });
+    return premiumSubscriptionRoute(assistedRequest, env);
   }
   if (request.method === 'POST' && path === '/api/admin/referrals/withdrawals') {
     const body=await readBody(request), amount=Number(body.amount), phone=normalizeUgandanPhone(body.phone_number||body.phoneNumber), provider=String(body.provider||'').toLowerCase();
@@ -1193,7 +1143,24 @@ async function dbRoute(request, env, path) {
   const method = request.method;
   const url = new URL(request.url);
   const user = await currentUser(request, env);
-  const admin = user ? await isAdmin(env, user) : false;
+  const admin = user ? await getAdmin(env, user) : null;
+  const isAdmin = Boolean(admin);
+  const adminLevel = admin ? (ADMIN_RANK_LEVEL[adminRankOf(admin)] || 0) : 0;
+  if (admin && table === "news" && method !== "GET" && adminLevel < ADMIN_RANK_LEVEL.senior_admin) {
+    return error("Senior Admin rank or higher is required to manage news.", 403);
+  }
+  if (admin && table === "copyright_removals" && adminLevel < ADMIN_RANK_LEVEL.senior_admin) {
+    return error("Senior Admin rank or higher is required for copyright-removal records.", 403);
+  }
+  if (admin && table === "admins" && adminLevel < ADMIN_RANK_LEVEL.super_admin) {
+    return error("Only Super Admin can access administrator records.", 403);
+  }
+  if (admin && ["platform_wallet","platform_deposits","platform_payouts"].includes(table) && adminLevel < ADMIN_RANK_LEVEL.super_admin) {
+    return error("Only Super Admin can access platform financial records.", 403);
+  }
+  if (admin && ["withdrawal_requests","withdrawals","artist_wallets","artist_payouts"].includes(table) && adminLevel < ADMIN_RANK_LEVEL.admin_manager) {
+    return error("Admin Manager rank or higher is required for artist withdrawal operations.", 403);
+  }
 
   const artistFinancialRead =
     ARTIST_OWNED_FINANCIAL_TABLES.has(table) &&
@@ -1204,11 +1171,11 @@ async function dbRoute(request, env, path) {
     table === "withdrawal_requests" &&
     method === "POST" &&
     Boolean(user) &&
-    !admin;
+    !isAdmin;
 
   if (
     ADMIN_TABLES.has(table) &&
-    !admin &&
+    !isAdmin &&
     !artistFinancialRead &&
     !artistWithdrawalCreate
   ) {
@@ -1233,7 +1200,7 @@ async function dbRoute(request, env, path) {
     let { sql: where, values } = parseFilters(url);
 
     // Financial rows must always be scoped to the signed-in user.
-    if (!admin && artistFinancialRead) {
+    if (!isAdmin && artistFinancialRead) {
       const ownerColumn =
         table === "artist_wallets" ||
         table === "artist_payouts"
@@ -1253,12 +1220,12 @@ async function dbRoute(request, env, path) {
 
     // Published news is the only news content available to ordinary visitors.
     // Admins retain access to drafts for editorial management.
-    if (table === "news" && !admin) {
+    if (table === "news" && !isAdmin) {
       where = appendCondition(where, "published = 1");
     }
 
     // Non-admin users may read approved songs and their own submissions.
-    if (table === "songs" && !admin) {
+    if (table === "songs" && !isAdmin) {
       if (user) {
         where = appendCondition(
           where,
@@ -1270,7 +1237,7 @@ async function dbRoute(request, env, path) {
       }
     }
 
-    const publicArtistRead = table === "artists" && !admin;
+    const publicArtistRead = table === "artists" && !isAdmin;
 
     // Public artist reads may expose only these explicitly approved fields.
     // This applies even when a caller supplies a custom `select` parameter.
@@ -1290,7 +1257,7 @@ async function dbRoute(request, env, path) {
 
     // Copyright takedowns are soft removals: keep the records for audit,
     // but never expose removed songs or artist profiles to ordinary users.
-    if (table === "songs" && !admin) {
+    if (table === "songs" && !isAdmin) {
       where = appendCondition(
         where,
         "NOT EXISTS (SELECT 1 FROM copyright_removals cr WHERE cr.content_type = 'song' AND cr.content_id = songs.id)"
@@ -1336,7 +1303,7 @@ async function dbRoute(request, env, path) {
       const result = await env.DB.prepare(query).bind(...values).all();
       let rows = result.results || [];
 
-      if (!admin) {
+      if (!isAdmin) {
         rows = redactSensitiveColumns(rows);
       }
 
@@ -1369,7 +1336,7 @@ async function dbRoute(request, env, path) {
     !INTERACTION_TABLES.has(table) &&
     table !== "artists" &&
     table !== "songs" &&
-    !admin &&
+    !isAdmin &&
     !artistWithdrawalCreate
   ) {
     return error(
@@ -1394,7 +1361,7 @@ async function dbRoute(request, env, path) {
   try {
     if (method === "POST") {
       const body = await readBody(request);
-      if (table === "withdrawal_requests" && !admin) {
+      if (table === "withdrawal_requests" && !isAdmin) {
         withdrawalDiagnosticStage = "reading withdrawal request";
       }
       const rows = Array.isArray(body) ? body : [body];
@@ -1431,7 +1398,7 @@ async function dbRoute(request, env, path) {
         }
 
         // Never trust a client-supplied author ID or moderation fields.
-        if (INTERACTION_TABLES.has(table) && !admin) {
+        if (INTERACTION_TABLES.has(table) && !isAdmin) {
           const serverControlledFields = new Set([
             "approved", "is_approved", "moderation_status", "moderated_by",
             "is_admin", "role", "status", "deleted_at", "is_deleted",
@@ -1514,7 +1481,7 @@ async function dbRoute(request, env, path) {
           continue;
         }
 
-        if (!admin && table === "songs") {
+        if (!isAdmin && table === "songs") {
           if (row.artist_id !== user.id) {
             return error(
               "You may only submit songs for your own account",
@@ -1671,7 +1638,7 @@ async function dbRoute(request, env, path) {
           continue;
         }
 
-        if (table === "withdrawal_requests" && !admin) {
+        if (table === "withdrawal_requests" && !isAdmin) {
           // Force ownership server-side, regardless of client input.
           row.artist_id = user.id;
 
@@ -1821,7 +1788,7 @@ async function dbRoute(request, env, path) {
 
         if (
           ARTIST_OWNED_FINANCIAL_TABLES.has(table) &&
-          !admin
+          !isAdmin
         ) {
           return error(
             "Admin access required for this operation",
@@ -1829,7 +1796,7 @@ async function dbRoute(request, env, path) {
           );
         }
 
-        if (!admin && !INTERACTION_TABLES.has(table)) {
+        if (!isAdmin && !INTERACTION_TABLES.has(table)) {
           return error(
             "Admin access required for this operation",
             403
@@ -1863,7 +1830,7 @@ async function dbRoute(request, env, path) {
     }
 
     if (method === "PATCH" || method === "PUT") {
-      if (!admin) {
+      if (!isAdmin) {
         return error("Admin access required", 403);
       }
 
@@ -1932,7 +1899,7 @@ async function dbRoute(request, env, path) {
     }
 
     if (method === "DELETE") {
-      if (!admin) {
+      if (!isAdmin) {
         return error("Admin access required", 403);
       }
 
@@ -1946,7 +1913,7 @@ async function dbRoute(request, env, path) {
     return error("Method not allowed", 405);
   } catch (e) {
     console.error("Database write failed:", e.message);
-    if (table === "withdrawal_requests" && method === "POST" && !admin) {
+    if (table === "withdrawal_requests" && method === "POST" && !isAdmin) {
       const detail = String(e?.message || e || "Unknown error").replace(/[\\r\\n]+/g, " ").slice(0, 220);
       console.error("Artist withdrawal diagnostic:", withdrawalDiagnosticStage, detail);
       return error(`Withdrawal diagnostic at ${withdrawalDiagnosticStage}: ${detail}`, 500);
@@ -1957,8 +1924,8 @@ async function dbRoute(request, env, path) {
 
 async function removeCopyrightContent(env, user, body) {
   const admin = user ? await getAdmin(env, user) : null;
-  if (!admin || admin.role !== "super_admin") {
-    return error("Super Admin access required", 403);
+  if (!admin || !adminHasRank(admin, "senior_admin")) {
+    return error("Senior Admin rank or higher is required for copyright removal.", 403);
   }
 
   const contentType = String(body.content_type || "").trim().toLowerCase();
@@ -2074,11 +2041,13 @@ async function adminRoute(request, env, path) {
     return error("Admin access required", 403);
   }
 
-  const superAdmin = admin.role === "super_admin" || admin.rank === "super_admin";
+  const superAdmin = adminRankOf(admin) === "super_admin";
+  const seniorAdmin = adminHasRank(admin, "senior_admin");
+  const managerAdmin = adminHasRank(admin, "admin_manager");
   const url = new URL(request.url);
 
   if (path === "/api/admin/ads") {
-    if (!superAdmin) return error("Super Admin access required", 403);
+    if (!managerAdmin) return error("Admin Manager rank or higher is required to manage advertisements.", 403);
     try {
       await env.DB.prepare(`CREATE TABLE IF NOT EXISTS homepage_ads (id TEXT PRIMARY KEY, title TEXT NOT NULL, space_id INTEGER NOT NULL CHECK(space_id IN (1,2)), target_url TEXT, image_url TEXT NOT NULL, fit_mode TEXT NOT NULL DEFAULT 'contain', active INTEGER NOT NULL DEFAULT 1, sort_order INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')))`).run();
       if (request.method === "GET") { const rows=await env.DB.prepare("SELECT * FROM homepage_ads ORDER BY space_id, sort_order, datetime(created_at)").all(); return json({data:rows.results||[],error:null}); }
@@ -2129,10 +2098,12 @@ async function adminRoute(request, env, path) {
 
   const artistPayoutMatch = path.match(/^\/api\/admin\/withdrawals\/([^/]+)\/pay$/);
   if (request.method === "POST" && artistPayoutMatch) {
+    if (!managerAdmin) return error("Admin Manager rank or higher is required to pay artist withdrawals.", 403);
     return artistWithdrawalPayoutRoute(env, path);
   }
 
   if (request.method === "GET" && path === "/api/admin/withdrawals") {
+    if (!managerAdmin) return error("Admin Manager rank or higher is required to review artist withdrawals.", 403);
     try {
       await ensureArtistWithdrawalPayoutColumns(env);
       const result = await env.DB.prepare(`
@@ -2160,7 +2131,7 @@ async function adminRoute(request, env, path) {
   }
 
   if (request.method === "GET" && path === "/api/admin/analytics") {
-    if (!superAdmin) return error("Super Admin access required", 403);
+    if (!managerAdmin) return error("Admin Manager rank or higher is required for operational analytics.", 403);
     try {
       const [songResult, artistResult] = await Promise.all([
         env.DB.prepare(`
@@ -2382,7 +2353,7 @@ async function adminRoute(request, env, path) {
   }
 
   if (request.method === "GET" && path === "/api/admin/copyright-removal-artists") {
-    if (!superAdmin) return error("Super Admin access required", 403);
+    if (!seniorAdmin) return error("Senior Admin rank or higher is required for copyright removal.", 403);
     try {
       const result = await env.DB.prepare(`
         SELECT id, user_id, name
@@ -2398,7 +2369,7 @@ async function adminRoute(request, env, path) {
   }
 
   if (request.method === "GET" && path === "/api/admin/copyright-removal-songs") {
-    if (!superAdmin) return error("Super Admin access required", 403);
+    if (!seniorAdmin) return error("Senior Admin rank or higher is required for copyright removal.", 403);
     const artistId = String(url.searchParams.get("artist_id") || "").trim();
     if (!artistId) return error("Choose an artist first", 422);
     try {
@@ -2430,8 +2401,8 @@ async function adminRoute(request, env, path) {
   }
 
   if (request.method === "GET" && path === "/api/admin/copyright-removals") {
-    if (!superAdmin) {
-      return error("Super Admin access required", 403);
+    if (!seniorAdmin) {
+      return error("Senior Admin rank or higher is required for copyright removal.", 403);
     }
 
     try {
@@ -2450,11 +2421,13 @@ async function adminRoute(request, env, path) {
   }
 
   if (request.method === "POST" && path === "/api/admin/copyright-removals") {
+    if (!seniorAdmin) return error("Senior Admin rank or higher is required for copyright removal.", 403);
     const body = await readBody(request);
     return removeCopyrightContent(env, user, body);
   }
 
   if (request.method === "GET" && path === "/api/admin/songs") {
+    if (!adminHasRank(admin, "admin")) return error("Admin rank or higher is required to review songs.", 403);
     try {
       const status = url.searchParams.get("status") || "pending";
       let result;
@@ -2500,6 +2473,7 @@ async function adminRoute(request, env, path) {
     path.startsWith("/api/admin/songs/") &&
     path.endsWith("/review")
   ) {
+    if (!adminHasRank(admin, "admin")) return error("Admin rank or higher is required to review songs.", 403);
     const prefix = "/api/admin/songs/";
 
     const songId = decodeURIComponent(
@@ -3935,12 +3909,23 @@ async function premiumSubscriptionRoute(request, env) {
   }
 
   if (request.method !== "POST") return error("Method not allowed", 405);
-  const artist = await env.DB.prepare(
-    "SELECT id FROM artists WHERE user_id = ? LIMIT 1"
-  ).bind(user.id).first();
+  const body = await readBody(request);
+  let artist;
+  let assistingAdmin = null;
+  const assistedAdminId = String(body.assisted_admin_id || "").trim();
+  if (assistedAdminId) {
+    assistingAdmin = await getAdmin(env, user);
+    if (!assistingAdmin || String(assistingAdmin.id) !== assistedAdminId) {
+      return error("Administrator session could not be verified for this assisted payment.", 403);
+    }
+    const artistId = String(body.artist_id || "").trim();
+    if (!artistId) return error("Choose an existing artist first.", 422);
+    artist = await env.DB.prepare("SELECT id,user_id,name FROM artists WHERE id=? LIMIT 1").bind(artistId).first();
+  } else {
+    artist = await env.DB.prepare("SELECT id,user_id,name FROM artists WHERE user_id=? LIMIT 1").bind(user.id).first();
+  }
   if (!artist) return error("NileSoniQ Premium is available to artist accounts only", 403);
 
-  const body = await readBody(request);
   const packageCode = String(body.package_code || body.packageCode || 'premium').trim().toLowerCase();
   const packagePrices = { premium: 5000, hustler: 10000, hit_maker: 20000, star: 30000 };
   const packageAmount = packagePrices[packageCode];
@@ -3957,16 +3942,16 @@ async function premiumSubscriptionRoute(request, env) {
   // Use a shorter unique reference for Airtel to reduce possible downstream
   // reference truncation/collision. Keep MTN's existing reference format unchanged.
   const reference = `NILESONIQ-PREMIUM-${paymentReferenceName(artist.name)}-${crypto.randomUUID().replace(/-/g, "").slice(0, 16).toUpperCase()}`;
-  const riskCheck = await checkPesaJetCollectionRisk(request, env, phone, user.id, reference);
+  const riskCheck = await checkPesaJetCollectionRisk(request, env, phone, artist.user_id || user.id, reference);
   if (riskCheck.blocked) return error(riskCheck.message, 429);
-  const description = `NileSoniQ Premium Upgrade - ${artist.name || "Artist"}`.slice(0, 250);
+  const description = `NileSoniQ ${assistingAdmin ? "assisted artist package upgrade" : "Premium Upgrade"} - ${artist.name || "Artist"}`.slice(0, 250);
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
   await env.DB.prepare(`
     INSERT INTO premium_subscriptions
-      (id,user_id,artist_id,amount,currency,provider,phone_number,reference,status,created_at,package_name,referring_admin_id)
-    SELECT ?,?,?,?,'UGX',?,?,?,'pending',?,?,referring_admin_id FROM artists WHERE id=?
-  `).bind(id,user.id,artist.id,packageAmount,provider,phone,reference,now,packageCode,artist.id).run();
+      (id,user_id,artist_id,amount,currency,provider,phone_number,reference,status,created_at,package_name,initiated_by_admin_id,referring_admin_id)
+    SELECT ?,?,?,?,'UGX',?,?,?,'pending',?,?,?,referring_admin_id FROM artists WHERE id=?
+  `).bind(id,artist.user_id || user.id,artist.id,packageAmount,provider,phone,reference,now,packageCode,assistingAdmin?.id || null,artist.id).run();
 
   let response, result;
   try {
@@ -4032,11 +4017,15 @@ async function premiumSubscriptionRoute(request, env) {
   }
 
   await env.DB.prepare("UPDATE premium_subscriptions SET provider_transaction_id=? WHERE reference=? AND status='pending'").bind(providerId,reference).run();
+  if (assistingAdmin) {
+    await env.DB.prepare(`INSERT INTO admin_audit_log(id,actor_admin_id,target_admin_id,action,details_json) VALUES(?,?,?,'assisted_upgrade_started',?)`)
+      .bind(crypto.randomUUID(), assistingAdmin.id, assistingAdmin.id, JSON.stringify({artist_id:artist.id,package_code:packageCode,reference,amount:packageAmount,provider})).run();
+  }
   return json({
     success: true,
     status: "PENDING",
     reference,
-    message: `Your UGX ${packageAmount.toLocaleString('en-US')} ${packageCode.replace('_',' ')} payment request was accepted. Approve the mobile-money prompt on your phone; activation waits for provider confirmation.`
+    message: `${assistingAdmin ? "PesaJet accepted the assisted " : "Your "}UGX ${packageAmount.toLocaleString('en-US')} ${packageCode.replace('_',' ')} payment request for ${artist.name || "the artist"}. Approve the mobile-money prompt; activation waits for provider confirmation.`
   });
 }
 
