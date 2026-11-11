@@ -3396,7 +3396,18 @@ class="table-wrap">
   <div class="table-wrap"><table><thead><tr><th>Date</th><th>Amount</th><th>Network</th><th>Status</th><th>Review</th></tr></thead><tbody id="adminReferralWithdrawals"></tbody></table></div>
     <h3 style="margin-top:24px">Assisted Existing-Artist Upgrade</h3>
     <p style="color:#999;font-size:13px">Send a package payment prompt to an existing artist. The artist must approve the mobile-money prompt; commission is credited only after PesaJet confirms payment.</p>
-    <div class="form-grid"><div class="field"><label>Artist profile ID</label><input id="adminAssistedArtistId" placeholder="Artist ID"></div><div class="field"><label>Paid package</label><select id="adminAssistedPackage"><option value="premium">Premium — UGX 5,000</option><option value="hustler">Hustler — UGX 10,000</option><option value="hit_maker">Hit Maker — UGX 20,000</option><option value="star">Star — UGX 30,000</option></select></div><div class="field"><label>Artist mobile number</label><input id="adminAssistedPhone" placeholder="077xxxxxxx"></div><div class="field"><label>Network</label><select id="adminAssistedProvider"><option value="mtn">MTN</option><option value="airtel">Airtel</option></select></div></div>
+    <div class="form-grid">
+      <div class="field" style="position:relative">
+        <label for="adminAssistedArtistSearch">Search artist by name</label>
+        <input id="adminAssistedArtistSearch" type="search" autocomplete="off" placeholder="Type at least 2 letters of the artist name" oninput="searchAdminAssistedArtists()" onfocus="searchAdminAssistedArtists()">
+        <input id="adminAssistedArtistId" type="hidden">
+        <div id="adminAssistedArtistResults" class="hidden" style="position:absolute;z-index:50;left:0;right:0;top:100%;max-height:240px;overflow:auto;background:#171717;border:1px solid #555;border-radius:8px"></div>
+        <small id="adminAssistedArtistSelected" style="display:block;margin-top:6px;color:#8fd18f">No artist selected</small>
+      </div>
+      <div class="field"><label>Paid package</label><select id="adminAssistedPackage"><option value="premium">Premium — UGX 5,000</option><option value="hustler">Hustler — UGX 10,000</option><option value="hit_maker">Hit Maker — UGX 20,000</option><option value="star">Star — UGX 30,000</option></select></div>
+      <div class="field"><label>Artist mobile number</label><input id="adminAssistedPhone" type="tel" placeholder="077xxxxxxx"></div>
+      <div class="field"><label>Network</label><select id="adminAssistedProvider"><option value="mtn">MTN</option><option value="airtel">Airtel</option></select></div>
+    </div>
     <button class="btn btn-orange" onclick="startAdminAssistedUpgrade()">Send Artist Payment Prompt</button>
   <div id="adminReferralSuperPanel" class="hidden">
     <h3 style="margin-top:28px">Super Admin — Administrator Management</h3>
@@ -11839,7 +11850,29 @@ async function requestAdminReferralWithdrawal(){try{await adminReferralPost('/ap
 async function reviewAdminReferralWithdrawal(id,action){const note=prompt('Optional review note:')||'';if(!confirm(`${action==='approve'?'Approve':'Reject'} this admin withdrawal?`))return;try{await adminReferralPost(`/api/admin/referrals/withdrawals/${encodeURIComponent(id)}/review`,{action,note});await loadAdminReferralDashboard();}catch(e){alert(e.message);}}
 async function saveAdminRank(id){try{const rank=document.getElementById(`rank-${id}`).value;await adminReferralPost('/api/admin/referrals/rank',{admin_id:id,rank});await loadAdminReferralDashboard();}catch(e){alert(e.message);}}
 async function toggleAdminSuspension(id,active){if(!confirm(active?'Suspend this administrator?':'Reactivate this administrator?'))return;try{await adminReferralPost('/api/admin/referrals/suspend',{admin_id:id,suspended:!!active});await loadAdminReferralDashboard();}catch(e){alert(e.message);}}
-async function startAdminAssistedUpgrade(){try{const d=await adminReferralPost('/api/admin/referrals/upgrade',{artist_id:document.getElementById('adminAssistedArtistId').value,package_code:document.getElementById('adminAssistedPackage').value,phone_number:document.getElementById('adminAssistedPhone').value,provider:document.getElementById('adminAssistedProvider').value});alert(d.message||'Payment prompt sent.');}catch(e){alert(e.message);}}
+let adminAssistedSearchTimer=null;
+async function searchAdminAssistedArtists(){
+  const input=document.getElementById('adminAssistedArtistSearch'), box=document.getElementById('adminAssistedArtistResults'), hidden=document.getElementById('adminAssistedArtistId'), selected=document.getElementById('adminAssistedArtistSelected');
+  const term=String(input?.value||'').trim();
+  if(hidden)hidden.value=''; if(selected)selected.textContent='Select an artist from the search results';
+  if(!box)return; box.classList.remove('hidden');
+  if(term.length<2){box.innerHTML='<div style="padding:10px;color:#aaa">Type at least 2 letters to search.</div>';return;}
+  box.innerHTML='<div style="padding:10px;color:#aaa">Searching artists…</div>';
+  if(adminAssistedSearchTimer)clearTimeout(adminAssistedSearchTimer);
+  adminAssistedSearchTimer=setTimeout(async()=>{
+    try{
+      const r=await fetch('/api/admin/referrals/artists?q='+encodeURIComponent(term),{credentials:'include',cache:'no-store'}),d=await r.json();
+      if(!r.ok)throw new Error(d.error||'Could not search artists');
+      const rows=Array.isArray(d.data)?d.data:[];
+      if(!rows.length){box.innerHTML='<div style="padding:10px;color:#aaa">No matching artists found.</div>';return;}
+      box.innerHTML=rows.map(a=>`<button type="button" class="admin-assisted-artist-option" data-id="${escapeHtml(a.id)}" data-name="${escapeHtml(a.name||'Unnamed artist')}" style="display:block;width:100%;text-align:left;padding:11px;background:transparent;color:#fff;border:0;border-bottom:1px solid #333;cursor:pointer"><strong>${escapeHtml(a.name||'Unnamed artist')}</strong><small style="display:block;color:#aaa">${escapeHtml(a.location||'Location not set')} · ${escapeHtml(a.package_name||'free')} package</small></button>`).join('');
+      box.querySelectorAll('.admin-assisted-artist-option').forEach(button=>button.addEventListener('click',()=>{
+        hidden.value=button.dataset.id;input.value=button.dataset.name;selected.textContent='Selected: '+button.dataset.name;box.classList.add('hidden');
+      }));
+    }catch(e){box.innerHTML='<div style="padding:10px;color:#ff9b9b">'+escapeHtml(e.message)+'</div>';}
+  },250);
+}
+async function startAdminAssistedUpgrade(){try{const artistId=document.getElementById('adminAssistedArtistId').value;if(!artistId)throw new Error('Search for an artist and select them from the results first.');const d=await adminReferralPost('/api/admin/referrals/upgrade',{artist_id:artistId,package_code:document.getElementById('adminAssistedPackage').value,phone_number:document.getElementById('adminAssistedPhone').value,provider:document.getElementById('adminAssistedProvider').value});alert(d.message||'Payment prompt sent.');}catch(e){alert(e.message);}}
 async function assignAdminReferralOwner(){try{await adminReferralPost('/api/admin/referrals/assign',{artist_id:document.getElementById('adminAssignArtistId').value,admin_id:document.getElementById('adminAssignAdminId').value});alert('Referral owner assigned.');await loadAdminReferralDashboard();}catch(e){alert(e.message);}}
 
 </script>
