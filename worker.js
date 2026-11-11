@@ -197,17 +197,25 @@ async function adminReferralRoute(request, env, path) {
   const superAdmin = admin.role === 'super_admin';
   const url = new URL(request.url);
   if (request.method === 'GET' && path === '/api/admin/referrals/artists') {
+    // Return a short starter list when the search box is opened, then filter
+    // as the administrator types. Escape SQL LIKE wildcard characters.
     const term = String(url.searchParams.get('q') || '').trim().replace(/[\\%_]/g, '');
-    if (term.length < 2) return json({ data: [] });
-    const like = `%${term}%`;
-    const matches = await env.DB.prepare(`
-      SELECT id, name, location, package_name
-      FROM artists
-      WHERE name IS NOT NULL AND trim(name) <> ''
-        AND lower(name) LIKE lower(?)
-      ORDER BY CASE WHEN lower(name)=lower(?) THEN 0 ELSE 1 END, name COLLATE NOCASE
-      LIMIT 20
-    `).bind(like, term).all();
+    const matches = term
+      ? await env.DB.prepare(`
+          SELECT id, name, location, package_name
+          FROM artists
+          WHERE name IS NOT NULL AND trim(name) <> ''
+            AND lower(name) LIKE lower(?)
+          ORDER BY CASE WHEN lower(name)=lower(?) THEN 0 ELSE 1 END, name COLLATE NOCASE
+          LIMIT 30
+        `).bind(`%${term}%`, term).all()
+      : await env.DB.prepare(`
+          SELECT id, name, location, package_name
+          FROM artists
+          WHERE name IS NOT NULL AND trim(name) <> ''
+          ORDER BY name COLLATE NOCASE
+          LIMIT 30
+        `).all();
     return json({ data: matches.results || [] });
   }
   if (request.method === 'GET' && path === '/api/admin/referrals') {
@@ -289,7 +297,7 @@ async function adminReferralRoute(request, env, path) {
     if(!ADMIN_RANKS.includes(rank)) return error('Invalid admin rank.',422);
     const target=await env.DB.prepare('SELECT id,role,rank FROM admins WHERE id=?').bind(targetId).first();
     if(!target) return error('Administrator not found.',404);
-    if(target.role==='super_admin' && target.id!==admin.id) return error('Super Admin rank can only be changed by that Super Admin.',403);
+    if(target.id===admin.id) return error('You cannot change your own administrator rank.',403);
     const role=rank==='super_admin'?'super_admin':'admin';
     await env.DB.prepare('UPDATE admins SET rank=?,role=? WHERE id=?').bind(rank,role,targetId).run();
     await env.DB.prepare('INSERT INTO admin_audit_log(id,actor_admin_id,target_admin_id,action,details_json) VALUES(?,?,? ,'rank_changed',?)').bind(crypto.randomUUID(),admin.id,targetId,JSON.stringify({from:target.rank,to:rank})).run();
@@ -431,7 +439,7 @@ async function getAdmin(env, user) {
   if (!user) return null;
 
   return env.DB.prepare(`
-    SELECT id, user_id, email, role, active
+    SELECT id, user_id, email, role, rank, active
     FROM admins
     WHERE user_id = ? AND active = 1
     LIMIT 1
@@ -2137,7 +2145,7 @@ async function adminRoute(request, env, path) {
 
     try {
       const result = await env.DB.prepare(`
-        SELECT id, user_id, email, role, active, created_at
+        SELECT id, user_id, email, role, rank, active, created_at
         FROM admins
         ORDER BY created_at DESC
       `).all();
