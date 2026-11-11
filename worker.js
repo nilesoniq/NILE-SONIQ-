@@ -304,34 +304,33 @@ async function adminReferralRoute(request, env, path) {
   if(request.method==='POST' && path==='/api/admin/referrals/rank'){
     if(!superAdmin) return error('Only Super Admin can change admin ranks.',403);
     const body=await readBody(request);
-    const targetKey=String(body.admin_id || body.user_id || body.email || '').trim();
-    const rank=String(body.rank || '').trim().toLowerCase();
-    if(!targetKey) return error('Choose an administrator first.',422);
+    const adminId=String(body.admin_id||'').trim();
+    const userId=String(body.user_id||'').trim();
+    const email=String(body.email||'').trim().toLowerCase();
+    const rank=String(body.rank||'').trim().toLowerCase();
+    if(!adminId&&!userId&&!email) return error('Choose an administrator first.',422);
     if(!ADMIN_RANKS.includes(rank)) return error('Invalid administrator type.',422);
-
-    // Accept the admin record ID, linked auth user ID, or email. The UI has
-    // existed in two versions and they did not always pass the same identifier.
     const target=await env.DB.prepare(`
       SELECT id,user_id,email,role,rank
       FROM admins
-      WHERE CAST(id AS TEXT)=?
-         OR CAST(user_id AS TEXT)=?
-         OR lower(trim(email))=lower(trim(?))
+      WHERE (?<>'' AND CAST(id AS TEXT)=?)
+         OR (?<>'' AND CAST(user_id AS TEXT)=?)
+         OR (?<>'' AND lower(trim(email))=?)
       LIMIT 1
-    `).bind(targetKey,targetKey,targetKey).first();
+    `).bind(adminId,adminId,userId,userId,email,email).first();
     if(!target) return error('Administrator not found. Refresh the administrator list and try again.',404);
-    if(String(target.user_id)===String(user.id) || String(target.id)===String(admin.id)) {
+    if(String(target.user_id)===String(user.id)||String(target.id)===String(admin.id)){
       return error('You cannot change your own administrator rank.',403);
     }
-    const previousRank=target.rank || (target.role==='super_admin'?'super_admin':'admin');
+    const previousRank=target.rank||(target.role==='super_admin'?'super_admin':'admin');
     const role=rank==='super_admin'?'super_admin':'admin';
     const update=await env.DB.prepare('UPDATE admins SET rank=?,role=? WHERE id=?').bind(rank,role,target.id).run();
-    if(Number(update?.meta?.changes || 0)!==1) return error('The administrator rank was not changed. Please refresh and try again.',409);
+    if(Number(update?.meta?.changes||0)!==1) return error('The administrator rank and role were not changed. Please refresh and try again.',409);
     await env.DB.prepare(`
       INSERT INTO admin_audit_log(id,actor_admin_id,target_admin_id,action,details_json)
       VALUES(?,?,?,'rank_changed',?)
-    `).bind(crypto.randomUUID(),admin.id,target.id,JSON.stringify({from:previousRank,to:rank,identifier:targetKey})).run();
-    return json({success:true,admin_id:target.id,user_id:target.user_id,rank,role});
+    `).bind(crypto.randomUUID(),admin.id,target.id,JSON.stringify({from:previousRank,to:rank,role,admin_id:adminId||null,user_id:userId||null,email:email||null})).run();
+    return json({success:true,admin_id:target.id,user_id:target.user_id,email:target.email,rank,role});
   }
   if(request.method==='POST' && path==='/api/admin/referrals/assign'){
     if(!superAdmin) return error('Only Super Admin can assign referral ownership.',403);
@@ -482,7 +481,7 @@ async function isAdmin(env, user) {
 
 async function isSuperAdmin(env, user) {
   const admin = await getAdmin(env, user);
-  return Boolean(admin && admin.role === "super_admin");
+  return Boolean(admin && (admin.role === "super_admin" || admin.rank === "super_admin"));
 }
 
 async function createSession(env, userId) {
