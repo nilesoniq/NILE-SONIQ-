@@ -197,26 +197,36 @@ async function adminReferralRoute(request, env, path) {
   const superAdmin = admin.role === 'super_admin';
   const url = new URL(request.url);
   if (request.method === 'GET' && path === '/api/admin/referrals/artists') {
-    // Return a short starter list when the search box is opened, then filter
-    // as the administrator types. Escape SQL LIKE wildcard characters.
-    const term = String(url.searchParams.get('q') || '').trim().replace(/[\\%_]/g, '');
-    const matches = term
-      ? await env.DB.prepare(`
-          SELECT id, name, location, package_name
-          FROM artists
-          WHERE name IS NOT NULL AND trim(name) <> ''
-            AND lower(name) LIKE lower(?)
-          ORDER BY CASE WHEN lower(name)=lower(?) THEN 0 ELSE 1 END, name COLLATE NOCASE
-          LIMIT 30
-        `).bind(`%${term}%`, term).all()
-      : await env.DB.prepare(`
-          SELECT id, name, location, package_name
-          FROM artists
-          WHERE name IS NOT NULL AND trim(name) <> ''
-          ORDER BY name COLLATE NOCASE
-          LIMIT 30
-        `).all();
-    return json({ data: matches.results || [] });
+    // Keep the response deliberately simple and provide aliases for older UI builds.
+    // instr() avoids LIKE wildcard escaping problems with artist names.
+    const term = String(url.searchParams.get('q') || url.searchParams.get('search') || url.searchParams.get('name') || '').trim();
+    let matches;
+    if (term) {
+      matches = await env.DB.prepare(`
+        SELECT id, name, location, package_name
+        FROM artists
+        WHERE COALESCE(trim(name), '') <> ''
+          AND instr(lower(name), lower(?)) > 0
+        ORDER BY CASE WHEN lower(name)=lower(?) THEN 0 ELSE 1 END,
+                 name COLLATE NOCASE
+        LIMIT 100
+      `).bind(term, term).all();
+    } else {
+      matches = await env.DB.prepare(`
+        SELECT id, name, location, package_name
+        FROM artists
+        WHERE COALESCE(trim(name), '') <> ''
+        ORDER BY name COLLATE NOCASE
+        LIMIT 100
+      `).all();
+    }
+    const artists = (matches.results || []).map(row => ({
+      id: String(row.id),
+      name: String(row.name || 'Unnamed artist'),
+      location: row.location || '',
+      package_name: row.package_name || 'free'
+    }));
+    return json({ success: true, data: artists, artists, results: artists, count: artists.length });
   }
   if (request.method === 'GET' && path === '/api/admin/referrals') {
     await ensureAdminWallet(env,admin.id);
@@ -293,15 +303,33 @@ async function adminReferralRoute(request, env, path) {
   }
   if(request.method==='POST' && path==='/api/admin/referrals/rank'){
     if(!superAdmin) return error('Only Super Admin can change admin ranks.',403);
-    const body=await readBody(request), targetId=String(body.admin_id||''), rank=String(body.rank||'');
-    if(!ADMIN_RANKS.includes(rank)) return error('Invalid admin rank.',422);
-    const target=await env.DB.prepare('SELECT id,role,rank FROM admins WHERE id=?').bind(targetId).first();
-    if(!target) return error('Administrator not found.',404);
-    if(target.id===admin.id) return error('You cannot change your own administrator rank.',403);
+    const body=await readBody(request);
+    const targetKey=String(body.admin_id || body.user_id || body.email || '').trim();
+    const rank=String(body.rank || '').trim().toLowerCase();
+    if(!targetKey) return error('Choose an administrator first.',422);
+    if(!ADMIN_RANKS.includes(rank)) return error('Invalid administrator type.',422);
+
+    // Accept the admin record ID, linked auth user ID, or email. The UI has
+    // existed in two versions and they did not always pass the same identifier.
+    const target=await env.DB.prepare(`
+      SELECT id,user_id,email,role,rank
+      FROM admins
+      WHERE id=? OR user_id=? OR lower(email)=lower(?)
+      LIMIT 1
+    `).bind(targetKey,targetKey,targetKey).first();
+    if(!target) return error('Administrator not found. Refresh the administrator list and try again.',404);
+    if(String(target.user_id)===String(user.id) || String(target.id)===String(admin.id)) {
+      return error('You cannot change your own administrator rank.',403);
+    }
+    const previousRank=target.rank || (target.role==='super_admin'?'super_admin':'admin');
     const role=rank==='super_admin'?'super_admin':'admin';
-    await env.DB.prepare('UPDATE admins SET rank=?,role=? WHERE id=?').bind(rank,role,targetId).run();
-    await env.DB.prepare('INSERT INTO admin_audit_log(id,actor_admin_id,target_admin_id,action,details_json) VALUES(?,?,? ,'rank_changed',?)').bind(crypto.randomUUID(),admin.id,targetId,JSON.stringify({from:target.rank,to:rank})).run();
-    return json({success:true});
+    const update=await env.DB.prepare('UPDATE admins SET rank=?,role=? WHERE id=?').bind(rank,role,target.id).run();
+    if(Number(update?.meta?.changes || 0)!==1) return error('The administrator rank was not changed. Please refresh and try again.',409);
+    await env.DB.prepare(`
+      INSERT INTO admin_audit_log(id,actor_admin_id,target_admin_id,action,details_json)
+      VALUES(?,?,?,'rank_changed',?)
+    `).bind(crypto.randomUUID(),admin.id,target.id,JSON.stringify({from:previousRank,to:rank,identifier:targetKey})).run();
+    return json({success:true,admin_id:target.id,user_id:target.user_id,rank,role});
   }
   if(request.method==='POST' && path==='/api/admin/referrals/assign'){
     if(!superAdmin) return error('Only Super Admin can assign referral ownership.',403);
