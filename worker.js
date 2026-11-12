@@ -303,7 +303,7 @@ async function adminReferralRoute(request, env, path) {
       if(Number(wallet?.balance||0)<Number(req.amount)) return error('Insufficient available admin wallet balance.',409);
       await env.DB.batch([
         env.DB.prepare("UPDATE admin_withdrawal_requests SET status='approved',reviewed_by=?,review_note=?,reviewed_at=datetime('now') WHERE id=? AND status='pending'").bind(admin.id,String(body.note||'').slice(0,500),id),
-        env.DB.prepare('UPDATE admin_wallets SET balance=balance-?,updated_at=datetime('now') WHERE admin_id=? AND balance>=?').bind(req.amount,req.admin_id,req.amount)
+        env.DB.prepare(`UPDATE admin_wallets SET balance=balance-?,updated_at=datetime('now') WHERE admin_id=? AND balance>=?`).bind(req.amount,req.admin_id,req.amount)
       ]);
     } else await env.DB.prepare("UPDATE admin_withdrawal_requests SET status='rejected',reviewed_by=?,review_note=?,reviewed_at=datetime('now') WHERE id=? AND status='pending'").bind(admin.id,String(body.note||'').slice(0,500),id).run();
     await env.DB.prepare('INSERT INTO admin_audit_log(id,actor_admin_id,target_admin_id,action,details_json) VALUES(?,?,?,?,?)').bind(crypto.randomUUID(),admin.id,req.admin_id,`withdrawal_${action}`,JSON.stringify({request_id:id,amount:req.amount})).run();
