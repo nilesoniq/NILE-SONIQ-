@@ -11835,8 +11835,11 @@ async function loadAdminReferralDashboard(){
   const msg=document.getElementById('adminReferralMessage');
   if(msg) msg.textContent='Loading admin earnings…';
   try{
-    const r=await fetch('/api/admin/referrals',{credentials:'include'}),d=await r.json();
-    if(!r.ok||!d.data) throw new Error(d.error||'Could not load admin referral dashboard');
+    const r=await fetch('/api/admin/referrals',{method:'GET',credentials:'same-origin',cache:'no-store',headers:{'Accept':'application/json','Cache-Control':'no-cache'}});
+    const contentType=String(r.headers.get('content-type')||'').toLowerCase();
+    const d=contentType.includes('application/json')?await r.json().catch(()=>({})):{};
+    if(!r.ok||!d.data) throw new Error(d.error||d.message||`Could not load admin referral dashboard (HTTP ${r.status}).`);
+    if(!contentType.includes('application/json')) throw new Error('Admin dashboard returned an unexpected response.');
     const x=d.data, money=n=>'UGX '+Number(n||0).toLocaleString('en-US',{maximumFractionDigits:3});
     document.getElementById('adminReferralCode').textContent=x.admin?.referral_code||'—';
     document.getElementById('adminReferralArtists').textContent=x.referred_artists||0;
@@ -11852,7 +11855,7 @@ async function loadAdminReferralDashboard(){
     if(msg) msg.textContent='Admin earnings loaded.';
   }catch(e){if(msg)msg.textContent=e.message;}
 }
-async function adminReferralPost(path,body){const r=await fetch(path,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Request failed');return d;}
+async function adminReferralPost(path,body){const r=await fetch(path,{method:'POST',credentials:'same-origin',cache:'no-store',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify(body)});const type=String(r.headers.get('content-type')||'').toLowerCase();const d=type.includes('application/json')?await r.json().catch(()=>({})):{ };if(!r.ok)throw new Error(d.error||d.message||`Request failed (HTTP ${r.status}).`);if(!type.includes('application/json'))throw new Error('The server returned an unexpected response. Please refresh and try again.');return d;}
 async function requestAdminReferralWithdrawal(){try{await adminReferralPost('/api/admin/referrals/withdrawals',{amount:Number(document.getElementById('adminReferralWithdrawAmount').value),phone_number:document.getElementById('adminReferralWithdrawPhone').value,provider:document.getElementById('adminReferralWithdrawProvider').value});alert('Withdrawal request submitted. Only Super Admin can approve it.');await loadAdminReferralDashboard();}catch(e){alert(e.message);}}
 async function reviewAdminReferralWithdrawal(id,action){const note=prompt('Optional review note:')||'';if(!confirm(`${action==='approve'?'Approve':'Reject'} this admin withdrawal?`))return;try{await adminReferralPost(`/api/admin/referrals/withdrawals/${encodeURIComponent(id)}/review`,{action,note});await loadAdminReferralDashboard();}catch(e){alert(e.message);}}
 async function saveAdminRank(id,userId,email){try{const select=document.getElementById(`rank-${id}`);if(!select)throw new Error('Could not find the selected administrator rank.');const rank=String(select.value||'').trim().toLowerCase();const result=await adminReferralPost('/api/admin/referrals/rank',{admin_id:String(id),user_id:userId||'',email:email||'',rank});if(!result||result.success!==true||String(result.rank||'').toLowerCase()!==rank)throw new Error(result?.error||result?.message||'Rank was not saved.');await loadAdminReferralDashboard();alert('Administrator type updated to '+rank.replaceAll('_',' ')+'.');}catch(e){alert(e.message||'Could not update administrator type.');}}
@@ -11875,10 +11878,12 @@ async function searchAdminAssistedArtists(){
   adminAssistedSearchTimer=setTimeout(async()=>{
     try{
       const url='/api/admin/referrals/artists'+(term?'?q='+encodeURIComponent(term):'');
-      const response=await fetch(url,{credentials:'include',cache:'no-store'});
-      const data=await response.json().catch(()=>({}));
+      const response=await fetch(url,{method:'GET',credentials:'same-origin',cache:'no-store',headers:{'Accept':'application/json','Cache-Control':'no-cache'}});
+      const contentType=String(response.headers.get('content-type')||'').toLowerCase();
+      const data=contentType.includes('application/json')?await response.json().catch(()=>({})):{};
       if(sequence!==adminAssistedSearchSequence)return;
-      if(!response.ok)throw new Error(data.error||'Could not search artists.');
+      if(!response.ok)throw new Error(data.error||data.message||`Artist search failed (HTTP ${response.status}).`);
+      if(!contentType.includes('application/json'))throw new Error('Artist search returned an unexpected response. Please refresh and try again.');
       const rows=Array.isArray(data.artists)?data.artists:(Array.isArray(data.data)?data.data:(Array.isArray(data.results)?data.results:[]));
       if(!rows.length){box.innerHTML='<div style="padding:10px;color:#aaa">No artists match that name.</div>';return;}
       box.innerHTML=rows.map(a=>`<button type="button" class="admin-assisted-artist-option" data-id="${escapeHtml(String(a.id||''))}" data-name="${escapeHtml(String(a.name||'Unnamed artist'))}" style="display:block;width:100%;text-align:left;padding:11px;background:transparent;color:#fff;border:0;border-bottom:1px solid #333;cursor:pointer"><strong>${escapeHtml(a.name||'Unnamed artist')}</strong><small style="display:block;color:#aaa">${escapeHtml(a.location||'Location not set')} · ${escapeHtml(a.package_name||'free')} package</small></button>`).join('');
