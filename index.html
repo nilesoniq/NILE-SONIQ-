@@ -3382,6 +3382,16 @@ class="table-wrap">
     <div class="analytics-card"><span>Total Commission</span><strong id="adminReferralTotal">UGX 0</strong></div>
     <div class="analytics-card"><span>Available Admin Balance</span><strong id="adminReferralBalance">UGX 0</strong></div>
   </div>
+  <div style="margin:14px 0 18px;padding:14px;background:#101010;border:1px solid var(--border);border-radius:12px">
+    <label for="adminReferralShareLink" style="display:block;color:#ddd;font-size:13px;font-weight:700;margin-bottom:8px">Your shareable artist referral link</label>
+    <input id="adminReferralShareLink" type="text" readonly value="" placeholder="Your referral link will appear here" style="width:100%;min-width:0;background:#080808;color:#fff;border:1px solid #333;border-radius:9px;padding:11px;margin-bottom:10px">
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button type="button" class="btn btn-orange" onclick="copyAdminReferralLink()">Copy Referral Link</button>
+      <button type="button" class="btn btn-dark" onclick="shareAdminReferralLink()">Share on WhatsApp</button>
+    </div>
+    <small style="display:block;color:#888;margin-top:8px">Share this link with artists. When they register through it, your referral code is applied automatically.</small>
+    <div id="adminReferralLinkMessage" role="status" style="font-size:12px;color:#78d49a;margin-top:7px;min-height:16px"></div>
+  </div>
   <div class="form-grid" style="margin-top:16px">
     <div class="field"><label>Withdrawal amount (UGX, minimum 10,000)</label><input id="adminReferralWithdrawAmount" type="number" min="10000" step="100" placeholder="10000"></div>
     <div class="field"><label>Mobile Money number</label><input id="adminReferralWithdrawPhone" type="tel" placeholder="077xxxxxxx"></div>
@@ -11841,7 +11851,10 @@ async function loadAdminReferralDashboard(){
     if(!r.ok||!d.data) throw new Error(d.error||d.message||`Could not load admin referral dashboard (HTTP ${r.status}).`);
     if(!contentType.includes('application/json')) throw new Error('Admin dashboard returned an unexpected response.');
     const x=d.data, money=n=>'UGX '+Number(n||0).toLocaleString('en-US',{maximumFractionDigits:3});
-    document.getElementById('adminReferralCode').textContent=x.admin?.referral_code||'—';
+    const referralCode=String(x.admin?.referral_code||'').trim();
+    document.getElementById('adminReferralCode').textContent=referralCode||'—';
+    const referralLinkInput=document.getElementById('adminReferralShareLink');
+    if(referralLinkInput) referralLinkInput.value=referralCode ? `${window.location.origin}/?ref=${encodeURIComponent(referralCode)}` : '';
     document.getElementById('adminReferralArtists').textContent=x.referred_artists||0;
     document.getElementById('adminReferralTotal').textContent=money(x.total_earnings);
     document.getElementById('adminReferralBalance').textContent=money(x.balance);
@@ -11854,6 +11867,35 @@ async function loadAdminReferralDashboard(){
     } else superPanel.classList.add('hidden');
     if(msg) msg.textContent='Admin earnings loaded.';
   }catch(e){if(msg)msg.textContent=e.message;}
+}
+async function copyAdminReferralLink(){
+  const input=document.getElementById('adminReferralShareLink');
+  const message=document.getElementById('adminReferralLinkMessage');
+  const link=String(input?.value||'').trim();
+  if(!link){if(message)message.textContent='Your referral link is not available yet. Please refresh the dashboard.';return;}
+  try{
+    if(navigator.clipboard&&window.isSecureContext){
+      await navigator.clipboard.writeText(link);
+    }else{
+      input.focus();
+      input.select();
+      input.setSelectionRange(0,link.length);
+      const copied=document.execCommand('copy');
+      input.setSelectionRange(0,0);
+      if(!copied)throw new Error('Copy was not supported by this browser.');
+    }
+    if(message)message.textContent='Referral link copied. You can now paste and share it.';
+  }catch(error){
+    if(message)message.textContent='Could not copy automatically. Press and hold the link above, then choose Copy.';
+  }
+}
+function shareAdminReferralLink(){
+  const input=document.getElementById('adminReferralShareLink');
+  const message=document.getElementById('adminReferralLinkMessage');
+  const link=String(input?.value||'').trim();
+  if(!link){if(message)message.textContent='Your referral link is not available yet. Please refresh the dashboard.';return;}
+  const shareText='Join NileSoniQ as an artist using my referral link: '+link;
+  window.open('https://wa.me/?text='+encodeURIComponent(shareText),'_blank','noopener');
 }
 async function adminReferralPost(path,body){const r=await fetch(path,{method:'POST',credentials:'same-origin',cache:'no-store',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify(body)});const type=String(r.headers.get('content-type')||'').toLowerCase();const d=type.includes('application/json')?await r.json().catch(()=>({})):{ };if(!r.ok)throw new Error(d.error||d.message||`Request failed (HTTP ${r.status}).`);if(!type.includes('application/json'))throw new Error('The server returned an unexpected response. Please refresh and try again.');return d;}
 async function requestAdminReferralWithdrawal(){try{await adminReferralPost('/api/admin/referrals/withdrawals',{amount:Number(document.getElementById('adminReferralWithdrawAmount').value),phone_number:document.getElementById('adminReferralWithdrawPhone').value,provider:document.getElementById('adminReferralWithdrawProvider').value});alert('Withdrawal request submitted. Only Super Admin can approve it.');await loadAdminReferralDashboard();}catch(e){alert(e.message);}}
