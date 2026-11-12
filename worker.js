@@ -203,7 +203,6 @@ async function adminReferralRoute(request, env, path) {
   if (!user) return error('Authentication required',401);
   const admin = await getAdmin(env,user);
   if (!admin) return error('Admin access required',403);
-  await ensureAdminReferralSchema(env);
   const superAdmin = admin.role === 'super_admin' || admin.rank === 'super_admin';
   const url = new URL(request.url);
   if (request.method === 'GET' && path === '/api/admin/referrals/artists') {
@@ -241,6 +240,16 @@ async function adminReferralRoute(request, env, path) {
       return error('Could not search artists. Please try again.', 500);
     }
   }
+
+  // Search does not depend on referral-wallet tables or schema migrations.
+  // Other referral operations ensure their supporting tables/columns here.
+  try {
+    await ensureAdminReferralSchema(env);
+  } catch (schemaError) {
+    console.error('Admin referral schema setup failed:', schemaError?.stack || schemaError?.message || schemaError);
+    return error('Admin referral services are not ready. Please contact support.', 500);
+  }
+
   if (request.method === 'GET' && path === '/api/admin/referrals') {
     await ensureAdminWallet(env,admin.id);
     const wallet = await env.DB.prepare(`SELECT balance FROM admin_wallets WHERE admin_id=?`).bind(admin.id).first();
@@ -253,7 +262,7 @@ async function adminReferralRoute(request, env, path) {
       const all = await env.DB.prepare(`SELECT ad.id,ad.user_id,ad.email,ad.role,ad.rank,ad.active,ad.referral_code,COALESCE(w.balance,0) balance,COUNT(DISTINCT c.artist_id) referred_artists,COALESCE(SUM(c.amount),0) total_commission FROM admins ad LEFT JOIN admin_wallets w ON w.admin_id=ad.id LEFT JOIN admin_referral_commissions c ON c.admin_id=ad.id AND c.status='posted' GROUP BY ad.id ORDER BY ad.created_at`).all();
       const pending = await env.DB.prepare(`SELECT r.*,a.email admin_email FROM admin_withdrawal_requests r JOIN admins a ON a.id=r.admin_id WHERE r.status='pending' ORDER BY r.created_at`).all();
       result.all_admins=all.results||[]; result.pending_withdrawals=pending.results||[];
-      result.rank_policy=(await env.DB.prepare('SELECT * FROM admin_rank_policy ORDER BY CASE rank WHEN 'junior_admin' THEN 1 WHEN 'admin' THEN 2 WHEN 'senior_admin' THEN 3 WHEN 'admin_manager' THEN 4 ELSE 5 END').all()).results||[];
+      result.rank_policy=(await env.DB.prepare(`SELECT * FROM admin_rank_policy ORDER BY CASE rank WHEN 'junior_admin' THEN 1 WHEN 'admin' THEN 2 WHEN 'senior_admin' THEN 3 WHEN 'admin_manager' THEN 4 ELSE 5 END`).all()).results||[];
     }
     return json({data:result,error:null});
   }
@@ -345,7 +354,7 @@ async function adminReferralRoute(request, env, path) {
     if(!superAdmin) return error('Only Super Admin can suspend administrators.',403);
     const body=await readBody(request), targetId=String(body.admin_id||''), suspend=body.suspended!==false;
     if(targetId===admin.id) return error('You cannot suspend your own Super Admin account.',403);
-    await env.DB.prepare('UPDATE admins SET active=?,suspended_at=? WHERE id=? AND role<>'super_admin'').bind(suspend?0:1,suspend?new Date().toISOString():null,targetId).run();
+    await env.DB.prepare("UPDATE admins SET active=?,suspended_at=? WHERE id=? AND role<>'super_admin'").bind(suspend?0:1,suspend?new Date().toISOString():null,targetId).run();
     await env.DB.prepare('INSERT INTO admin_audit_log(id,actor_admin_id,target_admin_id,action,details_json) VALUES(?,?,?,?,?)').bind(crypto.randomUUID(),admin.id,targetId,suspend?'admin_suspended':'admin_reactivated','{}').run();
     return json({success:true});
   }
