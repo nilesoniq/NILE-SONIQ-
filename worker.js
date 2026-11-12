@@ -303,7 +303,7 @@ async function adminReferralRoute(request, env, path) {
       if(Number(wallet?.balance||0)<Number(req.amount)) return error('Insufficient available admin wallet balance.',409);
       await env.DB.batch([
         env.DB.prepare("UPDATE admin_withdrawal_requests SET status='approved',reviewed_by=?,review_note=?,reviewed_at=datetime('now') WHERE id=? AND status='pending'").bind(admin.id,String(body.note||'').slice(0,500),id),
-        env.DB.prepare(`UPDATE admin_wallets SET balance=balance-?,updated_at=datetime('now') WHERE admin_id=? AND balance>=?`).bind(req.amount,req.admin_id,req.amount)
+        env.DB.prepare('UPDATE admin_wallets SET balance=balance-?,updated_at=datetime('now') WHERE admin_id=? AND balance>=?').bind(req.amount,req.admin_id,req.amount)
       ]);
     } else await env.DB.prepare("UPDATE admin_withdrawal_requests SET status='rejected',reviewed_by=?,review_note=?,reviewed_at=datetime('now') WHERE id=? AND status='pending'").bind(admin.id,String(body.note||'').slice(0,500),id).run();
     await env.DB.prepare('INSERT INTO admin_audit_log(id,actor_admin_id,target_admin_id,action,details_json) VALUES(?,?,?,?,?)').bind(crypto.randomUUID(),admin.id,req.admin_id,`withdrawal_${action}`,JSON.stringify({request_id:id,amount:req.amount})).run();
@@ -675,7 +675,7 @@ async function paidSignupRoute(request, env) {
   return json({success:true,status:"pending",reference,amount,currency:"UGX",package_code:packageCode,message:`Payment prompt requested for UGX ${amount}. Approve it on your phone. Your account and verification email will be created only after a verified successful payment.`},202);
 }
 
-async function completePaidArtistSignup(env, reference, status, transactionId, amount, currency, failureMessage="") {
+async function completePaidArtistSignup(env, reference, status, transactionId, amount, currency, fee, failureMessage="") {
   await ensurePendingArtistSignups(env);
   const row = await env.DB.prepare("SELECT * FROM pending_artist_signups WHERE reference=? LIMIT 1").bind(reference).first();
   if (!row) return {matched:false};
@@ -686,10 +686,14 @@ async function completePaidArtistSignup(env, reference, status, transactionId, a
     const confirmedAmount = Number(amount);
     const confirmedCurrency = String(currency || "").trim().toUpperCase();
     const requiredAmount = Number(row.amount);
-    if (!Number.isFinite(confirmedAmount) || !Number.isFinite(requiredAmount) || confirmedAmount < requiredAmount || confirmedCurrency !== "UGX") {
-      console.error("Paid signup payment amount/currency mismatch",{reference,expectedMinimumAmount:row.amount,receivedAmount:amount,receivedCurrency:currency});
+    const feeValue = fee === null || fee === undefined || fee === "" ? null : Number(fee);
+    const feeSupplied = feeValue !== null;
+    const feeValid = !feeSupplied || (Number.isFinite(feeValue) && feeValue >= 0 && feeValue <= confirmedAmount);
+    if (!Number.isFinite(confirmedAmount) || !Number.isFinite(requiredAmount) || confirmedAmount < requiredAmount || confirmedCurrency !== "UGX" || !feeValid) {
+      console.error("Paid signup payment amount/currency/fee mismatch",{reference,expectedMinimumAmount:row.amount,receivedAmount:amount,receivedCurrency:currency,receivedFee:fee});
       return {matched:true,changed:false,reason:"amount_currency_mismatch"};
     }
+    const netWalletCredit = confirmedAmount - (feeSupplied ? feeValue : 0);
     // Atomically claim this payment before creating anything. Duplicate/concurrent
     // PesaJet webhooks cannot both create an account for the same reference.
     const claim = await env.DB.prepare("UPDATE pending_artist_signups SET status='processing', provider_transaction_id=COALESCE(NULLIF(?,''),provider_transaction_id) WHERE reference=? AND status='pending'").bind(incomingTx,reference).run();
@@ -714,7 +718,32 @@ async function completePaidArtistSignup(env, reference, status, transactionId, a
         env.DB.prepare(`INSERT INTO auth_users (id,email,encrypted_password,phone,raw_user_meta_data,confirmation_token,confirmation_sent_at,created_at,updated_at,is_anonymous,is_sso_user) VALUES (?,?,?,?,?,?,datetime('now'),datetime('now'),datetime('now'),0,0)`).bind(userId,row.email,row.password_hash,row.phone_number,metadata,token),
         env.DB.prepare("INSERT INTO artists (id,user_id,name,referring_admin_id) VALUES (?,?,?,(SELECT id FROM admins WHERE upper(referral_code)=? AND active=1 AND suspended_at IS NULL LIMIT 1))").bind(artistId,userId,row.artist_name,String(row.referral_code||'')),
         env.DB.prepare(`INSERT INTO premium_subscriptions (id,user_id,artist_id,amount,currency,provider,phone_number,reference,status,created_at,paid_at,expires_at,provider_transaction_id,package_name,referring_admin_id) VALUES (?,?,?,?,'UGX',?,?,?,'active',datetime('now'),datetime('now'),?,?,?,(SELECT id FROM admins WHERE upper(referral_code)=? AND active=1 AND suspended_at IS NULL LIMIT 1))`).bind(subscriptionId,userId,artistId,row.amount,row.provider,row.phone_number,subscriptionReference,expiry,incomingTx,row.package_code,String(row.referral_code||'')),
-        env.DB.prepare("UPDATE pending_artist_signups SET status='completed',provider_transaction_id=COALESCE(NULLIF(?,''),provider_transaction_id),completed_at=datetime('now'),user_id=? WHERE reference=? AND status='processing'").bind(incomingTx,userId,reference)
+        env.DB.prepare("UPDATE pending_artist_signups SET status='completed',provider_transaction_id=COALESCE(NULLIF(?,''),provider_transaction_id),completed_at=datetime('now'),user_id=? WHERE reference=? AND status='processing'").bind(incomingTx,userId,reference),
+        // Every confirmed paid artist signup/package contributes to the platform wallet.
+        // The unique ledger event is the idempotency gate; the following wallet
+        // update runs only when this batch inserted a new ledger row.
+        env.DB.prepare(`
+          INSERT OR IGNORE INTO platform_financial_ledger
+            (event_key,event_type,source_type,source_id,reference,amount_signed,currency,
+             pesajet_fee_amount,tax_liability_amount,status,note,occurred_at)
+          VALUES (?,'income','artist_signup',?,?,?,'UGX',?,0,?,?,datetime('now'))
+        `).bind(
+          `artist-signup:${subscriptionId}`,
+          subscriptionId,
+          reference,
+          confirmedAmount,
+          feeSupplied ? feeValue : 0,
+          feeSupplied ? "posted" : "fee_unverified",
+          feeSupplied
+            ? "Confirmed paid artist registration/package. Wallet credited net of the PesaJet fee reported by the provider."
+            : "Confirmed paid artist registration/package. Provider fee was not supplied; wallet credited the confirmed amount and fee reconciliation is required."
+        ),
+        env.DB.prepare(`
+          UPDATE platform_wallet
+          SET balance=MAX(0,balance+?),updated_at=datetime('now')
+          WHERE id=(SELECT id FROM platform_wallet ORDER BY created_at LIMIT 1)
+            AND changes()>0
+        `).bind(netWalletCredit)
       ]);
     } catch (e) {
       // Allow a retry if account/profile creation failed before the batch committed.
@@ -4302,7 +4331,7 @@ async function paymentWebhookRoute(request, env) {
     const featureResult = await applyFeaturePaymentStatus(env, reference, status, transactionId, webhookPayment.amount, webhookPayment.currency, webhookPayment.fee);
     if (featureResult.matched) return json({received:true, featurePayment:true, applied:Boolean(featureResult.changed)});
     const paidSignupResult = (reference.startsWith("NILESONIQ-SIGNUP-") || reference.startsWith("NILESONIQ-ARTIST-REGISTRATION-"))
-      ? await completePaidArtistSignup(env, reference, status, transactionId, webhookPayment.amount, webhookPayment.currency,
+      ? await completePaidArtistSignup(env, reference, status, transactionId, webhookPayment.amount, webhookPayment.currency, webhookPayment.fee,
           payload?.message || payload?.description || payload?.reason || payload?.failureMessage || payload?.failure_message || "")
       : { matched: false };
     if (paidSignupResult.matched) {
@@ -4768,7 +4797,7 @@ async function applyFeaturePaymentStatus(env, reference, status, transactionId, 
       const note=payment.payment_type==='listener_subscription'?'Verified listener subscription fee retained by NileSoniQ; no artist share.':'Verified Song Boost campaign payment; package entitlement remains at its advertised fixed price.';
       await env.DB.batch([
         env.DB.prepare(`INSERT OR IGNORE INTO platform_financial_ledger (event_key,event_type,source_type,source_id,reference,amount_signed,currency,pesajet_fee_amount,tax_liability_amount,status,note,occurred_at) VALUES (?,'income',?,?,?,?,'UGX',?,0,?,?,?)`).bind(`${sourceType}:${payment.id}`,sourceType,payment.id,reference,confirmedAmount,feeAmount,feeKnown?'posted':'fee_unverified',note,now),
-        env.DB.prepare(`UPDATE platform_wallet SET balance=MAX(0,balance+?-?),updated_at=datetime('now') WHERE id=(SELECT id FROM platform_wallet ORDER BY created_at LIMIT 1)`).bind(confirmedAmount,feeAmount)
+        env.DB.prepare(`UPDATE platform_wallet SET balance=MAX(0,balance+?-?),updated_at=datetime('now') WHERE id=(SELECT id FROM platform_wallet ORDER BY created_at LIMIT 1) AND changes()>0`).bind(confirmedAmount,feeAmount)
       ]);
     }
     return {matched:true,changed,reason:changed?'verified_success':'already_processed'};
