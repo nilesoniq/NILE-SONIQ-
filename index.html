@@ -2536,9 +2536,9 @@ Loading artists...
 
 <div class="dashboard-header">
 
-<h1>Artist Dashboard</h1>
+<h1 id="dashboardHeading">Artist Dashboard</h1>
 
-<p>
+<p id="dashboardSubheading">
 Manage your profile, music and earnings.
 </p>
 
@@ -2560,6 +2560,61 @@ Artist Login
 </div>
 
 <div id="dashboardContent" class="hidden">
+
+<div id="labelDashboardContent" class="hidden" style="display:none;">
+  <div class="dashboard-card" style="margin-bottom:16px;">
+    <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;">
+      <div><h2 id="labelDashboardName" style="margin:0 0 8px;">Your Label</h2><div id="labelDashboardBadges" style="color:var(--orange);font-weight:700;"></div><p id="labelDashboardPlan" style="color:#bbb;margin:8px 0 0;"></p></div>
+      <div id="labelDashboardStatus" style="font-weight:700;"></div>
+    </div>
+  </div>
+  <div class="dashboard-card" style="margin-bottom:16px;">
+    <h3>Label wallet</h3>
+    <div style="font-size:30px;font-weight:800;color:var(--orange);" id="labelWalletBalance">UGX 0</div>
+    <p id="labelWalletLifetime" style="color:#aaa;margin:6px 0 0;">Lifetime earnings: UGX 0</p>
+    <p style="color:#888;font-size:12px;margin:8px 0 0;">Earnings from valid plays and downloads by your linked artists are credited to this Label wallet.</p>
+  </div>
+  <div class="dashboard-card" style="margin-bottom:16px;">
+    <h3>Performance</h3>
+    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;">
+      <div><strong id="labelStatArtists">0</strong><div style="color:#999;font-size:12px;">Artists</div></div>
+      <div><strong id="labelStatSongs">0</strong><div style="color:#999;font-size:12px;">Songs</div></div>
+      <div><strong id="labelStatPlays">0</strong><div style="color:#999;font-size:12px;">Valid plays</div></div>
+      <div><strong id="labelStatDownloads">0</strong><div style="color:#999;font-size:12px;">Valid downloads</div></div>
+    </div>
+  </div>
+  <div class="dashboard-card" style="margin-bottom:16px;">
+    <h3>Manage artists</h3>
+    <p id="labelArtistLimitText" style="color:#aaa;font-size:13px;"></p>
+    <div id="labelArtistManageMessage" class="message"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <input id="labelArtistEmail" type="email" placeholder="Existing Artist account email" style="flex:1;min-width:210px;">
+      <button class="btn btn-orange" type="button" onclick="addLabelArtist()">Add Artist</button>
+    </div>
+    <div id="labelArtistsList" style="margin-top:14px;"></div>
+  </div>
+  <div class="dashboard-card" style="margin-bottom:16px;">
+    <h3>Subscription and renewal</h3>
+    <p id="labelRenewalInfo" style="color:#bbb;"></p>
+    <div id="labelRenewalMessage" class="message"></div>
+    <div class="form-grid">
+      <div class="field"><label for="labelRenewPackage">Annual package</label><select id="labelRenewPackage"><option value="basic">Basic — UGX 50,000/year</option><option value="pro">Pro — UGX 70,000/year</option><option value="premium">Premium — UGX 100,000/year</option></select></div>
+      <div class="field"><label for="labelRenewProvider">Mobile money network</label><select id="labelRenewProvider"><option value="mtn">MTN Mobile Money</option><option value="airtel">Airtel Money</option></select></div>
+      <div class="field full"><label for="labelRenewPhone">Mobile money phone number</label><input id="labelRenewPhone" type="tel" placeholder="e.g. 0771234567"></div>
+    </div>
+    <button class="btn btn-orange" type="button" onclick="renewLabelSubscription()">Pay / Renew Label</button>
+  </div>
+  <div class="dashboard-card" style="margin-bottom:16px;">
+    <h3>Recent Label earnings</h3>
+    <div id="labelEarningsList" style="color:#bbb;font-size:13px;">No earnings recorded yet.</div>
+  </div>
+  <div class="dashboard-card" style="margin-bottom:16px;">
+    <h3>Account managers</h3>
+    <p style="color:#aaa;font-size:12px;">Managers are view-only and cannot manage artists, subscriptions or money.</p>
+    <div id="labelManagerMessage" class="message"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;"><input id="labelManagerEmail" type="email" placeholder="Existing NileSoniQ account email" style="flex:1;min-width:210px;"><button class="btn btn-dark" type="button" onclick="addLabelManager()">Add Manager</button></div><div id="labelManagersList" style="margin-top:12px;"></div>
+  </div>
+</div>
 
 <div class="dashboard-card" id="artistProfileSummaryCard" style="margin-bottom:18px;">
   <div style="display:flex;flex-direction:column;align-items:flex-start;gap:12px;">
@@ -3374,22 +3429,23 @@ class="table-wrap">
 
 <div id="adminReferralsPanel" class="dashboard-card hidden">
   <h2>Admin Referrals & Earnings</h2>
-  <p style="color:#999;font-size:13px;line-height:1.5">Earn 20% on confirmed paid artist package transactions and 5% of gross qualified streaming earnings from artists assigned to you. Free packages do not earn package commission.</p>
+  <p style="color:#999;font-size:13px;line-height:1.5">Earn 20% on confirmed paid Artist packages and Label annual subscriptions, plus 5% of gross qualified streaming earnings from referred Artists. Free packages do not earn package commission.</p>
   <div id="adminReferralMessage" class="message" role="status"></div>
   <div class="analytics-grid" style="margin-top:14px">
     <div class="analytics-card"><span>Referral Code</span><strong id="adminReferralCode" style="font-size:17px">—</strong></div>
     <div class="analytics-card"><span>Referred Artists</span><strong id="adminReferralArtists">0</strong></div>
+    <div class="analytics-card"><span>Referred Labels</span><strong id="adminReferralLabels">0</strong></div>
     <div class="analytics-card"><span>Total Commission</span><strong id="adminReferralTotal">UGX 0</strong></div>
     <div class="analytics-card"><span>Available Admin Balance</span><strong id="adminReferralBalance">UGX 0</strong></div>
   </div>
   <div style="margin:14px 0 18px;padding:14px;background:#101010;border:1px solid var(--border);border-radius:12px">
-    <label for="adminReferralShareLink" style="display:block;color:#ddd;font-size:13px;font-weight:700;margin-bottom:8px">Your shareable artist referral link</label>
+    <label for="adminReferralShareLink" style="display:block;color:#ddd;font-size:13px;font-weight:700;margin-bottom:8px">Your shareable Artist / Label referral link</label>
     <input id="adminReferralShareLink" type="text" readonly value="" placeholder="Your referral link will appear here" style="width:100%;min-width:0;background:#080808;color:#fff;border:1px solid #333;border-radius:9px;padding:11px;margin-bottom:10px">
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button type="button" class="btn btn-orange" onclick="copyAdminReferralLink()">Copy Referral Link</button>
       <button type="button" class="btn btn-dark" onclick="shareAdminReferralLink()">Share on WhatsApp</button>
     </div>
-    <small style="display:block;color:#888;margin-top:8px">Share this link with artists. When they register through it, your referral code is applied automatically.</small>
+    <small style="display:block;color:#888;margin-top:8px">Share this link with Artists or Labels. When they register through it, your referral code is applied automatically.</small>
     <div id="adminReferralLinkMessage" role="status" style="font-size:12px;color:#78d49a;margin-top:7px;min-height:16px"></div>
   </div>
   <div class="form-grid" style="margin-top:16px">
@@ -3399,7 +3455,7 @@ class="table-wrap">
   </div>
   <button class="btn btn-orange" onclick="requestAdminReferralWithdrawal()">Request Admin Withdrawal</button>
   <h3 style="margin-top:24px">My Commission History</h3>
-  <div class="table-wrap"><table><thead><tr><th>Date</th><th>Artist</th><th>Type</th><th>Gross</th><th>Commission</th><th>Status</th></tr></thead><tbody id="adminReferralCommissions"></tbody></table></div>
+  <div class="table-wrap"><table><thead><tr><th>Date</th><th>Artist / Label</th><th>Type</th><th>Gross</th><th>Commission</th><th>Status</th></tr></thead><tbody id="adminReferralCommissions"></tbody></table></div>
   <h3 style="margin-top:24px">My Withdrawal Requests</h3>
   <div class="table-wrap"><table><thead><tr><th>Date</th><th>Amount</th><th>Network</th><th>Status</th><th>Review</th></tr></thead><tbody id="adminReferralWithdrawals"></tbody></table></div>
     <h3 style="margin-top:24px">Assisted Existing-Artist Upgrade</h3>
@@ -3419,7 +3475,7 @@ class="table-wrap">
     <button class="btn btn-orange" onclick="startAdminAssistedUpgrade()">Send Artist Payment Prompt</button>
   <div id="adminReferralSuperPanel" class="hidden">
     <h3 style="margin-top:28px">Super Admin — Administrator Management</h3>
-    <div class="table-wrap"><table><thead><tr><th>Admin</th><th>Rank</th><th>Referral code</th><th>Artists</th><th>Commission</th><th>Wallet</th><th>Action</th></tr></thead><tbody id="adminReferralAllAdmins"></tbody></table></div>
+    <div class="table-wrap"><table><thead><tr><th>Admin</th><th>Rank</th><th>Referral code</th><th>Artists</th><th>Labels</th><th>Commission</th><th>Wallet</th><th>Action</th></tr></thead><tbody id="adminReferralAllAdmins"></tbody></table></div>
     <h3 style="margin-top:24px">Admin Withdrawal Approvals</h3>
     <div class="table-wrap"><table><thead><tr><th>Admin</th><th>Amount</th><th>Phone</th><th>Network</th><th>Action</th></tr></thead><tbody id="adminReferralPendingWithdrawals"></tbody></table></div>
     <h3 style="margin-top:24px">Assign Referral Owner</h3><div class="form-grid"><div class="field"><label>Artist profile ID</label><input id="adminAssignArtistId" placeholder="Artist ID"></div><div class="field"><label>Admin ID</label><input id="adminAssignAdminId" placeholder="Admin ID"></div></div><button class="btn" onclick="assignAdminReferralOwner()">Assign Artist</button>
@@ -3589,6 +3645,11 @@ Create Account
 <div id="authMessage"
 class="message"></div>
 
+<div class="field" id="signupAccountTypeField" style="display:none;">
+<label for="signupAccountType">Account type</label>
+<select id="signupAccountType" onchange="toggleSignupAccountType()"><option value="artist">Artist Account</option><option value="label">Label Account</option></select>
+</div>
+
 <div id="signupNameField"
 class="field hidden">
 
@@ -3622,6 +3683,16 @@ placeholder="you@example.com">
 <option value="star">Star — UGX 30,000 per 30 days · Blue verification tick</option>
 </select>
 <p style="color:#999;font-size:12px;margin-top:7px;">Paid packages activate only after mobile-money payment is confirmed. Choosing a package does not charge you immediately.</p>
+</div>
+<div class="field" id="signupLabelPackageField" style="display:none;">
+<label for="signupLabelPackage">Choose your Label package</label>
+<select id="signupLabelPackage" onchange="toggleSignupPaymentMethod()">
+<option value="free">Free — UGX 0 (2 artists, 1 upload per artist/month)</option>
+<option value="basic">Basic — UGX 50,000/year (3 artists, UGX 1 per play/download)</option>
+<option value="pro">Pro — UGX 70,000/year (5 artists, UGX 2 per play/download)</option>
+<option value="premium">Premium — UGX 100,000/year (unlimited artists, UGX 3 per play/download)</option>
+</select>
+<p style="color:#999;font-size:12px;margin-top:7px;">Paid Label packages last one year. No automatic renewal or wallet deduction.</p>
 </div>
 <div class="field" id="signupPaymentMethodField" style="display:none;">
 <label for="signupPaymentMethod">Premium payment method</label>
@@ -3951,6 +4022,7 @@ const EARNINGS_PER_PLAY = 0.375; // UGX 0.50 gross less 20% commission and 5% ta
 
 let currentUser = null;
 let currentArtist = null;
+let currentLabel = null;
 
 let currentSongs = [];
 let newReleaseSongs = [];
@@ -4358,12 +4430,14 @@ const authApi = {
         currentUser = data.user;
         currentAdmin = data.admin || null;
         currentArtist = data.artist || null;
+        currentLabel = data.label || null;
         if(currentArtist) setTimeout(loadArtistBoostSongs,0);
         return {data:{session:{user:currentUser}}};
       }
       currentUser = null;
       currentAdmin = null;
       currentArtist = null;
+      currentLabel = null;
       return {data:{session:null}};
     }catch(error){
       console.error("Cloudflare auth session error:",error);
@@ -4385,6 +4459,7 @@ const authApi = {
     currentUser = data.user || null;
     currentAdmin = data.admin || null;
     currentArtist = data.artist || null;
+    currentLabel = data.label || null;
 
     // Login only returns the account identity. Ask the Cloudflare Worker
     // for the verified session profile so admin/artist state is populated.
@@ -4412,6 +4487,7 @@ const authApi = {
       currentUser = data.user;
       currentAdmin = data.admin || null;
       currentArtist = data.artist || null;
+      currentLabel = data.label || null;
       notifyAuthListeners();
     }
     return {data:{user:data.user || null,session:data.user?{user:data.user}:null,verification_email_sent:Boolean(data.verification_email_sent),message:data.message||"",artist_package:data.user?.artist_package||packageName||"free"},error:null};
@@ -4428,6 +4504,7 @@ const authApi = {
       currentUser = null;
       currentArtist = null;
       currentAdmin = null;
+      currentLabel = null;
       notifyAuthListeners();
       if(!response.ok && data.error){ return {error:new Error(data.error)}; }
       return {error:null};
@@ -4579,14 +4656,23 @@ async function updateUI(){
     }
 
 
-    await loadArtistProfile();
-    await refreshArtistUploadAllowance();
-
-    await loadMySongs();
-
-    await loadMyWithdrawals();
+    if(currentLabel && !isAdmin){
+      const heading=document.getElementById('dashboardHeading'),subheading=document.getElementById('dashboardSubheading');
+      if(heading)heading.textContent='Label Dashboard';if(subheading)subheading.textContent='Manage your Label, artists, subscription and earnings.';
+      const labelRoot=document.getElementById('labelDashboardContent');if(labelRoot){labelRoot.classList.remove('hidden');labelRoot.style.display='block';}
+      Array.from(dashboardContent.children).forEach(child=>{if(child.id!=='labelDashboardContent')child.style.display='none';});
+      await loadLabelDashboard();
+    }else{
+      const heading=document.getElementById('dashboardHeading'),subheading=document.getElementById('dashboardSubheading');
+      if(heading)heading.textContent='Artist Dashboard';if(subheading)subheading.textContent='Manage your profile, music and earnings.';
+      const labelRoot=document.getElementById('labelDashboardContent');if(labelRoot){labelRoot.classList.add('hidden');labelRoot.style.display='none';}
+      Array.from(dashboardContent.children).forEach(child=>{if(child.id!=='labelDashboardContent')child.style.display='';});
+      await loadArtistProfile();
+      await refreshArtistUploadAllowance();
+      await loadMySongs();
+      await loadMyWithdrawals();
       await updateAmountWithdrawn();
-
+    }
 
     if(isAdmin){
 
@@ -4609,6 +4695,8 @@ async function updateUI(){
     dashboardContent.classList.add("hidden");
 
     currentAdmin = null;
+    currentLabel = null;
+    const labelRoot=document.getElementById('labelDashboardContent');if(labelRoot){labelRoot.classList.add('hidden');labelRoot.style.display='none';}
     await refreshArtistUploadAllowance();
 
   }
@@ -5167,169 +5255,121 @@ function closeAuthModal(){
 }
 
 
+function signupIsLabel(){return document.getElementById("signupAccountType")?.value === "label";}
+function selectedSignupPackage(){return signupIsLabel()?(document.getElementById("signupLabelPackage")?.value||"free"):(document.getElementById("signupPackage")?.value||"free");}
+function toggleSignupAccountType(){
+  const label=signupIsLabel();
+  const nameLabel=document.querySelector('#signupNameField label');
+  const nameInput=document.getElementById('signupArtistName');
+  if(nameLabel)nameLabel.textContent=label?'Label Name':'Artist Name';
+  if(nameInput)nameInput.placeholder=label?'Your record label name':'Your artist name';
+  const artistPkg=document.getElementById('signupPackageField'),labelPkg=document.getElementById('signupLabelPackageField');
+  if(artistPkg)artistPkg.style.display=label?'none':'block';
+  if(labelPkg)labelPkg.style.display=label?'block':'none';
+  toggleSignupPaymentMethod();
+}
 function toggleSignupPaymentMethod(){
-  const premium=["premium","hustler","hit_maker","star"].includes(document.getElementById("signupPackage")?.value);
+  const paid=selectedSignupPackage()!=="free";
   const field=document.getElementById("signupPaymentMethodField");
   const select=document.getElementById("signupPaymentMethod");
-  if(!field || !select) return;
-  field.style.display=premium ? "block" : "none";
-  select.required=premium;
-  if(!premium) select.value="";
+  if(!field||!select)return;
+  field.style.display=paid?"block":"none";
+  select.required=paid;
+  if(!paid)select.value="";
   toggleSignupPaymentPhone();
 }
-
 function toggleSignupPaymentPhone(){
-  const premium=["premium","hustler","hit_maker","star"].includes(document.getElementById("signupPackage")?.value);
-  const method=document.getElementById("signupPaymentMethod")?.value || "";
-  const field=document.getElementById("signupPaymentPhoneField");
-  const input=document.getElementById("signupPaymentPhone");
-  if(!field || !input) return;
-  const show=premium && !!method;
-  field.style.display=show ? "block" : "none";
-  input.required=show;
-  if(!show) input.value="";
+  const paid=selectedSignupPackage()!=="free";
+  const method=document.getElementById("signupPaymentMethod")?.value||"";
+  const field=document.getElementById("signupPaymentPhoneField"),input=document.getElementById("signupPaymentPhone");
+  if(!field||!input)return;
+  const show=paid&&!!method;field.style.display=show?"block":"none";input.required=show;if(!show)input.value="";
 }
-
 function setAuthMode(mode){
-
-  currentAuthMode = mode;
-
-  const loginTab =
-    document.getElementById("loginTab");
-
-  const signupTab =
-    document.getElementById("signupTab");
-
-  const signupNameField =
-    document.getElementById(
-      "signupNameField"
-    );
-
-  const title =
-    document.getElementById("authTitle");
-
-  const submit =
-    document.getElementById("authSubmit");
-
-
-  if(mode === "login"){
-
-    loginTab.classList.add("active");
-
-    signupTab.classList.remove("active");
-
-    signupNameField.classList.add("hidden");
-
-    title.textContent = "Login";
-
-    submit.textContent = "Login";
-    document.getElementById("signupPackageField").style.display="none";
-    document.getElementById("signupPaymentMethodField").style.display="none";
-    document.getElementById("signupPaymentMethod").required=false;
-    document.getElementById("forgotPasswordRow").classList.remove("hidden");
-    document.getElementById("authPasswordField").classList.remove("hidden");
-    document.getElementById("forgotPasswordForm").classList.add("hidden");
-    document.getElementById("resetPasswordForm").classList.add("hidden");
-    submit.classList.remove("hidden");
-
+  currentAuthMode=mode;
+  const loginTab=document.getElementById("loginTab"),signupTab=document.getElementById("signupTab"),signupNameField=document.getElementById("signupNameField"),title=document.getElementById("authTitle"),submit=document.getElementById("authSubmit");
+  const typeField=document.getElementById('signupAccountTypeField');
+  if(mode==="login"){
+    loginTab.classList.add("active");signupTab.classList.remove("active");signupNameField.classList.add("hidden");
+    title.textContent="Login";submit.textContent="Login";
+    document.getElementById("signupPackageField").style.display="none";document.getElementById("signupLabelPackageField").style.display="none";
+    if(typeField)typeField.style.display='none';
+    document.getElementById("signupPaymentMethodField").style.display="none";document.getElementById("signupPaymentPhoneField").style.display="none";
+    document.getElementById("signupPaymentMethod").required=false;document.getElementById("signupPaymentPhone").required=false;
+    document.getElementById("forgotPasswordRow").classList.remove("hidden");document.getElementById("authPasswordField").classList.remove("hidden");
+    document.getElementById("forgotPasswordForm").classList.add("hidden");document.getElementById("resetPasswordForm").classList.add("hidden");submit.classList.remove("hidden");
   }else{
-
-    currentAuthContext = "artist";
-
-    loginTab.classList.remove("active");
-
-    signupTab.classList.add("active");
-
-    signupNameField.classList.remove("hidden");
-
-    title.textContent =
-      "Create Artist Account";
-
-    submit.textContent =
-      "Create Account";
-    document.getElementById("signupPackageField").style.display="block";
-    toggleSignupPaymentMethod();
-    document.getElementById("forgotPasswordRow").classList.add("hidden");
-    document.getElementById("authPasswordField").classList.remove("hidden");
-    document.getElementById("forgotPasswordForm").classList.add("hidden");
-    document.getElementById("resetPasswordForm").classList.add("hidden");
-    submit.classList.remove("hidden");
-
+    currentAuthContext="artist";loginTab.classList.remove("active");signupTab.classList.add("active");signupNameField.classList.remove("hidden");
+    if(typeField)typeField.style.display='block';
+    title.textContent="Create Artist Account";submit.textContent="Create Account";
+    document.getElementById("forgotPasswordRow").classList.add("hidden");document.getElementById("authPasswordField").classList.remove("hidden");
+    document.getElementById("forgotPasswordForm").classList.add("hidden");document.getElementById("resetPasswordForm").classList.add("hidden");submit.classList.remove("hidden");
+    toggleSignupAccountType();
   }
-
   clearMessage("authMessage");
-
 }
-
 
 async function submitAuth(){
-  const email = document.getElementById("authEmail").value.trim();
-  const password = document.getElementById("authPassword").value;
-  const artistName = document.getElementById("signupArtistName").value.trim();
-
-  if(!email || !password){
-    showMessage("authMessage","Please enter your email and password.","error");
-    return;
-  }
-
+  const email=document.getElementById("authEmail").value.trim(),password=document.getElementById("authPassword").value,name=document.getElementById("signupArtistName").value.trim();
+  if(!email||!password){showMessage("authMessage","Please enter your email and password.","error");return;}
   try{
-    if(currentAuthMode === "login"){
-      const {error} = await authApi.signInWithPassword({email,password});
-      if(error) throw error;
-
-      // Determine the account role from the authenticated Worker session,
-      // not from a public-facing login choice.
-      const isAdmin = await isCurrentUserAdmin();
-      const destination = isAdmin ? "admin" : "dashboard";
-
-      showMessage("authMessage", "Login successful.", "success");
-      setTimeout(async()=>{
-        closeAuthModal();
-        await updateUI();
-        await showPage(destination);
-      },700);
-      return;
+    if(currentAuthMode==="login"){
+      const {error}=await authApi.signInWithPassword({email,password});if(error)throw error;
+      const isAdmin=await isCurrentUserAdmin(),destination=isAdmin?"admin":"dashboard";
+      showMessage("authMessage","Login successful.","success");
+      setTimeout(async()=>{closeAuthModal();await updateUI();await showPage(destination);},700);return;
     }
-
-    if(!artistName){
-      showMessage("authMessage","Please enter your artist name.","error");
-      return;
-    }
-
-    const chosenPackage=document.getElementById("signupPackage").value;
-    const chosenPaymentMethod=document.getElementById("signupPaymentMethod")?.value || "";
-    const paymentPhone=(document.getElementById("signupPaymentPhone")?.value || "").trim();
-    if(chosenPackage!=="free" && !chosenPaymentMethod){
-      showMessage("authMessage","Please select a mobile-money payment method for your paid package.","error");
-      return;
-    }
-    if(chosenPackage!=="free" && !paymentPhone){
-      showMessage("authMessage","Please enter the mobile-money phone number you will use to pay.","error");
-      return;
+    if(!name){showMessage("authMessage",signupIsLabel()?"Please enter your Label name.":"Please enter your artist name.","error");return;}
+    const chosenPackage=selectedSignupPackage(),chosenPaymentMethod=document.getElementById("signupPaymentMethod")?.value||"",paymentPhone=(document.getElementById("signupPaymentPhone")?.value||"").trim();
+    if(chosenPackage!=="free"&&!chosenPaymentMethod){showMessage("authMessage","Please select a mobile-money payment method.","error");return;}
+    if(chosenPackage!=="free"&&!paymentPhone){showMessage("authMessage","Please enter the mobile-money phone number you will use to pay.","error");return;}
+    if(signupIsLabel()){
+      const response=await fetch(`/api/label/signup`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({email,password,label_name:name,package_code:chosenPackage,provider:chosenPaymentMethod,phone_number:paymentPhone,referral_code:new URLSearchParams(window.location.search).get("ref")||""})});
+      const data=await response.json().catch(()=>({}));if(!response.ok||data.success===false)throw new Error(data.error||data.message||"Could not create Label account.");
+      if(chosenPackage==="free"){
+        await authApi.getSession();await updateUI();showMessage("authMessage",`Free Label account created.${data.verification_email_sent?" A verification email was sent.":" Email verification could not be confirmed as sent."}`,"success");
+        setTimeout(async()=>{closeAuthModal();await showPage("dashboard");},700);return;
+      }
+      showMessage("authMessage",`Payment request started for UGX ${Number(data.amount||0).toLocaleString()}. Approve the mobile-money prompt. Your Label account will only be created after PesaJet confirms payment. Reference: ${data.reference}. Do not pay again while this request is pending.`,"success");return;
     }
     const packageLabels={free:"Free (UGX 0)",premium:"Premium (UGX 5,000 per 30 days)",hustler:"Hustler (UGX 10,000 per 30 days)",hit_maker:"Hit Maker (UGX 20,000 per 30 days)",star:"Star (UGX 30,000 per 30 days)"};
-    if(chosenPackage === "free"){
-      const {data,error} = await authApi.signUp({email,password,packageName:"free",options:{data:{artist_name:artistName}}});
-      if(error) throw error;
-      const emailNotice=data?.verification_email_sent
-        ? " A verification email was sent; check your inbox and spam folder."
-        : " The account was created, but the verification email could not be confirmed as sent. Please contact support if it does not arrive.";
-      showMessage("authMessage", "Free account created."+emailNotice,"success");
-      return;
+    if(chosenPackage==="free"){
+      const {data,error}=await authApi.signUp({email,password,packageName:"free",options:{data:{artist_name:name}}});if(error)throw error;
+      showMessage("authMessage",data?.message||"Free Artist account created.","success");return;
     }
-    const response=await fetch(`${AUTH_API}/register-paid`,{
-      method:"POST",credentials:"include",
-      headers:{"Content-Type":"application/json","Accept":"application/json"},
-      body:JSON.stringify({email,password,artist_name:artistName,package_code:chosenPackage,provider:chosenPaymentMethod,phone_number:paymentPhone,referral_code:new URLSearchParams(window.location.search).get("ref")||""})
-    });
-    const data=await response.json().catch(()=>({}));
-    if(!response.ok || data.success===false) throw new Error(data.error||data.message||"Could not start payment.");
-    showMessage("authMessage", `Payment request started for ${packageLabels[chosenPackage]||chosenPackage}. Approve the mobile-money prompt on your phone. Your account will only be created and verification email sent after PesaJet confirms the payment. Reference: ${data.reference||"pending"}. Do not pay again while this request is pending.`,"success");
-  }catch(error){
-    console.error(error);
-    showMessage("authMessage",error.message || "Authentication failed.","error");
-  }
+    const response=await fetch(`${AUTH_API}/register-paid`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({email,password,artist_name:name,package_code:chosenPackage,provider:chosenPaymentMethod,phone_number:paymentPhone,referral_code:new URLSearchParams(window.location.search).get("ref")||""})});
+    const data=await response.json().catch(()=>({}));if(!response.ok||data.success===false)throw new Error(data.error||data.message||"Could not start payment.");
+    showMessage("authMessage",`Payment request started for ${packageLabels[chosenPackage]||chosenPackage}. Approve the mobile-money prompt. Your account will only be created after PesaJet confirms payment. Reference: ${data.reference||"pending"}. Do not pay again while pending.`,"success");
+  }catch(error){console.error(error);showMessage("authMessage",error.message||"Authentication failed.","error");}
 }
+
+async function loadLabelDashboard(){
+  const root=document.getElementById('labelDashboardContent');if(!root)return;
+  try{
+    const response=await fetch(`/api/label/dashboard`,{credentials:'include',headers:{'Accept':'application/json'},cache:'no-store'});
+    const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||'Could not load Label dashboard.');
+    currentLabel=data.label||currentLabel;const label=data.label||{},wallet=data.wallet||{},stats=data.stats||{},planNames={free:'Free',basic:'Basic',pro:'Pro',premium:'Premium'};
+    document.getElementById('labelDashboardName').textContent=label.name||'Your Label';
+    document.getElementById('labelDashboardBadges').textContent=Number(label.verified)?'✓ Verified Label':'';
+    document.getElementById('labelDashboardPlan').textContent=`${planNames[label.package_code]||label.package_code} package · UGX ${Number(label.annual_price||0).toLocaleString()}${label.package_code==='free'?'':' per year'}`;
+    const state=label.subscription_state||'active';document.getElementById('labelDashboardStatus').textContent=state==='grace'?'GRACE PERIOD':state==='suspended'?'SUSPENDED':'ACTIVE';
+    document.getElementById('labelWalletBalance').textContent=`UGX ${Number(wallet.balance||0).toLocaleString()}`;
+    document.getElementById('labelWalletLifetime').textContent=`Lifetime earnings: UGX ${Number(wallet.lifetime_earnings||0).toLocaleString()}`;
+    document.getElementById('labelStatArtists').textContent=Number(stats.total_artists||0);document.getElementById('labelStatSongs').textContent=Number(stats.total_songs||0);document.getElementById('labelStatPlays').textContent=Number(stats.total_plays||0).toLocaleString();document.getElementById('labelStatDownloads').textContent=Number(stats.total_downloads||0).toLocaleString();
+    const limit=label.artist_limit===null?'Unlimited':label.artist_limit;document.getElementById('labelArtistLimitText').textContent=`${stats.total_artists||0} of ${limit} artist slots used. ${label.package_code==='free'?'Each linked artist may submit one song per calendar month.':'Paid Label packages allow unlimited uploads.'}`;
+    const artistList=document.getElementById('labelArtistsList');artistList.innerHTML=(data.artists||[]).map(a=>`<div style="display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid #333;"><div><strong>${escapeHtml(a.name||'Artist')}</strong><div style="font-size:12px;color:#999;">${Number(a.plays||0).toLocaleString()} plays · ${Number(a.downloads||0).toLocaleString()} downloads</div></div>${data.permissions?.can_manage_artists?`<button class="btn btn-dark" type="button" onclick="removeLabelArtist('${String(a.artist_user_id).replace(/[^a-f0-9-]/gi,'')}')">Remove</button>`:''}</div>`).join('')||'<p style="color:#999;">No artists linked yet.</p>';
+    const expiry=label.expires_at?new Date(label.expires_at).toLocaleDateString(): 'No expiry';document.getElementById('labelRenewalInfo').textContent=label.package_code==='free'?'Your Free Label has no annual expiry.':`Subscription expiry: ${expiry}. A three-day grace period applies. Renew manually; automatic collection is not enabled.`;
+    const renewal=document.getElementById('labelRenewPackage');if(renewal&&label.package_code!=='free')renewal.value=label.package_code;
+    document.getElementById('labelEarningsList').innerHTML=(data.ledger||[]).map(e=>`<div style="padding:9px 0;border-bottom:1px solid #333;"><strong>UGX ${Number(e.net_amount||0).toLocaleString()}</strong> · ${escapeHtml(String(e.source_type||'earning').replace(/_/g,' '))}<div style="font-size:11px;color:#999;">${escapeHtml(e.created_at||'')}</div></div>`).join('')||'No earnings recorded yet.';
+    document.getElementById('labelManagersList').innerHTML=(data.managers||[]).map(m=>`<div style="padding:7px 0;border-bottom:1px solid #333;color:#bbb;font-size:13px;">${escapeHtml(m.invited_email)} <span style="color:#888;">· view-only</span></div>`).join('')||'<p style="color:#999;font-size:12px;">No managers added.</p>';
+    const owner=Boolean(data.permissions?.owner);document.querySelectorAll('#labelDashboardContent button').forEach(b=>{if(['Add Artist','Add Manager'].includes(b.textContent.trim()))b.style.display=owner?'':'none';});
+    document.getElementById('labelArtistEmail').disabled=!owner;document.getElementById('labelManagerEmail').disabled=!owner;
+  }catch(e){console.error('Label dashboard:',e);showMessage('labelArtistManageMessage',e.message||'Could not load Label dashboard.','error');}
+}
+async function addLabelArtist(){const email=document.getElementById('labelArtistEmail').value.trim();try{const r=await fetch(`/api/label/artists`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({email})});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Could not add Artist.');document.getElementById('labelArtistEmail').value='';showMessage('labelArtistManageMessage',d.message||'Artist added.','success');await loadLabelDashboard();}catch(e){showMessage('labelArtistManageMessage',e.message,'error');}}
+async function removeLabelArtist(artist_user_id){if(!confirm('Remove this Artist from your Label? Their existing songs and recorded earnings will remain.'))return;try{const r=await fetch(`/api/label/artists`,{method:'DELETE',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({artist_user_id})});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Could not remove Artist.');await loadLabelDashboard();}catch(e){showMessage('labelArtistManageMessage',e.message,'error');}}
+async function addLabelManager(){const email=document.getElementById('labelManagerEmail').value.trim();try{const r=await fetch(`/api/label/managers`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({email})});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Could not add manager.');document.getElementById('labelManagerEmail').value='';showMessage('labelManagerMessage',d.message||'Manager added.','success');}catch(e){showMessage('labelManagerMessage',e.message,'error');}}
+async function renewLabelSubscription(){const package_code=document.getElementById('labelRenewPackage').value,provider=document.getElementById('labelRenewProvider').value,phone_number=document.getElementById('labelRenewPhone').value.trim();try{const r=await fetch(`/api/label/renew`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({package_code,provider,phone_number})});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Could not start renewal.');showMessage('labelRenewalMessage',`Payment prompt started for UGX ${Number(d.amount||0).toLocaleString()}. Approve it on your phone. Reference: ${d.reference}.`,'success');}catch(e){showMessage('labelRenewalMessage',e.message,'error');}}
 
 
 /* =========================================================
@@ -11856,13 +11896,14 @@ async function loadAdminReferralDashboard(){
     const referralLinkInput=document.getElementById('adminReferralShareLink');
     if(referralLinkInput) referralLinkInput.value=referralCode ? `${window.location.origin}/?ref=${encodeURIComponent(referralCode)}` : '';
     document.getElementById('adminReferralArtists').textContent=x.referred_artists||0;
+    const labelCount=document.getElementById('adminReferralLabels');if(labelCount)labelCount.textContent=x.referred_labels||0;
     document.getElementById('adminReferralTotal').textContent=money(x.total_earnings);
     document.getElementById('adminReferralBalance').textContent=money(x.balance);
-    document.getElementById('adminReferralCommissions').innerHTML=(x.commissions||[]).map(c=>`<tr><td>${new Date(c.created_at).toLocaleString()}</td><td>${escapeHtml(c.artist_name||c.artist_id)}</td><td>${escapeHtml(c.source_type)}</td><td>${money(c.gross_amount)}</td><td>${money(c.amount)}</td><td>${escapeHtml(c.status)}</td></tr>`).join('')||'<tr><td colspan="6">No commissions recorded yet.</td></tr>';
+    document.getElementById('adminReferralCommissions').innerHTML=(x.commissions||[]).map(c=>`<tr><td>${new Date(c.created_at).toLocaleString()}</td><td>${escapeHtml(c.artist_name||c.entity_name||c.artist_id)}${c.entity_type==='label'?' <small>(Label)</small>':''}</td><td>${escapeHtml(c.source_type)}</td><td>${money(c.gross_amount)}</td><td>${money(c.amount)}</td><td>${escapeHtml(c.status)}</td></tr>`).join('')||'<tr><td colspan="6">No commissions recorded yet.</td></tr>';
     document.getElementById('adminReferralWithdrawals').innerHTML=(x.withdrawals||[]).map(w=>`<tr><td>${new Date(w.created_at).toLocaleString()}</td><td>${money(w.amount)}</td><td>${escapeHtml(w.provider)}</td><td>${escapeHtml(w.status)}</td><td>${escapeHtml(w.review_note||'—')}</td></tr>`).join('')||'<tr><td colspan="5">No withdrawal requests.</td></tr>';
     const superPanel=document.getElementById('adminReferralSuperPanel');
     if(x.all_admins){superPanel.classList.remove('hidden');
-      document.getElementById('adminReferralAllAdmins').innerHTML=x.all_admins.map(a=>`<tr><td>${escapeHtml(a.email||a.id)}</td><td><select id="rank-${a.id}">${['junior_admin','admin','senior_admin','admin_manager','super_admin'].map(v=>`<option value="${v}" ${(a.role==='super_admin'?'super_admin':(a.rank||'admin'))===v?'selected':''}>${v.replaceAll('_',' ')}</option>`).join('')}</select></td><td>${escapeHtml(a.referral_code||'')}</td><td>${a.referred_artists||0}</td><td>${money(a.total_commission)}</td><td>${money(a.balance)}</td><td><button class="btn" onclick="saveAdminRank('${a.id}','${a.user_id||''}','${a.email||''}')">Save rank</button> <button class="btn" onclick="toggleAdminSuspension('${a.id}',${a.active?1:0})">${a.active?'Suspend':'Reactivate'}</button></td></tr>`).join('');
+      document.getElementById('adminReferralAllAdmins').innerHTML=x.all_admins.map(a=>`<tr><td>${escapeHtml(a.email||a.id)}</td><td><select id="rank-${a.id}">${['junior_admin','admin','senior_admin','admin_manager','super_admin'].map(v=>`<option value="${v}" ${(a.role==='super_admin'?'super_admin':(a.rank||'admin'))===v?'selected':''}>${v.replaceAll('_',' ')}</option>`).join('')}</select></td><td>${escapeHtml(a.referral_code||'')}</td><td>${a.referred_artists||0}</td><td>${a.referred_labels||0}</td><td>${money(a.total_commission)}</td><td>${money(a.balance)}</td><td><button class="btn" onclick="saveAdminRank('${a.id}','${a.user_id||''}','${a.email||''}')">Save rank</button> <button class="btn" onclick="toggleAdminSuspension('${a.id}',${a.active?1:0})">${a.active?'Suspend':'Reactivate'}</button></td></tr>`).join('');
       document.getElementById('adminReferralPendingWithdrawals').innerHTML=(x.pending_withdrawals||[]).map(w=>`<tr><td>${escapeHtml(w.admin_email||w.admin_id)}</td><td>${money(w.amount)}</td><td>${escapeHtml(w.phone_number)}</td><td>${escapeHtml(w.provider)}</td><td><button class="btn btn-orange" onclick="reviewAdminReferralWithdrawal('${w.id}','approve')">Approve</button> <button class="btn" onclick="reviewAdminReferralWithdrawal('${w.id}','reject')">Reject</button></td></tr>`).join('')||'<tr><td colspan="5">No pending admin withdrawals.</td></tr>';
     } else superPanel.classList.add('hidden');
     if(msg) msg.textContent='Admin earnings loaded.';
