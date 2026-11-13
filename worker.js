@@ -3121,6 +3121,7 @@ async function rpcRoute(request, env, name) {
         `).bind(
           targetUser.email,
           role,
+          role === "super_admin" ? "super_admin" : "admin",
           targetUser.id
         ).run();
       } else {
@@ -3133,7 +3134,8 @@ async function rpcRoute(request, env, name) {
           crypto.randomUUID(),
           targetUser.id,
           targetUser.email,
-          role
+          role,
+          role === "super_admin" ? "super_admin" : "admin"
         ).run();
       }
 
