@@ -163,6 +163,9 @@ async function ensureAdminReferralSchema(env) {
     commission_required REAL NOT NULL DEFAULT 0, service_days_required INTEGER NOT NULL DEFAULT 0
   )`).run();
   await env.DB.prepare(`INSERT OR IGNORE INTO admin_rank_policy(rank) VALUES ('junior_admin'),('admin'),('senior_admin'),('admin_manager'),('super_admin')`).run();
+  await addColumn('admin_referral_commissions', 'entity_type', "TEXT NOT NULL DEFAULT 'artist'");
+  await addColumn('admin_referral_commissions', 'label_id', 'TEXT');
+  await addColumn('admin_referral_commissions', 'entity_name', 'TEXT');
   await addColumn('admins', 'rank', "TEXT NOT NULL DEFAULT 'admin'");
   await addColumn('admins', 'referral_code', 'TEXT');
   await addColumn('admins', 'suspended_at', 'TEXT');
@@ -183,16 +186,18 @@ async function ensureAdminWallet(env, adminId) {
   await env.DB.prepare(`INSERT OR IGNORE INTO admin_wallets(id,admin_id,balance) VALUES(?,?,0)`).bind(crypto.randomUUID(), adminId).run();
 }
 
-async function creditAdminCommission(env, { eventKey, adminId, artistId, sourceType, sourceId, gross, rate, note }) {
+async function creditAdminCommission(env, { eventKey, adminId, artistId, labelId, entityType='artist', entityName, sourceType, sourceId, gross, rate, note }) {
   const amount = Math.round(Number(gross) * Number(rate) * 1000) / 1000;
-  if (!adminId || !artistId || !eventKey || !Number.isFinite(amount) || amount <= 0) return false;
+  const kind = entityType === 'label' ? 'label' : 'artist';
+  const commissionEntityId = artistId || labelId;
+  if (!adminId || !commissionEntityId || !eventKey || !Number.isFinite(amount) || amount <= 0) return false;
   await ensureAdminReferralSchema(env);
   await ensureAdminWallet(env, adminId);
   const results = await env.DB.batch([
     env.DB.prepare(`INSERT OR IGNORE INTO admin_referral_commissions
-      (id,event_key,admin_id,artist_id,source_type,source_id,gross_amount,commission_rate,amount,currency,status,note)
-      SELECT ?,?,?,?,?,?,?,?,?, 'UGX','posted',? WHERE EXISTS (SELECT 1 FROM admins WHERE id=? AND active=1 AND suspended_at IS NULL)`)
-      .bind(crypto.randomUUID(),eventKey,adminId,artistId,sourceType,sourceId,Number(gross),Number(rate),amount,note||null,adminId),
+      (id,event_key,admin_id,artist_id,source_type,source_id,gross_amount,commission_rate,amount,currency,status,note,entity_type,label_id,entity_name)
+      SELECT ?,?,?,?,?,?,?,?,?, 'UGX','posted',?,?,?,? WHERE EXISTS (SELECT 1 FROM admins WHERE id=? AND active=1 AND suspended_at IS NULL)`)
+      .bind(crypto.randomUUID(),eventKey,adminId,commissionEntityId,sourceType,sourceId,Number(gross),Number(rate),amount,note||null,kind,kind==='label'?(labelId||commissionEntityId):null,entityName||null,adminId),
     env.DB.prepare(`UPDATE admin_wallets SET balance=balance+?,updated_at=datetime('now') WHERE admin_id=? AND changes()>0`).bind(amount,adminId)
   ]);
   return Number(results?.[0]?.meta?.changes || 0) > 0;
@@ -251,15 +256,17 @@ async function adminReferralRoute(request, env, path) {
   }
 
   if (request.method === 'GET' && path === '/api/admin/referrals') {
+    await ensureLabelSchema(env);
     await ensureAdminWallet(env,admin.id);
     const wallet = await env.DB.prepare(`SELECT balance FROM admin_wallets WHERE admin_id=?`).bind(admin.id).first();
-    const totals = await env.DB.prepare(`SELECT COUNT(DISTINCT artist_id) artists, COALESCE(SUM(amount),0) earnings FROM admin_referral_commissions WHERE admin_id=? AND status='posted'`).bind(admin.id).first();
-    const commissions = await env.DB.prepare(`SELECT c.*,a.name artist_name FROM admin_referral_commissions c LEFT JOIN artists a ON a.id=c.artist_id WHERE c.admin_id=? ORDER BY datetime(c.created_at) DESC LIMIT 200`).bind(admin.id).all();
+    const totals = await env.DB.prepare(`SELECT COUNT(DISTINCT CASE WHEN COALESCE(entity_type,'artist')='artist' THEN artist_id END) artists, COUNT(DISTINCT CASE WHEN entity_type='label' THEN label_id END) labels, COALESCE(SUM(amount),0) earnings FROM admin_referral_commissions WHERE admin_id=? AND status='posted'`).bind(admin.id).first();
+    const commissions = await env.DB.prepare(`SELECT c.*,COALESCE(l.name,a.name,c.entity_name) artist_name FROM admin_referral_commissions c LEFT JOIN artists a ON a.id=c.artist_id AND COALESCE(c.entity_type,'artist')='artist' LEFT JOIN labels l ON l.id=c.label_id WHERE c.admin_id=? ORDER BY datetime(c.created_at) DESC LIMIT 200`).bind(admin.id).all();
     const referrals = await env.DB.prepare(`SELECT a.id,a.name,a.created_at FROM artists a WHERE a.referring_admin_id=? ORDER BY datetime(a.created_at) DESC LIMIT 500`).bind(admin.id).all();
+    const referredLabels = await env.DB.prepare(`SELECT id,name,package_code,created_at FROM labels WHERE referring_admin_id=? ORDER BY datetime(created_at) DESC LIMIT 500`).bind(admin.id).all();
     const withdrawals = await env.DB.prepare(`SELECT * FROM admin_withdrawal_requests WHERE admin_id=? ORDER BY datetime(created_at) DESC LIMIT 100`).bind(admin.id).all();
-    const result = { admin: {...admin, referral_code: (await env.DB.prepare('SELECT referral_code,rank FROM admins WHERE id=?').bind(admin.id).first())?.referral_code}, balance:Number(wallet?.balance||0), referred_artists:Number(totals?.artists||0), total_earnings:Number(totals?.earnings||0), commissions:commissions.results||[], referrals:referrals.results||[], withdrawals:withdrawals.results||[] };
+    const result = { admin: {...admin, referral_code: (await env.DB.prepare('SELECT referral_code,rank FROM admins WHERE id=?').bind(admin.id).first())?.referral_code}, balance:Number(wallet?.balance||0), referred_artists:Number(totals?.artists||0), referred_labels:Number(referredLabels.results?.length||0), total_earnings:Number(totals?.earnings||0), commissions:commissions.results||[], referrals:referrals.results||[], labels:referredLabels.results||[], withdrawals:withdrawals.results||[] };
     if (superAdmin) {
-      const all = await env.DB.prepare(`SELECT ad.id,ad.user_id,ad.email,ad.role,ad.rank,ad.active,ad.referral_code,COALESCE(w.balance,0) balance,COUNT(DISTINCT c.artist_id) referred_artists,COALESCE(SUM(c.amount),0) total_commission FROM admins ad LEFT JOIN admin_wallets w ON w.admin_id=ad.id LEFT JOIN admin_referral_commissions c ON c.admin_id=ad.id AND c.status='posted' GROUP BY ad.id ORDER BY ad.created_at`).all();
+      const all = await env.DB.prepare(`SELECT ad.id,ad.user_id,ad.email,ad.role,ad.rank,ad.active,ad.referral_code,COALESCE(w.balance,0) balance,COUNT(DISTINCT CASE WHEN COALESCE(c.entity_type,'artist')='artist' THEN c.artist_id END) referred_artists,COUNT(DISTINCT CASE WHEN c.entity_type='label' THEN c.label_id END) referred_labels,COALESCE(SUM(c.amount),0) total_commission FROM admins ad LEFT JOIN admin_wallets w ON w.admin_id=ad.id LEFT JOIN admin_referral_commissions c ON c.admin_id=ad.id AND c.status='posted' GROUP BY ad.id ORDER BY ad.created_at`).all();
       const pending = await env.DB.prepare(`SELECT r.*,a.email admin_email FROM admin_withdrawal_requests r JOIN admins a ON a.id=r.admin_id WHERE r.status='pending' ORDER BY r.created_at`).all();
       result.all_admins=all.results||[]; result.pending_withdrawals=pending.results||[];
       result.rank_policy=(await env.DB.prepare(`SELECT * FROM admin_rank_policy ORDER BY CASE rank WHEN 'junior_admin' THEN 1 WHEN 'admin' THEN 2 WHEN 'senior_admin' THEN 3 WHEN 'admin_manager' THEN 4 ELSE 5 END`).all()).results||[];
@@ -587,6 +594,379 @@ function paymentReferenceName(value, fallback = "ARTIST") {
   return slug || fallback;
 }
 
+
+
+// =========================================================
+// LABEL ACCOUNTS — Cloudflare D1 implementation
+// =========================================================
+const LABEL_PACKAGES = Object.freeze({
+  free: { price: 0, artists: 2, rate: 0.5, verified: 0 },
+  basic: { price: 50000, artists: 3, rate: 1, verified: 1 },
+  pro: { price: 70000, artists: 5, rate: 2, verified: 1 },
+  premium: { price: 100000, artists: null, rate: 3, verified: 1 }
+});
+
+async function ensureLabelSchema(env) {
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS labels (
+      id TEXT PRIMARY KEY, owner_user_id TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
+      package_code TEXT NOT NULL DEFAULT 'free', annual_price INTEGER NOT NULL DEFAULT 0,
+      artist_limit INTEGER, earnings_rate REAL NOT NULL DEFAULT 0.5,
+      verified INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'active',
+      subscription_started_at TEXT, expires_at TEXT, grace_until TEXT,
+      referring_admin_id TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )`,
+    `CREATE TABLE IF NOT EXISTS label_wallets (
+      id TEXT PRIMARY KEY, label_id TEXT NOT NULL UNIQUE, balance REAL NOT NULL DEFAULT 0,
+      lifetime_earnings REAL NOT NULL DEFAULT 0, lifetime_withdrawals REAL NOT NULL DEFAULT 0,
+      currency TEXT NOT NULL DEFAULT 'UGX', created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )`,
+    `CREATE TABLE IF NOT EXISTS label_wallet_ledger (
+      id TEXT PRIMARY KEY, event_key TEXT NOT NULL UNIQUE, label_id TEXT NOT NULL,
+      artist_user_id TEXT, source_type TEXT NOT NULL, source_id TEXT,
+      gross_amount REAL NOT NULL DEFAULT 0, net_amount REAL NOT NULL DEFAULT 0,
+      currency TEXT NOT NULL DEFAULT 'UGX', status TEXT NOT NULL DEFAULT 'posted',
+      note TEXT, occurred_at TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )`,
+    `CREATE TABLE IF NOT EXISTS label_artists (
+      id TEXT PRIMARY KEY, label_id TEXT NOT NULL, artist_user_id TEXT NOT NULL,
+      artist_id TEXT, added_by_user_id TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(label_id, artist_user_id), UNIQUE(artist_user_id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS label_managers (
+      id TEXT PRIMARY KEY, label_id TEXT NOT NULL, manager_user_id TEXT NOT NULL,
+      invited_email TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'viewer',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(label_id, manager_user_id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS label_subscriptions (
+      id TEXT PRIMARY KEY, label_id TEXT NOT NULL, payment_reference TEXT NOT NULL UNIQUE,
+      package_code TEXT NOT NULL, amount INTEGER NOT NULL, currency TEXT NOT NULL DEFAULT 'UGX',
+      status TEXT NOT NULL DEFAULT 'pending', provider TEXT, provider_transaction_id TEXT,
+      provider_fee REAL, period_start TEXT, period_end TEXT, paid_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )`,
+    `CREATE TABLE IF NOT EXISTS pending_label_payments (
+      id TEXT PRIMARY KEY, reference TEXT NOT NULL UNIQUE, payment_type TEXT NOT NULL,
+      label_id TEXT, email TEXT, password_hash TEXT, label_name TEXT,
+      phone_number TEXT NOT NULL, provider TEXT NOT NULL, package_code TEXT NOT NULL,
+      amount INTEGER NOT NULL, currency TEXT NOT NULL DEFAULT 'UGX',
+      referral_code TEXT, status TEXT NOT NULL DEFAULT 'pending',
+      provider_transaction_id TEXT, failure_message TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')), completed_at TEXT, user_id TEXT
+    )`,
+    `CREATE TABLE IF NOT EXISTS label_renewal_reminders (
+      id TEXT PRIMARY KEY, label_id TEXT NOT NULL, reminder_day INTEGER NOT NULL,
+      expiry_date TEXT NOT NULL, sent_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(label_id, reminder_day, expiry_date)
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_label_artists_label ON label_artists(label_id, created_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_label_subscriptions_label ON label_subscriptions(label_id, created_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_pending_label_reference_status ON pending_label_payments(reference, status)`
+  ];
+  for (const sql of statements) await env.DB.prepare(sql).run();
+}
+
+function labelPackage(code) {
+  return LABEL_PACKAGES[String(code || '').trim().toLowerCase()] || null;
+}
+
+async function getLabelForUser(env, userId) {
+  await ensureLabelSchema(env);
+  return env.DB.prepare(`
+    SELECT l.*, CASE
+      WHEN l.package_code='free' THEN 'active'
+      WHEN l.expires_at IS NOT NULL AND datetime(l.expires_at)>datetime('now') THEN 'active'
+      WHEN l.grace_until IS NOT NULL AND datetime(l.grace_until)>datetime('now') THEN 'grace'
+      ELSE 'suspended' END AS subscription_state
+    FROM labels l WHERE l.owner_user_id=? LIMIT 1
+  `).bind(userId).first();
+}
+
+async function creditLabelWallet(env, { eventKey, labelId, artistUserId, sourceType, sourceId, amount, note }) {
+  const value = Math.round(Number(amount) * 1000) / 1000;
+  if (!eventKey || !labelId || !Number.isFinite(value) || value <= 0) return false;
+  await ensureLabelSchema(env);
+  await env.DB.prepare(`INSERT OR IGNORE INTO label_wallets(id,label_id,balance,lifetime_earnings) VALUES(?,?,0,0)`)
+    .bind(crypto.randomUUID(), labelId).run();
+  const result = await env.DB.batch([
+    env.DB.prepare(`INSERT OR IGNORE INTO label_wallet_ledger
+      (id,event_key,label_id,artist_user_id,source_type,source_id,gross_amount,net_amount,currency,status,note,occurred_at)
+      VALUES(?,?,?,?,?,?,?,?,'UGX','posted',?,datetime('now'))`)
+      .bind(crypto.randomUUID(),eventKey,labelId,artistUserId||null,sourceType,sourceId||null,value,value,note||null),
+    env.DB.prepare(`UPDATE label_wallets SET balance=balance+?,lifetime_earnings=lifetime_earnings+?,updated_at=datetime('now')
+      WHERE label_id=? AND changes()>0`).bind(value,value,labelId)
+  ]);
+  return Number(result?.[0]?.meta?.changes || 0) === 1;
+}
+
+async function createLabelAccount(env, { userId, email, name, packageCode, referralCode }) {
+  const plan = labelPackage(packageCode);
+  if (!plan) throw new Error('Invalid Label package.');
+  const referral = referralCode ? await env.DB.prepare(`SELECT id FROM admins WHERE upper(referral_code)=? AND active=1 AND suspended_at IS NULL LIMIT 1`)
+    .bind(String(referralCode).toUpperCase()).first() : null;
+  const labelId = crypto.randomUUID();
+  const now = new Date().toISOString();
+  const expiryDate = new Date(); if (packageCode !== 'free') expiryDate.setUTCFullYear(expiryDate.getUTCFullYear()+1); const expiry = packageCode === 'free' ? null : expiryDate.toISOString();
+  await ensureLabelSchema(env);
+  await env.DB.batch([
+    env.DB.prepare(`INSERT INTO labels(id,owner_user_id,name,package_code,annual_price,artist_limit,earnings_rate,verified,status,subscription_started_at,expires_at,grace_until,referring_admin_id)
+      VALUES(?,?,?,?,?,?,?,?, 'active',?,?,?,?)`)
+      .bind(labelId,userId,name,packageCode,plan.price,plan.artists,plan.rate,plan.verified,now,expiry,expiry?new Date(new Date(expiry).getTime()+3*86400000).toISOString():null,referral?.id||null),
+    env.DB.prepare(`INSERT OR IGNORE INTO label_wallets(id,label_id,balance,lifetime_earnings) VALUES(?,?,0,0)`)
+      .bind(crypto.randomUUID(),labelId)
+  ]);
+  return { id: labelId, name, package_code: packageCode, verified: plan.verified, expires_at: expiry };
+}
+
+async function sendLabelVerification(env, userId, email, labelName) {
+  const verificationToken = crypto.randomUUID() + crypto.randomUUID().replace(/-/g, '');
+  await env.DB.prepare(`UPDATE auth_users SET confirmation_token=?,confirmation_sent_at=datetime('now'),updated_at=datetime('now') WHERE id=?`)
+    .bind(verificationToken,userId).run();
+  let sent = false;
+  try {
+    const link = `https://nilesoniq.com/api/auth/verify-email?token=${encodeURIComponent(verificationToken)}`;
+    await sendResendEmail(env,{to:email,subject:'Verify your NileSoniQ Label account',text:`Welcome to NileSoniQ, ${labelName}. Verify your email: ${link}`,html:`<p>Welcome to NileSoniQ, ${String(labelName).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}.</p><p><a href="${link}">Verify your email address</a></p>`});
+    sent = true;
+  } catch (e) { console.error('Label verification email failed:',e.message); }
+  return sent;
+}
+
+async function labelSignupRoute(request, env) {
+  await ensureLabelSchema(env);
+  if (request.method === 'GET') {
+    const ref = String(new URL(request.url).searchParams.get('reference')||'').trim();
+    const row = await env.DB.prepare(`SELECT status,failure_message FROM pending_label_payments WHERE reference=? AND payment_type='signup' LIMIT 1`).bind(ref).first();
+    if (!row) return error('Label payment request not found.',404);
+    return json({status:row.status,message:row.status==='completed'?'Payment confirmed. Your Label account is ready.':row.failure_message||'Payment is still pending.'});
+  }
+  if (request.method !== 'POST') return error('Method not allowed',405);
+  const body = await readBody(request);
+  const email=String(body.email||'').trim().toLowerCase(), password=String(body.password||'');
+  const name=String(body.label_name||body.name||'').trim();
+  const packageCode=String(body.package_code||'free').trim().toLowerCase();
+  const plan=labelPackage(packageCode);
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return error('Please enter a valid email address.',422);
+  if (password.length<6 || password.length>128) return error('Password must be between 6 and 128 characters.',422);
+  if (!name || name.length>100) return error('Please enter a valid Label name.',422);
+  if (!plan) return error('Choose a valid Label package.',422);
+  const existing=await env.DB.prepare(`SELECT id FROM auth_users WHERE lower(email)=? AND deleted_at IS NULL LIMIT 1`).bind(email).first();
+  if (existing) return error('An account with that email already exists.',409);
+  const referralCode=String(body.referral_code||body.ref||'').trim().toUpperCase().slice(0,40);
+  if (packageCode==='free') {
+    const userId=crypto.randomUUID(), passwordHash=await bcrypt.hash(password,10);
+    await env.DB.prepare(`INSERT INTO auth_users(id,email,encrypted_password,raw_user_meta_data,created_at,updated_at,is_anonymous,is_sso_user)
+      VALUES(?,?,?,?,datetime('now'),datetime('now'),0,0)`)
+      .bind(userId,email,passwordHash,JSON.stringify({account_type:'label',label_name:name})).run();
+    const label=await createLabelAccount(env,{userId,email,name,packageCode,referralCode});
+    const verificationEmailSent=await sendLabelVerification(env,userId,email,name);
+    const token=await createSession(env,userId);
+    return json({success:true,status:'completed',user:{id:userId,email,account_type:'label'},label,verification_email_sent:verificationEmailSent},201,{'Set-Cookie':makeCookie(token,SESSION_SECONDS)});
+  }
+  const phone=normalizeUgandanPhone(body.phone_number||body.phoneNumber);
+  const provider=String(body.provider||'').toLowerCase();
+  if (!/^\+256\d{9}$/.test(phone)) return error('Enter a valid Ugandan mobile-money number.',422);
+  if (!['mtn','airtel'].includes(provider)) return error('Provider must be MTN or Airtel.',422);
+  const apiKey=env.PESAJET_API_KEY||env.PESAJET_TOKEN;
+  const baseUrl=String(env.PESAJET_API_BASE_URL||'https://payments.pesajet.com/api/v1').replace(/\/+$/,'');
+  if (!apiKey) return error('Payment service is not configured.',503);
+  const reference=`NILESONIQ-LABEL-SIGNUP-${crypto.randomUUID().replace(/-/g,'').slice(0,24).toUpperCase()}`;
+  const risk=await checkPesaJetCollectionRisk(request,env,phone,null,reference);
+  if (risk.blocked) return error(risk.message,429);
+  const passwordHash=await bcrypt.hash(password,10);
+  await env.DB.prepare(`INSERT INTO pending_label_payments(id,reference,payment_type,email,password_hash,label_name,phone_number,provider,package_code,amount,currency,referral_code,status)
+    VALUES(?,?,'signup',?,?,?,?,?,?,?,'UGX',?,'pending')`)
+    .bind(crypto.randomUUID(),reference,email,passwordHash,name,phone,provider,packageCode,plan.price,referralCode||null).run();
+  let response,result;
+  try {
+    response=await fetch(`${baseUrl}/payments`,{method:'POST',headers:{'Content-Type':'application/json','X-API-Key':apiKey},body:JSON.stringify({type:'COLLECTION',amount:plan.price,currency:'UGX',phoneNumber:phone,provider,reference,description:`NileSoniQ Label ${packageCode} annual subscription`,idempotencyKey:`nilesoniq-${reference}`})});
+    result=await response.json().catch(()=>({}));
+  } catch(e) { console.error('Label signup payment outcome uncertain:',e.message); return error(`Payment request outcome is uncertain. It remains pending; do not pay again. Reference: ${reference}`,502); }
+  const data=result?.data&&typeof result.data==='object'?result.data:{};
+  const tx=result?.transaction&&typeof result.transaction==='object'?result.transaction:(data?.transaction&&typeof data.transaction==='object'?data.transaction:data);
+  const statuses=[tx?.status,tx?.transactionStatus,tx?.paymentStatus,data?.status,result?.status].filter(Boolean).map(v=>String(v).toUpperCase().replace(/[\s-]+/g,'_'));
+  const failed=!response.ok||result?.success===false||data?.success===false||result?.error||data?.error||statuses.some(v=>['FAILED','FAILURE','ERROR','EXPIRED','REJECTED','DECLINED','CANCELLED','CANCELED','TIMED_OUT','TIMEOUT'].includes(v));
+  if (failed) {
+    const reason=String(result?.message||result?.error?.message||data?.message||'Payment provider rejected the request.');
+    await env.DB.prepare(`UPDATE pending_label_payments SET status='failed',failure_message=? WHERE reference=? AND status='pending'`).bind(reason.slice(0,300),reference).run();
+    return error(reason,response.status>=400&&response.status<500?response.status:502);
+  }
+  const txId=String(tx?.transactionId||tx?.transaction_id||data?.transactionId||result?.transactionId||'');
+  await env.DB.prepare(`UPDATE pending_label_payments SET provider_transaction_id=? WHERE reference=? AND status='pending'`).bind(txId,reference).run();
+  return json({success:true,status:'pending',reference,amount:plan.price,currency:'UGX',package_code:packageCode,message:`Approve the UGX ${plan.price.toLocaleString('en-US')} payment prompt. Your Label account will only be created after PesaJet confirms payment.`},202);
+}
+
+async function completePaidLabelPayment(env, reference, status, transactionId, amount, currency, fee, failureMessage='') {
+  await ensureLabelSchema(env);
+  const row=await env.DB.prepare(`SELECT * FROM pending_label_payments WHERE reference=? LIMIT 1`).bind(reference).first();
+  if (!row) return {matched:false};
+  if (row.status!=='pending') return {matched:true,changed:false,reason:'already_processed'};
+  const incomingTx=String(transactionId||'');
+  if (row.provider_transaction_id&&incomingTx&&row.provider_transaction_id!==incomingTx) return {matched:true,changed:false,reason:'transaction_id_mismatch'};
+  if (!isSuccessfulPaymentStatus(status)) {
+    await env.DB.prepare(`UPDATE pending_label_payments SET status='failed',provider_transaction_id=COALESCE(NULLIF(?,''),provider_transaction_id),failure_message=? WHERE reference=? AND status='pending'`)
+      .bind(incomingTx,String(failureMessage||status).slice(0,300),reference).run();
+    return {matched:true,changed:true,reason:'payment_failed'};
+  }
+  const received=Number(amount), expected=Number(row.amount), feeNum=fee===null||fee===undefined||fee===''?0:Number(fee);
+  if (!Number.isFinite(received)||received<expected||String(currency||'').toUpperCase()!=='UGX'||!Number.isFinite(feeNum)||feeNum<0||feeNum>received) return {matched:true,changed:false,reason:'amount_currency_mismatch'};
+  const claim=await env.DB.prepare(`UPDATE pending_label_payments SET status='processing',provider_transaction_id=COALESCE(NULLIF(?,''),provider_transaction_id) WHERE reference=? AND status='pending'`).bind(incomingTx,reference).run();
+  if (Number(claim?.meta?.changes||0)!==1) return {matched:true,changed:false,reason:'already_processing_or_processed'};
+  try {
+    const net=received-feeNum;
+    let labelId=row.label_id, ownerUserId=row.user_id;
+    if (row.payment_type==='signup') {
+      const existingUser=await env.DB.prepare(`SELECT id FROM auth_users WHERE lower(email)=? AND deleted_at IS NULL LIMIT 1`).bind(String(row.email).toLowerCase()).first();
+      if (existingUser) {
+        ownerUserId=existingUser.id;
+        const existingLabel=await env.DB.prepare(`SELECT id FROM labels WHERE owner_user_id=? LIMIT 1`).bind(ownerUserId).first();
+        if (!existingLabel) throw new Error('An account with this email already exists.');
+        labelId=existingLabel.id;
+      } else {
+        ownerUserId=crypto.randomUUID();
+        await env.DB.prepare(`INSERT INTO auth_users(id,email,encrypted_password,raw_user_meta_data,created_at,updated_at,is_anonymous,is_sso_user)
+          VALUES(?,?,?,?,datetime('now'),datetime('now'),0,0)`)
+          .bind(ownerUserId,row.email,row.password_hash,JSON.stringify({account_type:'label',label_name:row.label_name})).run();
+        const createdLabel=await createLabelAccount(env,{userId:ownerUserId,email:row.email,name:row.label_name,packageCode:row.package_code,referralCode:row.referral_code});
+        labelId=createdLabel.id;
+      }
+      const expiryRow=await env.DB.prepare(`SELECT expires_at FROM labels WHERE id=?`).bind(labelId).first();
+      const expiry=expiryRow?.expires_at||null;
+      await env.DB.prepare(`UPDATE labels SET subscription_started_at=COALESCE(subscription_started_at,datetime('now')),grace_until=COALESCE(grace_until,datetime(?,'+3 days')),updated_at=datetime('now') WHERE id=?`)
+        .bind(expiry,labelId).run();
+    } else {
+      const label=await env.DB.prepare(`SELECT * FROM labels WHERE id=? LIMIT 1`).bind(row.label_id).first();
+      if (!label) throw new Error('Label account was not found.');
+      const pkg=labelPackage(row.package_code); if (!pkg) throw new Error('Invalid Label package.');
+      const startMs=Math.max(Date.now(),label.expires_at?new Date(label.expires_at).getTime():0);
+      const start=new Date(startMs), expiry=new Date(startMs); expiry.setUTCFullYear(expiry.getUTCFullYear()+1);
+      await env.DB.prepare(`UPDATE labels SET package_code=?,annual_price=?,artist_limit=?,earnings_rate=?,verified=?,status='active',subscription_started_at=?,expires_at=?,grace_until=?,updated_at=datetime('now') WHERE id=?`)
+        .bind(row.package_code,pkg.price,pkg.artists,pkg.rate,pkg.verified,start.toISOString(),expiry.toISOString(),new Date(expiry.getTime()+3*86400000).toISOString(),label.id).run();
+      labelId=label.id; ownerUserId=label.owner_user_id;
+    }
+    const label=await env.DB.prepare(`SELECT referring_admin_id,owner_user_id FROM labels WHERE id=?`).bind(labelId).first();
+    const period=await env.DB.prepare(`SELECT subscription_started_at,expires_at FROM labels WHERE id=?`).bind(labelId).first();
+    await env.DB.batch([
+      env.DB.prepare(`INSERT OR IGNORE INTO label_subscriptions(id,label_id,payment_reference,package_code,amount,currency,status,provider,provider_transaction_id,provider_fee,period_start,period_end,paid_at)
+        VALUES(?,?,?,?,?,'UGX','paid','pesajet',?,?,?,?,datetime('now'))`)
+        .bind(crypto.randomUUID(),labelId,reference,row.package_code,received,incomingTx||null,feeNum,period?.subscription_started_at||null,period?.expires_at||null),
+      env.DB.prepare(`INSERT OR IGNORE INTO platform_financial_ledger(id,event_key,event_type,source_type,source_id,reference,amount_signed,currency,pesajet_fee_amount,status,note,occurred_at)
+        VALUES(?,?,'collection','label_subscription',?,?,?,'UGX',?,?, CASE WHEN ?='fee_unverified' THEN 'Verified PesaJet Label payment; provider fee was not supplied and requires reconciliation' ELSE 'Verified PesaJet Label annual subscription' END,datetime('now'))`)
+        .bind(crypto.randomUUID(),`label-payment:${reference}`,labelId,reference,net,feeNum,fee===null||fee===undefined||fee===''?'fee_unverified':'posted',fee===null||fee===undefined||fee===''?'fee_unverified':'posted'),
+      env.DB.prepare(`UPDATE platform_wallet SET balance=balance+?,updated_at=datetime('now') WHERE id=(SELECT id FROM platform_wallet ORDER BY created_at LIMIT 1) AND changes()>0`).bind(net)
+    ]);
+    if (label?.referring_admin_id) {
+      const labelName=(await env.DB.prepare('SELECT name FROM labels WHERE id=?').bind(labelId).first())?.name;
+      await creditAdminCommission(env,{eventKey:`label-package:${reference}`,adminId:label.referring_admin_id,artistId:ownerUserId,labelId,entityType:'label',entityName:labelName,sourceType:row.payment_type==='signup'?'label_package_signup':'label_package_renewal',sourceId:reference,gross:Number(row.amount),rate:ADMIN_PACKAGE_COMMISSION_RATE,note:'20% of verified Label annual package price'});
+    }
+    if (row.payment_type==='signup') await sendLabelVerification(env,ownerUserId,row.email,row.label_name);
+    await env.DB.prepare(`UPDATE pending_label_payments SET status='completed',completed_at=datetime('now'),user_id=? WHERE reference=? AND status='processing'`).bind(ownerUserId,reference).run();
+    return {matched:true,changed:true,reason:'verified_success',labelId,ownerUserId};
+  } catch(e) {
+    console.error('Label payment completion failed:',e.message);
+    await env.DB.prepare(`UPDATE pending_label_payments SET status='pending',failure_message=? WHERE reference=? AND status='processing'`).bind(String(e.message||'Completion failed').slice(0,300),reference).run().catch(()=>{});
+    return {matched:true,changed:false,reason:'completion_failed'};
+  }
+}
+
+async function labelRoute(request, env, path) {
+  await ensureLabelSchema(env);
+  const user=await currentUser(request,env);
+  if (!user) return error('Authentication required',401);
+  const owned=await getLabelForUser(env,user.id);
+  const manager=owned?null:await env.DB.prepare(`SELECT l.*,CASE WHEN l.package_code='free' THEN 'active' WHEN datetime(l.expires_at)>datetime('now') THEN 'active' WHEN datetime(l.grace_until)>datetime('now') THEN 'grace' ELSE 'suspended' END subscription_state FROM label_managers m JOIN labels l ON l.id=m.label_id WHERE m.manager_user_id=? LIMIT 1`).bind(user.id).first();
+  const label=owned||manager;
+  if (!label) return error('Label account not found.',403);
+  const isOwner=Boolean(owned);
+  if (request.method==='GET' && path==='/api/label/dashboard') {
+    const wallet=await env.DB.prepare(`SELECT balance,lifetime_earnings,lifetime_withdrawals,currency FROM label_wallets WHERE label_id=?`).bind(label.id).first();
+    const artists=await env.DB.prepare(`SELECT la.artist_user_id,la.created_at,a.id artist_id,a.name,a.avatar_url,COALESCE((SELECT SUM(s.plays) FROM songs s WHERE s.artist_id=la.artist_user_id),0) plays,COALESCE((SELECT SUM(s.downloads) FROM songs s WHERE s.artist_id=la.artist_user_id),0) downloads FROM label_artists la LEFT JOIN artists a ON a.user_id=la.artist_user_id WHERE la.label_id=? ORDER BY datetime(la.created_at) DESC`).bind(label.id).all();
+    const ledger=await env.DB.prepare(`SELECT source_type,source_id,gross_amount,net_amount,note,created_at FROM label_wallet_ledger WHERE label_id=? ORDER BY datetime(created_at) DESC LIMIT 50`).bind(label.id).all();
+    const managers=await env.DB.prepare(`SELECT m.invited_email,m.role,m.created_at FROM label_managers m WHERE m.label_id=? ORDER BY datetime(m.created_at) DESC`).bind(label.id).all();
+    const counts=await env.DB.prepare(`SELECT COUNT(*) total_artists,COALESCE(SUM((SELECT COUNT(*) FROM songs s WHERE s.artist_id=la.artist_user_id)),0) total_songs,COALESCE(SUM((SELECT SUM(s.plays) FROM songs s WHERE s.artist_id=la.artist_user_id)),0) total_plays,COALESCE(SUM((SELECT SUM(s.downloads) FROM songs s WHERE s.artist_id=la.artist_user_id)),0) total_downloads FROM label_artists la WHERE la.label_id=?`).bind(label.id).first();
+    return json({label,wallet:wallet||{balance:0,lifetime_earnings:0},artists:artists.results||[],managers:managers.results||[],ledger:ledger.results||[],stats:counts||{},permissions:{owner:isOwner,can_manage_artists:isOwner,can_manage_managers:isOwner,can_withdraw:false}});
+  }
+  if (request.method==='POST' && path==='/api/label/artists') {
+    if (!isOwner) return error('Only the Label owner can manage artists.',403);
+    if (label.subscription_state==='suspended') return error('Your Label subscription is suspended. Renew to manage artists.',403);
+    const body=await readBody(request), email=String(body.email||'').trim().toLowerCase();
+    if (!email||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return error('Enter a valid artist account email.',422);
+    const artistUser=await env.DB.prepare(`SELECT id,email FROM auth_users WHERE lower(email)=? AND deleted_at IS NULL LIMIT 1`).bind(email).first();
+    if (!artistUser) return error('That artist must create an Artist account first.',404);
+    const artist=await env.DB.prepare(`SELECT id,name FROM artists WHERE user_id=? LIMIT 1`).bind(artistUser.id).first();
+    if (!artist) return error('No Artist profile was found for that account.',404);
+    const count=await env.DB.prepare(`SELECT COUNT(*) total FROM label_artists WHERE label_id=?`).bind(label.id).first();
+    const limit=label.artist_limit===null?null:Number(label.artist_limit);
+    if (limit!==null&&Number(count?.total||0)>=limit) return error(`Your ${label.package_code} Label package allows up to ${limit} artists.`,409);
+    try {
+      await env.DB.prepare(`INSERT INTO label_artists(id,label_id,artist_user_id,artist_id,added_by_user_id) VALUES(?,?,?,?,?)`)
+        .bind(crypto.randomUUID(),label.id,artistUser.id,artist.id,user.id).run();
+    } catch(e) { return error('This Artist is already linked to a Label, or is already on your roster.',409); }
+    return json({success:true,message:`${artist.name||email} was added to your Label.`},201);
+  }
+  if (request.method==='DELETE' && path==='/api/label/artists') {
+    if (!isOwner) return error('Only the Label owner can manage artists.',403);
+    const body=await readBody(request), artistUserId=String(body.artist_user_id||'');
+    if (!artistUserId) return error('Artist account is required.',422);
+    await env.DB.prepare(`DELETE FROM label_artists WHERE label_id=? AND artist_user_id=?`).bind(label.id,artistUserId).run();
+    return json({success:true});
+  }
+  if (request.method==='POST' && path==='/api/label/managers') {
+    if (!isOwner) return error('Only the Label owner can manage account managers.',403);
+    const body=await readBody(request), email=String(body.email||'').trim().toLowerCase();
+    const managerUser=await env.DB.prepare(`SELECT id,email FROM auth_users WHERE lower(email)=? AND deleted_at IS NULL LIMIT 1`).bind(email).first();
+    if (!managerUser) return error('The manager must create a NileSoniQ account first.',404);
+    if (managerUser.id===user.id) return error('The owner is already the account owner.',409);
+    await env.DB.prepare(`INSERT OR IGNORE INTO label_managers(id,label_id,manager_user_id,invited_email,role) VALUES(?,?,?,?,'viewer')`)
+      .bind(crypto.randomUUID(),label.id,managerUser.id,managerUser.email).run();
+    return json({success:true,message:'Manager added with view-only access.'},201);
+  }
+  if (request.method==='POST' && path==='/api/label/renew') {
+    if (!isOwner) return error('Only the Label owner can renew the subscription.',403);
+    const body=await readBody(request), provider=String(body.provider||'').toLowerCase(), phone=normalizeUgandanPhone(body.phone_number||body.phoneNumber);
+    const packageCode=String(body.package_code||label.package_code).toLowerCase(), plan=labelPackage(packageCode);
+    if (!plan||packageCode==='free') return error('Choose a paid annual Label package.',422);
+    if (!['mtn','airtel'].includes(provider)||!/^\+256\d{9}$/.test(phone)) return error('Enter a valid MTN or Airtel mobile-money number.',422);
+    const apiKey=env.PESAJET_API_KEY||env.PESAJET_TOKEN, baseUrl=String(env.PESAJET_API_BASE_URL||'https://payments.pesajet.com/api/v1').replace(/\/+$/,'');
+    if (!apiKey) return error('Payment service is not configured.',503);
+    const reference=`NILESONIQ-LABEL-RENEWAL-${crypto.randomUUID().replace(/-/g,'').slice(0,24).toUpperCase()}`;
+    const risk=await checkPesaJetCollectionRisk(request,env,phone,user.id,reference); if (risk.blocked) return error(risk.message,429);
+    await env.DB.prepare(`INSERT INTO pending_label_payments(id,reference,payment_type,label_id,user_id,phone_number,provider,package_code,amount,currency,status) VALUES(?,?,'renewal',?,?,?,?,?,?,'UGX','pending')`)
+      .bind(crypto.randomUUID(),reference,label.id,user.id,phone,provider,packageCode,plan.price).run();
+    let response,result; try { response=await fetch(`${baseUrl}/payments`,{method:'POST',headers:{'Content-Type':'application/json','X-API-Key':apiKey},body:JSON.stringify({type:'COLLECTION',amount:plan.price,currency:'UGX',phoneNumber:phone,provider,reference,description:`NileSoniQ Label ${packageCode} annual renewal`,idempotencyKey:`nilesoniq-${reference}`})}); result=await response.json().catch(()=>({})); }
+    catch(e){console.error('Label renewal payment outcome uncertain:',e.message);return error(`Payment request outcome is uncertain. Reference: ${reference}`,502);}
+    const data=result?.data&&typeof result.data==='object'?result.data:{}; const tx=result?.transaction&&typeof result.transaction==='object'?result.transaction:(data?.transaction&&typeof data.transaction==='object'?data.transaction:data);
+    const states=[tx?.status,tx?.transactionStatus,data?.status,result?.status].filter(Boolean).map(v=>String(v).toUpperCase());
+    if(!response.ok||result?.success===false||data?.success===false||result?.error||states.some(v=>['FAILED','FAILURE','ERROR','EXPIRED','REJECTED','DECLINED','CANCELLED','CANCELED'].includes(v))){const msg=String(result?.message||result?.error?.message||'Payment provider rejected the request.');await env.DB.prepare(`UPDATE pending_label_payments SET status='failed',failure_message=? WHERE reference=?`).bind(msg.slice(0,300),reference).run();return error(msg,502);}
+    const txId=String(tx?.transactionId||tx?.transaction_id||data?.transactionId||''); await env.DB.prepare(`UPDATE pending_label_payments SET provider_transaction_id=? WHERE reference=?`).bind(txId,reference).run();
+    return json({success:true,status:'pending',reference,amount:plan.price,currency:'UGX',message:`Approve UGX ${plan.price.toLocaleString('en-US')} on your phone. Your annual renewal activates after PesaJet confirmation.`},202);
+  }
+  return error('Label route not found.',404);
+}
+
+async function processLabelRenewalReminders(env) {
+  await ensureLabelSchema(env);
+  const due=await env.DB.prepare(`SELECT l.id,l.name,l.owner_user_id,l.expires_at,u.email,date(l.expires_at) expiry_date,
+    CAST(julianday(date('now'))-julianday(date(l.expires_at)) AS INTEGER) day_after
+    FROM labels l JOIN auth_users u ON u.id=l.owner_user_id
+    WHERE l.package_code!='free' AND l.expires_at IS NOT NULL
+      AND CAST(julianday(date('now'))-julianday(date(l.expires_at)) AS INTEGER) IN (0,2,3)
+      AND u.email IS NOT NULL`).all();
+  for (const row of due.results||[]) {
+    const day=Number(row.day_after);
+    const claim=await env.DB.prepare(`INSERT OR IGNORE INTO label_renewal_reminders(id,label_id,reminder_day,expiry_date) VALUES(?,?,?,?)`)
+      .bind(crypto.randomUUID(),row.id,day,row.expiry_date).run();
+    if (Number(claim?.meta?.changes||0)!==1) continue;
+    try {
+      await sendResendEmail(env,{to:row.email,subject:day===0?'Your NileSoniQ Label subscription is due today':'Renew your NileSoniQ Label subscription',text:`Hello ${row.name}. Your annual Label subscription expired on ${row.expiry_date}. The three-day grace period ends three days after expiry. Renew from your Label dashboard to keep your Label active.`,html:`<p>Hello ${String(row.name).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))},</p><p>Your annual NileSoniQ Label subscription ${day===0?'is due today':`expired ${day} days ago`}.</p><p>Your Label remains active during the three-day grace period. Please renew from your dashboard to avoid suspension.</p>`});
+    } catch(e) { console.error('Label renewal reminder email failed:',e.message); await env.DB.prepare(`DELETE FROM label_renewal_reminders WHERE label_id=? AND reminder_day=? AND expiry_date=?`).bind(row.id,day,row.expiry_date).run().catch(()=>{}); }
+  }
+}
+
+
 async function ensurePendingArtistSignups(env) {
   await ensureAdminReferralSchema(env);
   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS pending_artist_signups (
@@ -825,6 +1205,7 @@ async function authRoute(request, env, path) {
     if (!user) return json({ authenticated: false });
 
     let artist = null;
+    let label = null;
     let admin = null;
     let metadata = {};
 
@@ -843,6 +1224,11 @@ async function authRoute(request, env, path) {
     } catch {}
 
     try {
+      label = await getLabelForUser(env, user.id);
+      if (!label) label = await env.DB.prepare(`SELECT l.*, 'active' AS subscription_state FROM label_managers m JOIN labels l ON l.id=m.label_id WHERE m.manager_user_id=? LIMIT 1`).bind(user.id).first();
+    } catch (e) { console.error('Label session lookup failed:',e.message); }
+
+    try {
       metadata = JSON.parse(user.raw_user_meta_data || "{}");
     } catch {}
 
@@ -852,9 +1238,11 @@ async function authRoute(request, env, path) {
         id: user.id,
         email: user.email,
         phone: user.phone,
-        artist_name: metadata.artist_name || artist?.name || null
+        artist_name: metadata.artist_name || artist?.name || null,
+        account_type: label ? 'label' : (admin ? 'admin' : 'artist')
       },
       artist,
+      label,
       admin
     });
   }
@@ -1600,16 +1988,20 @@ async function dbRoute(request, env, path) {
           // Refresh the artist's server-side entitlement from provider-confirmed,
           // unexpired subscriptions. A database failure must stop the upload; it
           // must never silently downgrade a paid artist to Free.
+          await ensureLabelSchema(env);
+          const labelMembership = await env.DB.prepare(`SELECT l.id,l.package_code,l.grace_until,l.expires_at,la.created_at membership_started_at FROM label_artists la JOIN labels l ON l.id=la.label_id WHERE la.artist_user_id=? LIMIT 1`).bind(user.id).first();
           let entitlement;
           try {
-            entitlement = await syncArtistPremiumEntitlement(env, user.id);
+            entitlement = labelMembership ? null : await syncArtistPremiumEntitlement(env, user.id);
           } catch (entitlementError) {
             console.error("Could not verify artist package before upload:", entitlementError.message);
             return error("We could not verify your artist package right now. No song was uploaded. Please try again shortly.", 503);
           }
-          const packageCode = String(entitlement?.packageCode || 'free').toLowerCase();
-          const uploadLimit = ARTIST_PACKAGE_UPLOAD_LIMITS[packageCode] ?? ARTIST_PACKAGE_UPLOAD_LIMITS.free;
-          const anchorRow = await env.DB.prepare(`
+          const labelActive = labelMembership && (labelMembership.package_code==='free' || (labelMembership.grace_until && new Date(labelMembership.grace_until).getTime()>Date.now()));
+          if (labelMembership && !labelActive) return error('The linked Label subscription is suspended. Ask the Label owner to renew before uploading.',403);
+          const packageCode = labelActive ? `label_${labelMembership.package_code}` : String(entitlement?.packageCode || 'free').toLowerCase();
+          const uploadLimit = labelActive ? (labelMembership.package_code==='free' ? 1 : Number.MAX_SAFE_INTEGER) : (ARTIST_PACKAGE_UPLOAD_LIMITS[packageCode] ?? ARTIST_PACKAGE_UPLOAD_LIMITS.free);
+          const anchorRow = labelActive ? {cycle_anchor: labelMembership.membership_started_at} : await env.DB.prepare(`
             SELECT COALESCE(
               (SELECT COALESCE(paid_at, created_at) FROM premium_subscriptions
                WHERE user_id = ? AND lower(status) = 'active' AND expires_at IS NOT NULL
@@ -2896,6 +3288,12 @@ async function rpcRoute(request, env, name) {
           ).bind(id).first();
           const artistId = String(songOwner?.artist_id || "").trim();
           if (artistId) {
+            await ensureLabelSchema(env);
+            const labelOwner = await env.DB.prepare(`SELECT l.id,l.name,l.package_code,l.earnings_rate,l.referring_admin_id FROM label_artists la JOIN labels l ON l.id=la.label_id WHERE la.artist_user_id=? AND (l.package_code='free' OR datetime(l.grace_until)>datetime('now')) LIMIT 1`).bind(artistId).first();
+            if (labelOwner) {
+              const amount = Number(labelOwner.earnings_rate || 0.5);
+              await creditLabelWallet(env,{eventKey:`song-download:${downloadLogId}`,labelId:labelOwner.id,artistUserId:artistId,sourceType:'qualified_download',sourceId:String(downloadLogId),amount,note:`Qualified download credited at Label ${labelOwner.package_code} rate`});
+            } else {
             const activePackage = await env.DB.prepare(`
               SELECT package_name
               FROM premium_subscriptions
@@ -2939,6 +3337,7 @@ async function rpcRoute(request, env, name) {
                       'posted', 'Package-rate gross per qualified download; 20% commission and 5% tax allocation',
                       datetime('now'))
             `).bind(`song-download:${downloadLogId}`,artistId,String(downloadLogId),gross,commission,tax,net).run();
+            }
           }
         }
       }
@@ -3017,6 +3416,14 @@ async function rpcRoute(request, env, name) {
           ).bind(id).first();
           const artistId = String(song?.artist_id || "").trim();
           if (artistId) {
+            await ensureLabelSchema(env);
+            const labelOwner = await env.DB.prepare(`SELECT l.id,l.name,l.package_code,l.earnings_rate,l.referring_admin_id FROM label_artists la JOIN labels l ON l.id=la.label_id WHERE la.artist_user_id=? AND (l.package_code='free' OR datetime(l.grace_until)>datetime('now')) LIMIT 1`).bind(artistId).first();
+            if (labelOwner) {
+              const amount=Number(labelOwner.earnings_rate||0.5);
+              await creditLabelWallet(env,{eventKey:`song-play:${playLogId}`,labelId:labelOwner.id,artistUserId:artistId,sourceType:'qualified_play',sourceId:String(playLogId),amount,note:`Qualified play credited at Label ${labelOwner.package_code} rate`});
+              const adminId=String(labelOwner.referring_admin_id||'').trim();
+              if(adminId) await creditAdminCommission(env,{eventKey:`stream-play:${playLogId}`,adminId,artistId,labelId:labelOwner.id,entityType:'label',entityName:labelOwner.name,sourceType:'qualified_play',sourceId:String(playLogId),gross:amount,rate:ADMIN_STREAM_COMMISSION_RATE,note:'5% of gross qualified streaming earnings for Label-represented Artist'});
+            } else {
             const activePackage = await env.DB.prepare(`
               SELECT package_name
               FROM premium_subscriptions
@@ -3068,6 +3475,7 @@ async function rpcRoute(request, env, name) {
                       datetime('now'))
             `).bind(`song-play:${playLogId}`,artistId,String(playLogId),gross,platformShare,tax,net).run();
             if (referralAdminId) await creditAdminCommission(env,{eventKey:`stream-play:${playLogId}`,adminId:referralAdminId,artistId,sourceType:'qualified_play',sourceId:String(playLogId),gross,rate:ADMIN_STREAM_COMMISSION_RATE,note:'5% of gross qualified streaming earnings'});
+            }
           }
         }
       }
@@ -3208,15 +3616,18 @@ async function uploadPreflightRoute(request, env) {
   try {
     const artist = await env.DB.prepare("SELECT id FROM artists WHERE user_id = ? LIMIT 1").bind(user.id).first();
     if (!artist) return error("Artist profile not found.", 403);
-
-    const entitlement = await syncArtistPremiumEntitlement(env, user.id, artist.id);
-    const packageCode = String(entitlement?.packageCode || "free").toLowerCase();
-    const limit = ARTIST_PACKAGE_UPLOAD_LIMITS[packageCode] ?? ARTIST_PACKAGE_UPLOAD_LIMITS.free;
+    await ensureLabelSchema(env);
+    const labelMembership=await env.DB.prepare(`SELECT l.id,l.package_code,l.grace_until,la.created_at membership_started_at FROM label_artists la JOIN labels l ON l.id=la.label_id WHERE la.artist_user_id=? LIMIT 1`).bind(user.id).first();
+    const labelActive=labelMembership&&(labelMembership.package_code==='free'||(labelMembership.grace_until&&new Date(labelMembership.grace_until).getTime()>Date.now()));
+    if(labelMembership&&!labelActive)return error('The linked Label subscription is suspended. Ask the Label owner to renew before uploading.',403);
+    const entitlement = labelActive ? null : await syncArtistPremiumEntitlement(env, user.id, artist.id);
+    const packageCode = labelActive ? `label_${labelMembership.package_code}` : String(entitlement?.packageCode || "free").toLowerCase();
+    const limit = labelActive ? (labelMembership.package_code==='free'?1:Number.MAX_SAFE_INTEGER) : (ARTIST_PACKAGE_UPLOAD_LIMITS[packageCode] ?? ARTIST_PACKAGE_UPLOAD_LIMITS.free);
 
     // Each artist's upload month is anchored to their own package activation
     // date. Free accounts use their account creation date; paid accounts use
     // the confirmed payment date of their current active package.
-    const anchorRow = await env.DB.prepare(`
+    const anchorRow = labelActive ? {cycle_anchor:labelMembership.membership_started_at} : await env.DB.prepare(`
       SELECT COALESCE(
         (SELECT COALESCE(paid_at, created_at) FROM premium_subscriptions
          WHERE user_id = ? AND lower(status) = 'active' AND expires_at IS NOT NULL
@@ -4336,6 +4747,10 @@ async function paymentWebhookRoute(request, env) {
       ? await completePaidArtistSignup(env, reference, status, transactionId, webhookPayment.amount, webhookPayment.currency, webhookPayment.fee,
           payload?.message || payload?.description || payload?.reason || payload?.failureMessage || payload?.failure_message || "")
       : { matched: false };
+    const labelPaymentResult = reference.startsWith('NILESONIQ-LABEL-SIGNUP-') || reference.startsWith('NILESONIQ-LABEL-RENEWAL-')
+      ? await completePaidLabelPayment(env,reference,status,transactionId,webhookPayment.amount,webhookPayment.currency,webhookPayment.fee,payload?.message||payload?.description||payload?.reason||payload?.failureMessage||payload?.failure_message||'')
+      : { matched:false };
+    if (labelPaymentResult.matched) console.info('NileSoniQ Label payment webhook processed.',{reference,status,changed:Boolean(labelPaymentResult.changed),reason:labelPaymentResult.reason||null});
     if (paidSignupResult.matched) {
       console.info("NileSoniQ paid signup webhook processed.",{reference,status,changed:Boolean(paidSignupResult.changed),reason:paidSignupResult.reason||null});
     }
@@ -5554,7 +5969,7 @@ async function songSharePreview(request, env, url) {
 
 export default {
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(settleExpiredBoostCampaigns(env));
+    ctx.waitUntil(Promise.allSettled([settleExpiredBoostCampaigns(env), processLabelRenewalReminders(env)]));
   },
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -5592,9 +6007,11 @@ export default {
         response = await publicArtistStatsRoute(request, env);
       } else if (path === "/api/auth/register-paid") {
         // Paid artist signup must use the dedicated pending-payment flow.
-        // The account and verification email are created only after a verified
-        // successful PesaJet webhook, never merely because this request arrived.
         response = await paidSignupRoute(request, env);
+      } else if (path === "/api/label/signup") {
+        response = await labelSignupRoute(request, env);
+      } else if (path.startsWith("/api/label/")) {
+        response = await labelRoute(request, env, path);
       } else if (path.startsWith("/api/auth/")) {
         response = await authRoute(request, env, path);
       } else if (path.startsWith("/api/db/")) {
