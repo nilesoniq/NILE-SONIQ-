@@ -5340,7 +5340,7 @@ async function submitAuth(){
     const response=await fetch(`${AUTH_API}/register-paid`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({email,password,artist_name:name,package_code:chosenPackage,provider:chosenPaymentMethod,phone_number:paymentPhone,referral_code:new URLSearchParams(window.location.search).get("ref")||""})});
     const data=await response.json().catch(()=>({}));if(!response.ok||data.success===false)throw new Error(data.error||data.message||"Could not start payment.");
     showMessage("authMessage",`Payment request started for ${packageLabels[chosenPackage]||chosenPackage}. Approve the mobile-money prompt. Your account will only be created after PesaJet confirms payment. Reference: ${data.reference||"pending"}. Do not pay again while pending.`,"success");
-  }catch(error){console.error(error);showMessage("authMessage",error.message||"Authentication failed.","error");}
+  }catch(error){console.error("Authentication error:",error);showMessage("authMessage",nileFriendlyError(error,"We could not complete that request. Please check your details and try again."),"error");}
 }
 
 async function loadLabelDashboard(){
@@ -5364,12 +5364,12 @@ async function loadLabelDashboard(){
     document.getElementById('labelManagersList').innerHTML=(data.managers||[]).map(m=>`<div style="padding:7px 0;border-bottom:1px solid #333;color:#bbb;font-size:13px;">${escapeHtml(m.invited_email)} <span style="color:#888;">· view-only</span></div>`).join('')||'<p style="color:#999;font-size:12px;">No managers added.</p>';
     const owner=Boolean(data.permissions?.owner);document.querySelectorAll('#labelDashboardContent button').forEach(b=>{if(['Add Artist','Add Manager'].includes(b.textContent.trim()))b.style.display=owner?'':'none';});
     document.getElementById('labelArtistEmail').disabled=!owner;document.getElementById('labelManagerEmail').disabled=!owner;
-  }catch(e){console.error('Label dashboard:',e);showMessage('labelArtistManageMessage',e.message||'Could not load Label dashboard.','error');}
+  }catch(e){console.error('Label dashboard:',e);showMessage('labelArtistManageMessage','Your Label dashboard is temporarily unavailable. Please try again.','error');}
 }
-async function addLabelArtist(){const email=document.getElementById('labelArtistEmail').value.trim();try{const r=await fetch(`/api/label/artists`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({email})});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Could not add Artist.');document.getElementById('labelArtistEmail').value='';showMessage('labelArtistManageMessage',d.message||'Artist added.','success');await loadLabelDashboard();}catch(e){showMessage('labelArtistManageMessage',e.message,'error');}}
-async function removeLabelArtist(artist_user_id){if(!confirm('Remove this Artist from your Label? Their existing songs and recorded earnings will remain.'))return;try{const r=await fetch(`/api/label/artists`,{method:'DELETE',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({artist_user_id})});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Could not remove Artist.');await loadLabelDashboard();}catch(e){showMessage('labelArtistManageMessage',e.message,'error');}}
-async function addLabelManager(){const email=document.getElementById('labelManagerEmail').value.trim();try{const r=await fetch(`/api/label/managers`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({email})});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Could not add manager.');document.getElementById('labelManagerEmail').value='';showMessage('labelManagerMessage',d.message||'Manager added.','success');}catch(e){showMessage('labelManagerMessage',e.message,'error');}}
-async function renewLabelSubscription(){const package_code=document.getElementById('labelRenewPackage').value,provider=document.getElementById('labelRenewProvider').value,phone_number=document.getElementById('labelRenewPhone').value.trim();try{const r=await fetch(`/api/label/renew`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({package_code,provider,phone_number})});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Could not start renewal.');showMessage('labelRenewalMessage',`Payment prompt started for UGX ${Number(d.amount||0).toLocaleString()}. Approve it on your phone. Reference: ${d.reference}.`,'success');}catch(e){showMessage('labelRenewalMessage',e.message,'error');}}
+async function addLabelArtist(){const email=document.getElementById('labelArtistEmail').value.trim();try{const r=await fetch(`/api/label/artists`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({email})});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Could not add Artist.');document.getElementById('labelArtistEmail').value='';showMessage('labelArtistManageMessage',d.message||'Artist added.','success');await loadLabelDashboard();}catch(e){showMessage('labelArtistManageMessage',nileFriendlyError(e,'We could not complete that Label action. Please try again.'),'error');}}
+async function removeLabelArtist(artist_user_id){if(!confirm('Remove this Artist from your Label? Their existing songs and recorded earnings will remain.'))return;try{const r=await fetch(`/api/label/artists`,{method:'DELETE',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({artist_user_id})});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Could not remove Artist.');await loadLabelDashboard();}catch(e){showMessage('labelArtistManageMessage',nileFriendlyError(e,'We could not complete that Label action. Please try again.'),'error');}}
+async function addLabelManager(){const email=document.getElementById('labelManagerEmail').value.trim();try{const r=await fetch(`/api/label/managers`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({email})});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Could not add manager.');document.getElementById('labelManagerEmail').value='';showMessage('labelManagerMessage',d.message||'Manager added.','success');}catch(e){showMessage('labelManagerMessage',nileFriendlyError(e,'We could not complete that action. Please try again.'),'error');}}
+async function renewLabelSubscription(){const package_code=document.getElementById('labelRenewPackage').value,provider=document.getElementById('labelRenewProvider').value,phone_number=document.getElementById('labelRenewPhone').value.trim();try{const r=await fetch(`/api/label/renew`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({package_code,provider,phone_number})});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Could not start renewal.');showMessage('labelRenewalMessage',`Payment prompt started for UGX ${Number(d.amount||0).toLocaleString()}. Approve it on your phone. Reference: ${d.reference}.`,'success');}catch(e){showMessage('labelRenewalMessage',nileFriendlyError(e,'We could not start the renewal. Please check the details and try again.'),'error');}}
 
 
 /* =========================================================
@@ -5407,7 +5407,7 @@ async function requestPasswordReset(){
     const data=await response.json().catch(()=>({}));
     if(!response.ok||data.success===false)throw new Error(data.error||data.message||"Could not request a reset link.");
     showMessage("authMessage",data.message||"If that email is registered, a password-reset link has been sent. Check your inbox and spam folder.","success");
-  }catch(error){showMessage("authMessage",error.message||"Password reset request failed.","error");}
+  }catch(error){console.error("Password reset request failed:",error);showMessage("authMessage",nileFriendlyError(error,"We could not request a password reset. Please try again."),"error");}
 }
 
 async function submitPasswordReset(){
@@ -5424,7 +5424,7 @@ async function submitPasswordReset(){
     showMessage("authMessage",data.message||"Password updated. You can now log in with your new password.","success");
     document.getElementById("newAuthPassword").value="";document.getElementById("confirmAuthPassword").value="";
     setTimeout(returnToAuthForm,1200);
-  }catch(error){showMessage("authMessage",error.message||"Password reset failed.","error");}
+  }catch(error){console.error("Password reset failed:",error);showMessage("authMessage",nileFriendlyError(error,"We could not reset your password. Please request a new reset link and try again."),"error");}
 }
 
 async function handleAuthEmailLink(){
@@ -6126,10 +6126,9 @@ async function uploadSong(){
           upsert:false,
           contentType:
             audioFile.type || undefined,
-          onRetry:(attempt)=>{
-            uploadButton.textContent="Retrying audio upload...";
-            const message=document.getElementById("uploadMessage");
-            if(message) message.textContent=`Your connection is weak. Retrying the audio upload automatically (attempt ${attempt}). Please keep this page open.`;
+          onRetry:(attempt,error)=>{
+            uploadButton.textContent="Uploading...";
+            console.warn("Audio upload retry",attempt,error);
           }
         }
       );
@@ -6174,10 +6173,9 @@ async function uploadSong(){
             upsert:false,
             contentType:
               coverFile.type || undefined,
-            onRetry:(attempt)=>{
-              uploadButton.textContent="Retrying cover upload...";
-              const message=document.getElementById("uploadMessage");
-              if(message) message.textContent=`Your connection is weak. Retrying the cover upload automatically (attempt ${attempt}). Please keep this page open.`;
+            onRetry:(attempt,error)=>{
+              uploadButton.textContent="Uploading...";
+              console.warn("Cover upload retry",attempt,error);
             }
           }
         );
@@ -6342,8 +6340,7 @@ async function uploadSong(){
 
     showMessage(
       "uploadMessage",
-      error.message ||
-      "Song upload failed.",
+      nileFriendlyError(error,"We could not complete your song upload. Please try again."),
       "error"
     );
 
@@ -6405,7 +6402,7 @@ async function submitArtistBoost(){
   const provider=document.getElementById("boostNetwork")?.value||"mtn";
   const package_code=document.getElementById("boostPackage")?.value||"starter";
   message.textContent="Sending secure payment request…";
-  try{const r=await fetch("/api/payments/feature-payment",{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({payment_type:"boost",artist_id:currentArtist.id,song_ids,package_code,phone_number,provider})});const data=await r.json().catch(()=>({}));if(!r.ok)throw new Error(data.error||data.message||"Could not start payment");message.textContent=data.message||"Approve the mobile-money prompt to activate your Boost.";}catch(e){message.textContent=e.message||"Payment request failed.";}
+  try{const r=await fetch("/api/payments/feature-payment",{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({payment_type:"boost",artist_id:currentArtist.id,song_ids,package_code,phone_number,provider})});const data=await r.json().catch(()=>({}));if(!r.ok)throw new Error(data.error||data.message||"Could not start payment");message.textContent=data.message||"Approve the mobile-money prompt to activate your Boost.";}catch(e){console.error("Boost payment request failed:",e);message.textContent=nileFriendlyError(e,"We could not start your Boost payment. Please check your details and try again. If you already approved a prompt, check its status before paying again.");}
 }
 function togglePublicArtistSubscribeForm(){
   const form=document.getElementById("publicArtistSubscribeForm");
@@ -6419,7 +6416,7 @@ async function subscribeToPublicArtist(artistId){
   const phone_number=document.getElementById("publicSubscribePhone")?.value||"";
   const provider=document.getElementById("publicSubscribeNetwork")?.value||"mtn";
   message.textContent="Sending secure payment request…";
-  try{const r=await fetch("/api/payments/feature-payment",{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({payment_type:"listener_subscription",artist_id:artistId,phone_number,provider})});const data=await r.json().catch(()=>({}));if(!r.ok)throw new Error(data.error||data.message||"Could not start subscription");message.textContent=data.message||"Approve the mobile-money prompt to activate your subscription.";}catch(e){message.textContent=e.message||"Subscription request failed.";}
+  try{const r=await fetch("/api/payments/feature-payment",{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({payment_type:"listener_subscription",artist_id:artistId,phone_number,provider})});const data=await r.json().catch(()=>({}));if(!r.ok)throw new Error(data.error||data.message||"Could not start subscription");message.textContent=data.message||"Approve the mobile-money prompt to activate your subscription.";}catch(e){console.error("Listener subscription request failed:",e);message.textContent=nileFriendlyError(e,"We could not start your subscription payment. Please try again. If you already approved a prompt, check its status before paying again.");}
 }
 async function loadPublicArtistStats(artistId){
   try{await fetch(`/api/artist/public-stats?artist_id=${encodeURIComponent(artistId)}`,{method:"POST",credentials:"include",cache:"no-store"});const r=await fetch(`/api/artist/public-stats?artist_id=${encodeURIComponent(artistId)}`,{credentials:"include",cache:"no-store"});const d=await r.json();const v=document.getElementById("publicArtistViews"),s=document.getElementById("publicArtistSubscribers");if(v)v.textContent=formatNumber(d.views||0);if(s)s.textContent=formatNumber(d.monthly_subscribers||0);}catch(e){console.warn("Public artist stats unavailable",e);}
@@ -6635,13 +6632,22 @@ async function loadSongs(){
     console.error("Public songs load error:", error);
     container.innerHTML = `
       <div class="empty">
-        <h3>Could not load songs</h3>
-        <p style="margin-top:8px;">${escapeHtml(error.message || "Unknown error")}</p>
+        <h3>Music is temporarily unavailable</h3>
+        <p style="margin-top:8px;">Please try again in a moment.</p>
       </div>
     `;
   }
 }
 
+
+/* Visitor-safe error text. Detailed errors remain in console/server logs. */
+function nileFriendlyError(error, fallback="Something went wrong. Please try again."){
+  const raw=String(error?.message || error || "").trim();
+  if(!raw) return fallback;
+  const technical=/(failed to fetch|networkerror|network request failed|http\s*\d{3}|\bstatus code\s*\d{3}|rpc request failed|rpc failed|sql|sqlite|database|\bd1\b|cloudflare|worker error|internal server error|unexpected token|json parse|cors|timeout|timed out|gateway|502|503|504|storage upload failed|request failed \(|function failed)/i;
+  if(technical.test(raw)) return fallback;
+  return raw.length>220 ? fallback : raw;
+}
 
 /* =========================================================
    NEW RELEASES
@@ -6697,9 +6703,8 @@ async function loadNewReleases(){
     } else {
       container.innerHTML = `
         <div class="empty">
-          <h3>Could not load new releases</h3>
-          <p style="margin-top:8px;">${escapeHtml(error.message || "Unknown error")}</p>
-          <button class="btn btn-dark" type="button" onclick="loadNewReleases()">Try Again</button>
+          <h3>New releases are temporarily unavailable</h3>
+          <p style="margin-top:8px;">Please check back shortly.</p>
         </div>
       `;
     }
@@ -6739,8 +6744,8 @@ async function loadTopCharts(){
     console.error("Top charts load error:", error);
     container.innerHTML = `
       <div class="empty">
-        <h3>Could not load top charts</h3>
-        <p style="margin-top:8px;">${escapeHtml(error.message || "Unknown error")}</p>
+        <h3>Top charts are temporarily unavailable</h3>
+        <p style="margin-top:8px;">Please check back shortly.</p>
       </div>
     `;
   }
@@ -7757,7 +7762,7 @@ async function openArtistBySlug(slug){
   }catch(error){
     console.error("Public artist route error:",error);
     await showPage("home");
-    alert("Could not load artist profile.");
+    console.warn("Public artist profile could not be loaded.");
   }
 }
 
@@ -7804,7 +7809,7 @@ async function openSongBySlug(slug){
   }catch(error){
     console.error("Public song route error:",error);
     await showPage("home");
-    alert("Could not load this song right now. Please try again.");
+    console.warn("Public song route could not be loaded.");
   }
 }
 
@@ -8050,7 +8055,7 @@ async function openSongArtistProfile(songId){
     alert("This artist profile is not available yet.");
   }catch(error){
     console.error("Could not open song artist profile:", error);
-    alert("Could not load this artist profile. Please try again.");
+    console.warn("Public artist route could not be loaded.");
   }
 }
 
@@ -8371,10 +8376,7 @@ async function openArtistProfile(artistId, fromPublicRoute=false){
         <h3>Could not load artist profile</h3>
 
         <p style="margin-top:8px;">
-          ${escapeHtml(
-            error.message ||
-            "Please try again."
-          )}
+          Please try again in a moment.
         </p>
 
       </div>
@@ -9049,8 +9051,8 @@ async function loadArtists(){
     renderFeaturedArtists();
     container.innerHTML = `
       <div class="empty">
-        <h3>Could not load artists</h3>
-        <p style="margin-top:8px;">${escapeHtml(error.message || "Unknown error")}</p>
+        <h3>Artists are temporarily unavailable</h3>
+        <p style="margin-top:8px;">Please try again in a moment.</p>
       </div>
     `;
   }
@@ -9125,7 +9127,7 @@ async function loadMySongs(){
   }catch(error){
     console.error("My songs/dashboard error:", error);
     tbody.innerHTML = `
-      <tr><td colspan="4"><div class="empty">${escapeHtml(error.message || "Could not load your songs and earnings.")}</div></td></tr>
+      <tr><td colspan="4"><div class="empty">Your songs and earnings are temporarily unavailable. Please refresh in a moment.</div></td></tr>
     `;
   }
 }
@@ -9675,8 +9677,7 @@ async function loadWithdrawals(){
       <tr>
         <td colspan="6">
           <div class="empty">
-            Could not load withdrawal requests:
-            ${escapeHtml(error.message || "Unknown error")}
+            Withdrawal requests are temporarily unavailable. Please try again shortly.
           </div>
         </td>
       </tr>
@@ -9898,7 +9899,7 @@ async function loadAdminAnalytics(){
     }
   }catch(error){
     console.error("Analytics error:",error);
-    const message=error.message||"Could not load analytics.";
+    const message="Analytics are temporarily unavailable. Please try again.";
     if(topSongsEl) topSongsEl.innerHTML=`<div class="analytics-chart-empty">${escapeHtml(message)}</div>`;
     if(topArtistsEl) topArtistsEl.innerHTML=`<div class="analytics-chart-empty">${escapeHtml(message)}</div>`;
   }
