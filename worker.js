@@ -583,6 +583,12 @@ async function ensureAuthEmailColumns(env) {
   }
 }
 
+const PAWAPAY_SIGNUP_COUNTRY_CODES = new Set(["BJ","BF","CM","CG","CD","ET","GA","GH","CI","KE","LS","LR","MW","ML","MZ","NG","RW","SN","SL","SS","TZ","UG","ZM","ZW"]);
+function normalizeSignupCountry(value) {
+  const code = String(value || "UG").trim().toUpperCase();
+  return PAWAPAY_SIGNUP_COUNTRY_CODES.has(code) ? code : null;
+}
+
 function paymentReferenceName(value, fallback = "ARTIST") {
   const slug = String(value || fallback)
     .normalize("NFKD")
@@ -654,7 +660,7 @@ async function ensureLabelSchema(env) {
       label_id TEXT, email TEXT, password_hash TEXT, label_name TEXT,
       phone_number TEXT NOT NULL, provider TEXT NOT NULL, package_code TEXT NOT NULL,
       amount INTEGER NOT NULL, currency TEXT NOT NULL DEFAULT 'UGX',
-      referral_code TEXT, status TEXT NOT NULL DEFAULT 'pending',
+      referral_code TEXT, country_code TEXT NOT NULL DEFAULT 'UG', status TEXT NOT NULL DEFAULT 'pending',
       provider_transaction_id TEXT, failure_message TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')), completed_at TEXT, user_id TEXT
     )`,
@@ -668,6 +674,8 @@ async function ensureLabelSchema(env) {
     `CREATE INDEX IF NOT EXISTS idx_pending_label_reference_status ON pending_label_payments(reference, status)`
   ];
   for (const sql of statements) await env.DB.prepare(sql).run();
+  const pendingColumns = await env.DB.prepare(`PRAGMA table_info(pending_label_payments)`).all();
+  if (!(pendingColumns.results || []).some(row => row.name === 'country_code')) await env.DB.prepare(`ALTER TABLE pending_label_payments ADD COLUMN country_code TEXT NOT NULL DEFAULT 'UG'`).run();
 }
 
 function labelPackage(code) {
@@ -748,11 +756,14 @@ async function labelSignupRoute(request, env) {
   const email=String(body.email||'').trim().toLowerCase(), password=String(body.password||'');
   const name=String(body.label_name||body.name||'').trim();
   const packageCode=String(body.package_code||'free').trim().toLowerCase();
+  const countryCode=normalizeSignupCountry(body.country_code);
   const plan=labelPackage(packageCode);
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return error('Please enter a valid email address.',422);
   if (password.length<6 || password.length>128) return error('Password must be between 6 and 128 characters.',422);
   if (!name || name.length>100) return error('Please enter a valid Label name.',422);
   if (!plan) return error('Choose a valid Label package.',422);
+  if (!countryCode) return error('Please select a supported country.',422);
+  if (packageCode !== 'free' && countryCode !== 'UG') return error('Paid mobile-money registration is not enabled in this country yet. Please choose the Free package or register from Uganda.',422);
   const existing=await env.DB.prepare(`SELECT id FROM auth_users WHERE lower(email)=? AND deleted_at IS NULL LIMIT 1`).bind(email).first();
   if (existing) return error('An account with that email already exists.',409);
   const referralCode=String(body.referral_code||body.ref||'').trim().toUpperCase().slice(0,40);
@@ -760,7 +771,7 @@ async function labelSignupRoute(request, env) {
     const userId=crypto.randomUUID(), passwordHash=await bcrypt.hash(password,10);
     await env.DB.prepare(`INSERT INTO auth_users(id,email,encrypted_password,raw_user_meta_data,created_at,updated_at,is_anonymous,is_sso_user)
       VALUES(?,?,?,?,datetime('now'),datetime('now'),0,0)`)
-      .bind(userId,email,passwordHash,JSON.stringify({account_type:'label',label_name:name})).run();
+      .bind(userId,email,passwordHash,JSON.stringify({account_type:'label',label_name:name,country_code:countryCode})).run();
     const label=await createLabelAccount(env,{userId,email,name,packageCode,referralCode});
     const verificationEmailSent=await sendLabelVerification(env,userId,email,name);
     const token=await createSession(env,userId);
@@ -777,9 +788,9 @@ async function labelSignupRoute(request, env) {
   const risk=await checkPesaJetCollectionRisk(request,env,phone,null,reference);
   if (risk.blocked) return error(risk.message,429);
   const passwordHash=await bcrypt.hash(password,10);
-  await env.DB.prepare(`INSERT INTO pending_label_payments(id,reference,payment_type,email,password_hash,label_name,phone_number,provider,package_code,amount,currency,referral_code,status)
-    VALUES(?,?,'signup',?,?,?,?,?,?,?,'UGX',?,'pending')`)
-    .bind(crypto.randomUUID(),reference,email,passwordHash,name,phone,provider,packageCode,plan.price,referralCode||null).run();
+  await env.DB.prepare(`INSERT INTO pending_label_payments(id,reference,payment_type,email,password_hash,label_name,phone_number,provider,package_code,amount,currency,referral_code,country_code,status)
+    VALUES(?,?,'signup',?,?,?,?,?,?,?,'UGX',?,?, 'pending')`)
+    .bind(crypto.randomUUID(),reference,email,passwordHash,name,phone,provider,packageCode,plan.price,referralCode||null,countryCode).run();
   let response,result;
   try {
     response=await fetch(`${baseUrl}/payments`,{method:'POST',headers:{'Content-Type':'application/json','X-API-Key':apiKey},body:JSON.stringify({type:'COLLECTION',amount:plan.price,currency:'UGX',phoneNumber:phone,provider,reference,description:`NileSoniQ Label ${packageCode} annual subscription`,idempotencyKey:`nilesoniq-${reference}`})});
@@ -829,7 +840,7 @@ async function completePaidLabelPayment(env, reference, status, transactionId, a
         ownerUserId=crypto.randomUUID();
         await env.DB.prepare(`INSERT INTO auth_users(id,email,encrypted_password,raw_user_meta_data,created_at,updated_at,is_anonymous,is_sso_user)
           VALUES(?,?,?,?,datetime('now'),datetime('now'),0,0)`)
-          .bind(ownerUserId,row.email,row.password_hash,JSON.stringify({account_type:'label',label_name:row.label_name})).run();
+          .bind(ownerUserId,row.email,row.password_hash,JSON.stringify({account_type:'label',label_name:row.label_name,country_code:row.country_code||'UG'})).run();
         const createdLabel=await createLabelAccount(env,{userId:ownerUserId,email:row.email,name:row.label_name,packageCode:row.package_code,referralCode:row.referral_code});
         labelId=createdLabel.id;
       }
@@ -986,10 +997,12 @@ async function ensurePendingArtistSignups(env) {
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     completed_at TEXT,
     user_id TEXT,
-    referral_code TEXT
+    referral_code TEXT,
+    country_code TEXT NOT NULL DEFAULT 'UG'
   )`).run();
   const columns = await env.DB.prepare(`PRAGMA table_info(pending_artist_signups)`).all();
   if (!(columns.results || []).some(row => row.name === 'referral_code')) await env.DB.prepare(`ALTER TABLE pending_artist_signups ADD COLUMN referral_code TEXT`).run();
+  if (!(columns.results || []).some(row => row.name === 'country_code')) await env.DB.prepare(`ALTER TABLE pending_artist_signups ADD COLUMN country_code TEXT NOT NULL DEFAULT 'UG'`).run();
 }
 
 async function paidSignupRoute(request, env) {
@@ -1007,6 +1020,7 @@ async function paidSignupRoute(request, env) {
   const password = String(body.password || "");
   const artistName = String(body.artist_name || body.name || "").trim();
   const packageCode = String(body.package_code || "").trim().toLowerCase();
+  const countryCode = normalizeSignupCountry(body.country_code);
   const provider = String(body.provider || "").trim().toLowerCase();
   const phone = normalizeUgandanPhone(body.phone_number || body.phoneNumber);
   const prices = {premium:5000,hustler:10000,hit_maker:20000,star:30000};
@@ -1014,6 +1028,8 @@ async function paidSignupRoute(request, env) {
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return error("Please enter a valid email address.", 422);
   if (password.length < 6 || password.length > 128) return error("Password must be between 6 and 128 characters.", 422);
   if (!artistName || artistName.length > 100) return error("Please enter a valid artist name.", 422);
+  if (!countryCode) return error("Please select a supported country.", 422);
+  if (countryCode !== "UG") return error("Paid mobile-money registration is not enabled in this country yet. Please choose the Free package or register from Uganda.", 422);
   if (!amount) return error("Choose a valid paid artist package.", 422);
   if (!/^\+256\d{9}$/.test(phone)) return error("Enter a valid Ugandan mobile-money number.", 422);
   if (!["mtn","airtel"].includes(provider)) return error("Provider must be MTN or Airtel.", 422);
@@ -1031,8 +1047,8 @@ async function paidSignupRoute(request, env) {
   const referralCode = String(body.referral_code || body.ref || '').trim().toUpperCase().slice(0,40);
   const referralAdmin = referralCode ? await env.DB.prepare(`SELECT id FROM admins WHERE upper(referral_code)=? AND active=1 AND suspended_at IS NULL LIMIT 1`).bind(referralCode).first() : null;
   const safeReferralCode = referralAdmin ? referralCode : null;
-  await env.DB.prepare(`INSERT INTO pending_artist_signups (id,reference,email,password_hash,artist_name,phone_number,provider,package_code,amount,currency,status,referral_code) VALUES (?,?,?,?,?,?,?,?,?,'UGX','pending',?)`)
-    .bind(id,reference,email,passwordHash,artistName,phone,provider,packageCode,amount,safeReferralCode).run();
+  await env.DB.prepare(`INSERT INTO pending_artist_signups (id,reference,email,password_hash,artist_name,phone_number,provider,package_code,amount,currency,status,referral_code,country_code) VALUES (?,?,?,?,?,?,?,?,?,'UGX','pending',?,?)`)
+    .bind(id,reference,email,passwordHash,artistName,phone,provider,packageCode,amount,safeReferralCode,countryCode).run();
   let response, result;
   try {
     response = await fetch(`${baseUrl}/payments`, {method:"POST",headers:{"Content-Type":"application/json","X-API-Key":apiKey},body:JSON.stringify({type:"COLLECTION",amount,currency:"UGX",phoneNumber:phone,provider,reference,description,idempotencyKey:`nilesoniq-${reference}`})});
@@ -1087,7 +1103,7 @@ async function completePaidArtistSignup(env, reference, status, transactionId, a
     }
     const userId = crypto.randomUUID();
     const artistId = crypto.randomUUID();
-    const metadata = JSON.stringify({artist_name:row.artist_name,package_name:row.package_code});
+    const metadata = JSON.stringify({artist_name:row.artist_name,package_name:row.package_code,country_code:row.country_code||'UG'});
     const token = crypto.randomUUID()+crypto.randomUUID().replace(/-/g,"");
     const expiry = new Date(Date.now()+30*24*60*60*1000).toISOString();
     const subscriptionId = crypto.randomUUID();
