@@ -3650,6 +3650,37 @@ class="message"></div>
 <select id="signupAccountType" onchange="toggleSignupAccountType()"><option value="artist">Artist Account</option><option value="label">Label Account</option></select>
 </div>
 
+<div class="field" id="signupCountryField" style="display:none;">
+<label for="signupCountry">Country / Region</label>
+<select id="signupCountry" name="country_code" required>
+<option value="BJ">🇧🇯 Benin</option>
+<option value="BF">🇧🇫 Burkina Faso</option>
+<option value="CM">🇨🇲 Cameroon</option>
+<option value="CG">🇨🇬 Congo-Brazzaville</option>
+<option value="CD">🇨🇩 Democratic Republic of the Congo (DRC)</option>
+<option value="ET">🇪🇹 Ethiopia</option>
+<option value="GA">🇬🇦 Gabon</option>
+<option value="GH">🇬🇭 Ghana</option>
+<option value="CI">🇨🇮 Ivory Coast</option>
+<option value="KE">🇰🇪 Kenya</option>
+<option value="LS">🇱🇸 Lesotho</option>
+<option value="LR">🇱🇷 Liberia</option>
+<option value="MW">🇲🇼 Malawi</option>
+<option value="ML">🇲🇱 Mali</option>
+<option value="MZ">🇲🇿 Mozambique</option>
+<option value="NG">🇳🇬 Nigeria</option>
+<option value="RW">🇷🇼 Rwanda</option>
+<option value="SN">🇸🇳 Senegal</option>
+<option value="SL">🇸🇱 Sierra Leone</option>
+<option value="SS">🇸🇸 South Sudan</option>
+<option value="TZ">🇹🇿 Tanzania</option>
+<option value="UG" selected>🇺🇬 Uganda</option>
+<option value="ZM">🇿🇲 Zambia</option>
+<option value="ZW">🇿🇼 Zimbabwe</option>
+</select>
+<p style="color:#999;font-size:12px;margin-top:7px;">Choose the country where you are based. Free account registration is available; paid mobile-money registration outside Uganda will be enabled after each country’s payment integration is tested.</p>
+</div>
+
 <div id="signupNameField"
 class="field hidden">
 
@@ -5294,6 +5325,7 @@ function setAuthMode(mode){
     title.textContent="Login";submit.textContent="Login";
     document.getElementById("signupPackageField").style.display="none";document.getElementById("signupLabelPackageField").style.display="none";
     if(typeField)typeField.style.display='none';
+    const countryField=document.getElementById("signupCountryField");if(countryField)countryField.style.display="none";
     document.getElementById("signupPaymentMethodField").style.display="none";document.getElementById("signupPaymentPhoneField").style.display="none";
     document.getElementById("signupPaymentMethod").required=false;document.getElementById("signupPaymentPhone").required=false;
     document.getElementById("forgotPasswordRow").classList.remove("hidden");document.getElementById("authPasswordField").classList.remove("hidden");
@@ -5301,6 +5333,7 @@ function setAuthMode(mode){
   }else{
     currentAuthContext="artist";loginTab.classList.remove("active");signupTab.classList.add("active");signupNameField.classList.remove("hidden");
     if(typeField)typeField.style.display='block';
+    const countryField=document.getElementById("signupCountryField");if(countryField)countryField.style.display="block";
     title.textContent="Create Artist Account";submit.textContent="Create Account";
     document.getElementById("forgotPasswordRow").classList.add("hidden");document.getElementById("authPasswordField").classList.remove("hidden");
     document.getElementById("forgotPasswordForm").classList.add("hidden");document.getElementById("resetPasswordForm").classList.add("hidden");submit.classList.remove("hidden");
@@ -5320,11 +5353,13 @@ async function submitAuth(){
       setTimeout(async()=>{closeAuthModal();await updateUI();await showPage(destination);},700);return;
     }
     if(!name){showMessage("authMessage",signupIsLabel()?"Please enter your Label name.":"Please enter your artist name.","error");return;}
-    const chosenPackage=selectedSignupPackage(),chosenPaymentMethod=document.getElementById("signupPaymentMethod")?.value||"",paymentPhone=(document.getElementById("signupPaymentPhone")?.value||"").trim();
+    const chosenPackage=selectedSignupPackage(),chosenPaymentMethod=document.getElementById("signupPaymentMethod")?.value||"",paymentPhone=(document.getElementById("signupPaymentPhone")?.value||"").trim(),countryCode=(document.getElementById("signupCountry")?.value||"UG").toUpperCase();
+    if(!countryCode){showMessage("authMessage","Please select your country.","error");return;}
+    if(chosenPackage!=="free"&&countryCode!=="UG"){showMessage("authMessage","Paid mobile-money registration is not enabled in this country yet. You can create a Free account now; paid options will be enabled after this country's payment integration is tested.","error");return;}
     if(chosenPackage!=="free"&&!chosenPaymentMethod){showMessage("authMessage","Please select a mobile-money payment method.","error");return;}
     if(chosenPackage!=="free"&&!paymentPhone){showMessage("authMessage","Please enter the mobile-money phone number you will use to pay.","error");return;}
     if(signupIsLabel()){
-      const response=await fetch(`/api/label/signup`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({email,password,label_name:name,package_code:chosenPackage,provider:chosenPaymentMethod,phone_number:paymentPhone,referral_code:new URLSearchParams(window.location.search).get("ref")||""})});
+      const response=await fetch(`/api/label/signup`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({email,password,label_name:name,package_code:chosenPackage,provider:chosenPaymentMethod,phone_number:paymentPhone,country_code:countryCode,referral_code:new URLSearchParams(window.location.search).get("ref")||""})});
       const data=await response.json().catch(()=>({}));if(!response.ok||data.success===false)throw new Error(data.error||data.message||"Could not create Label account.");
       if(chosenPackage==="free"){
         await authApi.getSession();await updateUI();showMessage("authMessage",`Free Label account created.${data.verification_email_sent?" A verification email was sent.":" Email verification could not be confirmed as sent."}`,"success");
@@ -5334,10 +5369,10 @@ async function submitAuth(){
     }
     const packageLabels={free:"Free (UGX 0)",premium:"Premium (UGX 5,000 per 30 days)",hustler:"Hustler (UGX 10,000 per 30 days)",hit_maker:"Hit Maker (UGX 20,000 per 30 days)",star:"Star (UGX 30,000 per 30 days)"};
     if(chosenPackage==="free"){
-      const {data,error}=await authApi.signUp({email,password,packageName:"free",options:{data:{artist_name:name}}});if(error)throw error;
+      const {data,error}=await authApi.signUp({email,password,packageName:"free",options:{data:{artist_name:name,country_code:countryCode}}});if(error)throw error;
       showMessage("authMessage",data?.message||"Free Artist account created.","success");return;
     }
-    const response=await fetch(`${AUTH_API}/register-paid`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({email,password,artist_name:name,package_code:chosenPackage,provider:chosenPaymentMethod,phone_number:paymentPhone,referral_code:new URLSearchParams(window.location.search).get("ref")||""})});
+    const response=await fetch(`${AUTH_API}/register-paid`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({email,password,artist_name:name,package_code:chosenPackage,provider:chosenPaymentMethod,phone_number:paymentPhone,country_code:countryCode,referral_code:new URLSearchParams(window.location.search).get("ref")||""})});
     const data=await response.json().catch(()=>({}));if(!response.ok||data.success===false)throw new Error(data.error||data.message||"Could not start payment.");
     showMessage("authMessage",`Payment request started for ${packageLabels[chosenPackage]||chosenPackage}. Approve the mobile-money prompt. Your account will only be created after PesaJet confirms payment. Reference: ${data.reference||"pending"}. Do not pay again while pending.`,"success");
   }catch(error){console.error("Authentication error:",error);showMessage("authMessage",nileFriendlyError(error,"We could not complete that request. Please check your details and try again."),"error");}
